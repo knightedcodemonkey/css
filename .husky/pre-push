@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+set -euo pipefail
+
+npm run lint
+npm run prettier:check
+npm test
+
