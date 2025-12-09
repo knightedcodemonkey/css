@@ -2,7 +2,7 @@ import path from 'node:path'
 import { promises as fs } from 'node:fs'
 
 import dependencyTree from 'dependency-tree'
-import type { DependencyTreeOptions } from 'dependency-tree'
+import type { Options as DependencyTreeOpts } from 'dependency-tree'
 import {
   transform as lightningTransform,
   type TransformOptions as LightningTransformOptions,
@@ -26,7 +26,7 @@ export interface CssOptions {
   cwd?: string
   filter?: (filePath: string) => boolean
   lightningcss?: LightningCssConfig
-  dependencyTree?: Partial<Omit<DependencyTreeOptions, 'filename' | 'directory'>>
+  dependencyTree?: Partial<Omit<DependencyTreeOpts, 'filename' | 'directory'>>
   resolver?: CssResolver
   peerResolver?: PeerLoader
 }
@@ -126,7 +126,7 @@ function collectStyleDependencies(
     cwd: string
     extensions: string[]
     filter?: (filePath: string) => boolean
-    dependencyTreeOptions?: Partial<Omit<DependencyTreeOptions, 'filename' | 'directory'>>
+    dependencyTreeOptions?: Partial<Omit<DependencyTreeOpts, 'filename' | 'directory'>>
   },
 ): StyleModule[] {
   const seen = new Set<string>()
@@ -141,7 +141,7 @@ function collectStyleDependencies(
   let treeList: string[] = []
 
   if (!entryIsStyle) {
-    const dependencyConfig: DependencyTreeOptions = {
+    const dependencyConfig: DependencyTreeOpts = {
       ...dependencyTreeOptions,
       filename: entryPath,
       directory: cwd,
