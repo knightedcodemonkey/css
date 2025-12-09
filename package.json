@@ -1,13 +1,13 @@
 {
   "name": "@knighted/css",
-  "version": "1.0.0-alpha.1",
+  "version": "1.0.0-alpha.2",
   "description": "A build-time utility that traverses JavaScript/TypeScript module dependency graphs to extract, compile, and optimize all imported CSS into a single, in-memory string.",
   "type": "module",
   "main": "./dist/css.js",
-  "types": "./dist/css.d.ts",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/css.d.ts",
+      "types": "./dist/index.d.ts",
       "import": "./dist/css.js",
       "require": "./dist/cjs/css.cjs"
     },
@@ -42,10 +42,15 @@
   ],
   "scripts": {
     "build": "duel",
+    "postbuild": "cp src/types/*.d.ts dist/",
     "check-types": "tsc --noEmit",
     "test": "c8 --reporter=text --reporter=text-summary --reporter=lcov --include \"src/**/*.ts\" tsx --test test/**/*.test.ts",
     "build:fixture": "npx rspack --config test/fixtures/loader-rspack/rspack.config.js",
     "preview:fixture": "npm run build:fixture && npx http-server test/fixtures/loader-rspack -p 4173",
+    "build:fixture:playwright": "npx rspack --config test/fixtures/playwright/rspack.config.js",
+    "serve:fixture:playwright": "npx http-server test/fixtures/playwright/dist -p 4174",
+    "preview:fixture:playwright": "npm run build:fixture:playwright && npx http-server test/fixtures/playwright -p 4174",
+    "test:e2e": "npx playwright test",
     "prettier": "prettier --write .",
     "prettier:check": "prettier --check .",
     "lint": "oxlint src test",
@@ -53,7 +58,7 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "dependency-tree": "^9.0.0",
+    "dependency-tree": "^11.2.0",
     "lightningcss": "^1.30.2"
   },
   "peerDependencies": {
@@ -74,6 +79,7 @@
   },
   "devDependencies": {
     "@knighted/duel": "^2.1.6",
+    "@playwright/test": "^1.48.2",
     "@rspack/cli": "^1.0.0",
     "@rspack/core": "^1.0.0",
     "@types/less": "^3.0.8",

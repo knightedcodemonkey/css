@@ -46,7 +46,7 @@ async function buildFixture() {
   return { mod }
 }
 
-test('loader supports exportName override via query (rspack)', async () => {
+test('loader exports knightedCss via query (rspack)', async () => {
   const { mod } = await buildFixture()
 
   assert.ok(typeof mod.reactStyles === 'string', 'export should be a string')

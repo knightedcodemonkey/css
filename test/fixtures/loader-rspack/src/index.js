@@ -1,4 +1,5 @@
-import { Button, reactStyles } from './button.js?knighted-css&exportName=reactStyles'
+import { Button } from './button.js'
+import { knightedCss as reactStyles } from './button.js?knighted-css'
 
 export { Button, reactStyles }
 

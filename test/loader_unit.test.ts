@@ -33,16 +33,3 @@ test('loader appends CSS export and tracks dependencies', async () => {
   assert.match(output, /export const knightedCss = /, 'should inject default export name')
   assert.ok(ctx.added.size > 0, 'should register at least one dependency')
 })
-
-test('loader falls back to default exportName when query name is invalid', async () => {
-  const ctx = createMockContext()
-  ctx.resourceQuery = '?knighted-css&exportName=123bad'
-  const source = "export default function Button() { return 'ok' }"
-  const output = await loader.call(ctx as LoaderContext<unknown>, source)
-
-  assert.match(
-    output,
-    /export const knightedCss = /,
-    'invalid query name should fall back to default export',
-  )
-})

@@ -1,0 +1,7 @@
+.pw-scss {
+  color: #16a34a;
+
+  .nested & {
+    font-weight: 700;
+  }
+}

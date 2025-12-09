@@ -100,7 +100,7 @@ export async function render(url: string) {
 
 ### Bundler loader (`?knighted-css` query)
 
-When using Webpack/Rspack, add the provided loader so importing a module with a specific query also returns the compiled stylesheet:
+When using Webpack/Rspack, add the provided loader so importing a module with a specific query also returns the compiled stylesheet. Recommended DX: import your component as usual, and import the CSS separately via the query import.
 
 ```js
 // webpack.config.js
@@ -114,7 +114,6 @@ module.exports = {
           {
             loader: '@knighted/css/loader',
             options: {
-              exportName: 'reactStyles', // optional (default: "knightedCss")
               lightningcss: { minify: true }, // all css() options supported
             },
           },
@@ -128,7 +127,8 @@ module.exports = {
 ```ts
 // lit wrapper
 import { LitElement, html, unsafeCSS } from 'lit'
-import { Button, reactStyles } from './button.tsx?knighted-css'
+import { Button } from './button.tsx'
+import { knightedCss as reactStyles } from './button.tsx?knighted-css'
 
 export class ButtonWrapper extends LitElement {
   static styles = [unsafeCSS(reactStyles)]
@@ -137,12 +137,11 @@ export class ButtonWrapper extends LitElement {
   }
 }
 
-// per-import override:
-// import { Button, cardCss } from './button.tsx?knighted-css&exportName=cardCss'
-// (exportName in the query wins over the loader option)
+// Prefer import aliasing when you need a different local name:
+// import { knightedCss as cardCss } from './button.tsx?knighted-css'
 ```
 
-The loader appends `export const reactStyles = "/* compiled css */"` to the module, so you can wire it directly into Lit’s `static styles` or any other runtime.
+The loader appends `export const knightedCss = "/* compiled css */"` to the module when imported with `?knighted-css`. Keep your main module import separate to preserve its typing; use the query import only for the CSS string.
 
 ### Custom resolver (enhanced-resolve example)
 

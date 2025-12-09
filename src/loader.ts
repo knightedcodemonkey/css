@@ -2,13 +2,7 @@ import type { LoaderDefinitionFunction } from 'webpack'
 
 import { cssWithMeta, type CssOptions } from './css.js'
 
-export interface KnightedCssLoaderOptions extends CssOptions {
-  /**
-   * Named export that will contain the compiled CSS string.
-   * Defaults to "knightedCss".
-   */
-  exportName?: string
-}
+export interface KnightedCssLoaderOptions extends CssOptions {}
 
 const DEFAULT_EXPORT_NAME = 'knightedCss'
 
@@ -18,16 +12,7 @@ const loader: LoaderDefinitionFunction<KnightedCssLoaderOptions> = async functio
   const rawOptions = (
     typeof this.getOptions === 'function' ? this.getOptions() : {}
   ) as KnightedCssLoaderOptions
-  const queryParams =
-    typeof this.resourceQuery === 'string' && this.resourceQuery.startsWith('?')
-      ? new URLSearchParams(this.resourceQuery.slice(1))
-      : undefined
-  const queryExportName = queryParams?.get('exportName')?.trim()
-  const isValidIdentifier =
-    typeof queryExportName === 'string' &&
-    /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(queryExportName)
-  const { exportName = DEFAULT_EXPORT_NAME, ...cssOptions } = rawOptions
-  const resolvedExportName = isValidIdentifier ? queryExportName : exportName
+  const cssOptions = rawOptions
   const normalizedOptions: CssOptions = {
     ...cssOptions,
     cwd: cssOptions.cwd ?? this.rootContext ?? process.cwd(),
@@ -40,8 +25,11 @@ const loader: LoaderDefinitionFunction<KnightedCssLoaderOptions> = async functio
   }
 
   const input = typeof source === 'string' ? source : source.toString('utf8')
-  const injection = `\n\nexport const ${resolvedExportName} = ${JSON.stringify(css)};\n`
-  const output = `${input}${injection}`
+  const injection = `\n\nexport const ${DEFAULT_EXPORT_NAME} = ${JSON.stringify(css)};\n`
+  const isStyleModule = this.resourcePath.endsWith('.css.ts')
+  const output = isStyleModule
+    ? `${injection}export default {};\n`
+    : `${input}${injection}`
 
   return output
 }
