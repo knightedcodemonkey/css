@@ -1,19 +1,14 @@
-import './global.d.ts'
-
 import Basic, { className as basicClass } from './dialects/basic.js'
-// @ts-expect-error: loader query is provided by bundler
+
 import { knightedCss as basicCss } from './dialects/basic.js?knighted-css'
 
 import Scss, { className as scssClass } from './dialects/scss.js'
-// @ts-expect-error: loader query is provided by bundler
 import { knightedCss as scssCss } from './dialects/scss.js?knighted-css'
 
 import SassIndented, { className as sassIndentedClass } from './dialects/sass-indented.js'
-// @ts-expect-error: loader query is provided by bundler
 import { knightedCss as sassIndentedCss } from './dialects/sass-indented.js?knighted-css'
 
 import LessComp, { className as lessClass } from './dialects/less.js'
-// @ts-expect-error: loader query is provided by bundler
 import { knightedCss as lessCss } from './dialects/less.js?knighted-css'
 
 import VanillaComp, {
@@ -21,7 +16,6 @@ import VanillaComp, {
   badgeClass,
   tokenClass,
 } from './dialects/vanilla.js'
-// @ts-expect-error: loader query is provided by bundler
 import { knightedCss as vanillaCss } from './dialects/vanilla.css.js?knighted-css'
 
 const dialects = [

@@ -1,0 +1,14 @@
+{
+  "name": "@types/knighted__css",
+  "version": "1.0.0-alpha.2",
+  "private": false,
+  "type": "module",
+  "types": "index.d.ts",
+  "files": [
+    "index.d.ts",
+    "loader-queries.d.ts"
+  ],
+  "dependencies": {
+    "@knighted/css": "1.0.0-alpha.2"
+  }
+}
