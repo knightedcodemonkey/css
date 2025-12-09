@@ -12,7 +12,8 @@ export default {
     path: path.resolve(__dirname, 'dist'),
     filename: 'bundle.js',
     library: {
-      type: 'commonjs2',
+      type: 'umd',
+      name: 'App',
     },
   },
   module: {
