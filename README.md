@@ -4,7 +4,7 @@
 [![codecov](https://codecov.io/gh/knightedcodemonkey/css/graph/badge.svg?token=q93Qqwvq6l)](https://codecov.io/gh/knightedcodemonkey/css)
 [![NPM version](https://img.shields.io/npm/v/@knighted/css.svg)](https://www.npmjs.com/package/@knighted/css)
 
-`@knighted/css` is a build-time helper that walks a JavaScript/TypeScript module graph, finds every CSS-like dependency (plain CSS, Sass/SCSS, Less, vanilla-extract), compiles them, and returns a single concatenated stylesheet string. It is designed to power zero-runtime styling workflows like Lit custom elements, server-side rendering, or pre-rendering pipelines where you need all CSS for a specific entry point without running a full bundler.
+`@knighted/css` is a build-time helper that walks a JavaScript/TypeScript module graph, finds every CSS-like dependency (plain CSS, Sass/SCSS, Less, vanilla-extract), compiles them, and returns a single concatenated stylesheet string. It is designed for workflows where you want fully materialized styles ahead of time—feeding Lit components, server-rendered routes, static site builds, or any pipeline that needs all CSS for a specific entry point without running a full bundler.
 
 ## Features
 
@@ -23,12 +23,10 @@
 ## Installation
 
 ```bash
-npm install @knighted/css \
-  sass less \
-  @vanilla-extract/css @vanilla-extract/integration @vanilla-extract/recipes
+npm install @knighted/css
 ```
 
-Only install the peers you need—if your project never touches Less, you can skip `less`, etc.
+Install the peers your project is using, for example `less`, or `sass`, etc.
 
 ## Quick Start
 
@@ -73,17 +71,18 @@ Typical customizations:
 
 ## Examples
 
-### Extract styles for Lit components
+### Generate standalone stylesheets
 
 ```ts
 import { writeFile } from 'node:fs/promises'
 import { css } from '@knighted/css'
 
-const sheet = await css('./src/lit/my-widget.ts', {
-  lightningcss: { minify: true, targets: { chrome: 120 } },
+// Build-time script that gathers all CSS imported by a React route
+const sheet = await css('./src/routes/marketing-page.tsx', {
+  lightningcss: { minify: true, targets: { chrome: 120, safari: 17 } },
 })
 
-await writeFile('./dist/my-widget.css', sheet)
+await writeFile('./dist/marketing-page.css', sheet)
 ```
 
 ### Inline CSS during SSR
@@ -98,6 +97,52 @@ export async function render(url: string) {
   return `<!doctype html><style>${styles}</style>${html}`
 }
 ```
+
+### Bundler loader (`?knighted-css` query)
+
+When using Webpack/Rspack, add the provided loader so importing a module with a specific query also returns the compiled stylesheet:
+
+```js
+// webpack.config.js
+module.exports = {
+  module: {
+    rules: [
+      {
+        test: /\.[jt]sx?$/,
+        resourceQuery: /knighted-css/,
+        use: [
+          {
+            loader: '@knighted/css/loader',
+            options: {
+              exportName: 'reactStyles', // optional (default: "knightedCss")
+              lightningcss: { minify: true }, // all css() options supported
+            },
+          },
+        ],
+      },
+    ],
+  },
+}
+```
+
+```ts
+// lit wrapper
+import { LitElement, html, unsafeCSS } from 'lit'
+import { Button, reactStyles } from './button.tsx?knighted-css'
+
+export class ButtonWrapper extends LitElement {
+  static styles = [unsafeCSS(reactStyles)]
+  render() {
+    return html`<${Button} />`
+  }
+}
+
+// per-import override:
+// import { Button, cardCss } from './button.tsx?knighted-css&exportName=cardCss'
+// (exportName in the query wins over the loader option)
+```
+
+The loader appends `export const reactStyles = "/* compiled css */"` to the module, so you can wire it directly into Lit’s `static styles` or any other runtime.
 
 ## Scripts
 

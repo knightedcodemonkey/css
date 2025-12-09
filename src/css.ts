@@ -39,7 +39,20 @@ interface StyleModule {
 /**
  * Extract and compile all CSS-like dependencies for a given module.
  */
+export interface CssResult {
+  css: string
+  files: string[]
+}
+
 export async function css(entry: string, options: CssOptions = {}): Promise<string> {
+  const { css: output } = await cssWithMeta(entry, options)
+  return output
+}
+
+export async function cssWithMeta(
+  entry: string,
+  options: CssOptions = {},
+): Promise<CssResult> {
   const cwd = options.cwd ? path.resolve(options.cwd) : process.cwd()
   const entryPath = await resolveEntry(entry, cwd, options.resolver)
   const extensions = (options.extensions ?? DEFAULT_EXTENSIONS).map(ext =>
@@ -54,7 +67,7 @@ export async function css(entry: string, options: CssOptions = {}): Promise<stri
   })
 
   if (files.length === 0) {
-    return ''
+    return { css: '', files: [] }
   }
 
   const chunks: string[] = []
@@ -80,7 +93,7 @@ export async function css(entry: string, options: CssOptions = {}): Promise<stri
     output = code.toString()
   }
 
-  return output
+  return { css: output, files: files.map(file => file.path) }
 }
 
 async function resolveEntry(
