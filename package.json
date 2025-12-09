@@ -10,6 +10,11 @@
       "types": "./dist/css.d.ts",
       "import": "./dist/css.js",
       "require": "./dist/cjs/css.cjs"
+    },
+    "./loader": {
+      "types": "./dist/loader.d.ts",
+      "import": "./dist/loader.js",
+      "require": "./dist/cjs/loader.cjs"
     }
   },
   "engines": {
@@ -37,7 +42,8 @@
   ],
   "scripts": {
     "build": "duel",
-    "test": "c8 --reporter=text --reporter=html tsx --test test/**/*.test.ts",
+    "check-types": "tsc --noEmit",
+    "test": "c8 --reporter=text --reporter=text-summary --reporter=lcov --include \"src/**/*.ts\" tsx --test test/**/*.test.ts",
     "prettier": "prettier --write .",
     "prettier:check": "prettier --check .",
     "lint": "oxlint src test",
@@ -66,7 +72,9 @@
   },
   "devDependencies": {
     "@knighted/duel": "^2.1.6",
+    "@rspack/core": "^1.0.0",
     "@types/less": "^3.0.8",
+    "@types/webpack": "^5.28.5",
     "@vanilla-extract/css": "^1.15.2",
     "@vanilla-extract/integration": "^8.0.6",
     "@vanilla-extract/recipes": "^0.5.7",

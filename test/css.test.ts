@@ -3,7 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 
-import { css, DEFAULT_EXTENSIONS } from '../src/css.ts'
+import { css, cssWithMeta, DEFAULT_EXTENSIONS } from '../src/css.ts'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -101,5 +101,14 @@ test('throws when optional peer is missing', async () => {
   assert.ok(
     /less/i.test(error?.message ?? ''),
     'expected error message to mention missing peer',
+  )
+})
+
+test('cssWithMeta includes dependency file list', async () => {
+  const result = await cssWithMeta(basicEntry)
+  assert.ok(result.css.includes('.demo'))
+  assert.ok(
+    result.files.some(file => file.endsWith('styles.css')),
+    'expected dependency list to include styles.css',
   )
 })

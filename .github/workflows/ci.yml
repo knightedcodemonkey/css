@@ -33,6 +33,8 @@ jobs:
         with:
           name: npm-debug-log-${{ hashFiles('package-lock.json') }}
           path: npm-debug.log
+      - name: Build
+        run: npm run build
       - name: Lint
         run: npm run lint
       - name: Test
@@ -41,7 +43,5 @@ jobs:
         uses: codecov/codecov-action@v5.5.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-      - name: Build
-        run: npm run build
       - name: Pack
         run: npm pack
