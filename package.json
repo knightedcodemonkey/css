@@ -39,8 +39,10 @@
     "build": "duel",
     "test": "c8 --reporter=text --reporter=html tsx --test test/**/*.test.ts",
     "prettier": "prettier --write .",
+    "prettier:check": "prettier --check .",
     "lint": "oxlint src test",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "prepare": "husky"
   },
   "dependencies": {
     "dependency-tree": "^9.0.0",
@@ -69,7 +71,9 @@
     "@vanilla-extract/integration": "^8.0.6",
     "@vanilla-extract/recipes": "^0.5.7",
     "c8": "^10.1.2",
+    "husky": "^9.1.7",
     "less": "^4.2.0",
+    "lint-staged": "^16.2.7",
     "oxlint": "^0.4.1",
     "prettier": "^3.7.4",
     "sass": "^1.80.7",
@@ -93,5 +97,9 @@
     "printWidth": 90,
     "semi": false,
     "singleQuote": true
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,mjs,cjs,cts,mts}": "oxlint",
+    "*.{js,jsx,ts,tsx,mjs,cjs,cts,mts,json,md,css,scss,html}": "prettier --check"
   }
 }
