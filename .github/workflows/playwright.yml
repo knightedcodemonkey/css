@@ -2,10 +2,9 @@ name: Playwright
 
 on:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-  workflow_dispatch: {}
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
   e2e:
@@ -16,7 +15,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4.3.0
         with:
-          node-version: 22.15.0
+          node-version: '24.11.1'
       - name: Install Dependencies
         run: npm ci
       - name: Install Playwright Browsers
