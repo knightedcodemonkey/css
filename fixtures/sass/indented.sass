@@ -1,0 +1,12 @@
+$spacing: 1.25rem
+
+=pill($radius: 999px)
+  border-radius: $radius
+  padding-inline: $spacing
+
+.sass-indented
+  +pill
+  background: linear-gradient(135deg, #f97316, #facc15)
+  &:before
+    content: "Pill"
+    margin-right: 0.5rem

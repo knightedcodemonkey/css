@@ -1,0 +1,304 @@
+import path from 'node:path'
+import { promises as fs } from 'node:fs'
+
+import dependencyTree from 'dependency-tree'
+import type { DependencyTreeOptions } from 'dependency-tree'
+import {
+  transform as lightningTransform,
+  type TransformOptions as LightningTransformOptions,
+} from 'lightningcss'
+
+export const DEFAULT_EXTENSIONS = ['.css', '.scss', '.sass', '.less', '.css.ts']
+
+type LightningCssConfig =
+  | boolean
+  | Partial<Omit<LightningTransformOptions<never>, 'code'>>
+
+export type CssResolver = (
+  specifier: string,
+  ctx: { cwd: string },
+) => string | Promise<string | undefined>
+
+type PeerLoader = (name: string) => Promise<unknown>
+
+export interface CssOptions {
+  extensions?: string[]
+  cwd?: string
+  filter?: (filePath: string) => boolean
+  lightningcss?: LightningCssConfig
+  dependencyTree?: Partial<Omit<DependencyTreeOptions, 'filename' | 'directory'>>
+  resolver?: CssResolver
+  peerResolver?: PeerLoader
+}
+
+interface StyleModule {
+  path: string
+  ext: string
+}
+
+/**
+ * Extract and compile all CSS-like dependencies for a given module.
+ */
+export async function css(entry: string, options: CssOptions = {}): Promise<string> {
+  const cwd = options.cwd ? path.resolve(options.cwd) : process.cwd()
+  const entryPath = await resolveEntry(entry, cwd, options.resolver)
+  const extensions = (options.extensions ?? DEFAULT_EXTENSIONS).map(ext =>
+    ext.toLowerCase(),
+  )
+
+  const files = collectStyleDependencies(entryPath, {
+    cwd,
+    extensions,
+    filter: options.filter,
+    dependencyTreeOptions: options.dependencyTree,
+  })
+
+  if (files.length === 0) {
+    return ''
+  }
+
+  const chunks: string[] = []
+  for (const file of files) {
+    const chunk = await compileStyleModule(file, {
+      cwd,
+      peerResolver: options.peerResolver,
+    })
+    if (chunk) {
+      chunks.push(chunk)
+    }
+  }
+
+  let output = chunks.join('\n')
+
+  if (options.lightningcss) {
+    const lightningOptions = normalizeLightningOptions(options.lightningcss)
+    const { code } = lightningTransform({
+      ...lightningOptions,
+      filename: lightningOptions.filename ?? 'extracted.css',
+      code: Buffer.from(output),
+    })
+    output = code.toString()
+  }
+
+  return output
+}
+
+async function resolveEntry(
+  entry: string,
+  cwd: string,
+  resolver?: CssResolver,
+): Promise<string> {
+  if (typeof resolver === 'function') {
+    const resolved = await resolver(entry, { cwd })
+    if (resolved) {
+      return resolved
+    }
+  }
+
+  if (path.isAbsolute(entry)) {
+    return entry
+  }
+
+  return path.resolve(cwd, entry)
+}
+
+function collectStyleDependencies(
+  entryPath: string,
+  {
+    cwd,
+    extensions,
+    filter,
+    dependencyTreeOptions,
+  }: {
+    cwd: string
+    extensions: string[]
+    filter?: (filePath: string) => boolean
+    dependencyTreeOptions?: Partial<Omit<DependencyTreeOptions, 'filename' | 'directory'>>
+  },
+): StyleModule[] {
+  const seen = new Set<string>()
+  const order: StyleModule[] = []
+
+  const shouldInclude =
+    typeof filter === 'function'
+      ? filter
+      : (filePath: string) => !filePath.includes('node_modules')
+
+  const entryIsStyle = Boolean(matchExtension(entryPath, extensions))
+  let treeList: string[] = []
+
+  if (!entryIsStyle) {
+    const dependencyConfig: DependencyTreeOptions = {
+      ...dependencyTreeOptions,
+      filename: entryPath,
+      directory: cwd,
+      filter: shouldInclude,
+    }
+    treeList = dependencyTree.toList(dependencyConfig)
+  }
+
+  const candidates = entryIsStyle ? [entryPath] : [entryPath, ...treeList]
+
+  for (const candidate of candidates) {
+    const match = matchExtension(candidate, extensions)
+    if (!match || seen.has(candidate)) continue
+    seen.add(candidate)
+    order.push({ path: path.resolve(candidate), ext: match })
+  }
+
+  return order
+}
+
+function matchExtension(filePath: string, extensions: string[]): string | undefined {
+  const lower = filePath.toLowerCase()
+  return extensions.find(ext => lower.endsWith(ext))
+}
+
+async function compileStyleModule(
+  file: StyleModule,
+  { cwd, peerResolver }: { cwd: string; peerResolver?: PeerLoader },
+): Promise<string> {
+  switch (file.ext) {
+    case '.css':
+      return fs.readFile(file.path, 'utf8')
+    case '.scss':
+    case '.sass':
+      return compileSass(file.path, file.ext === '.sass', peerResolver)
+    case '.less':
+      return compileLess(file.path, peerResolver)
+    case '.css.ts':
+      return compileVanillaExtract(file.path, cwd, peerResolver)
+    default:
+      return ''
+  }
+}
+
+async function compileSass(
+  filePath: string,
+  indented: boolean,
+  peerResolver?: PeerLoader,
+): Promise<string> {
+  const sassModule = await optionalPeer<typeof import('sass')>(
+    'sass',
+    'Sass',
+    peerResolver,
+  )
+  const sass = sassModule
+  const result = sass.compile(filePath, {
+    style: 'expanded',
+  })
+  return result.css
+}
+
+async function compileLess(filePath: string, peerResolver?: PeerLoader): Promise<string> {
+  const mod = await optionalPeer<typeof import('less')>('less', 'Less', peerResolver)
+  const less = unwrapModuleNamespace(mod)
+  const source = await fs.readFile(filePath, 'utf8')
+  const result = await less.render(source, { filename: filePath })
+  return result.css
+}
+
+async function compileVanillaExtract(
+  filePath: string,
+  cwd: string,
+  peerResolver?: PeerLoader,
+): Promise<string> {
+  const mod = await optionalPeer<typeof import('@vanilla-extract/integration')>(
+    '@vanilla-extract/integration',
+    'Vanilla Extract',
+    peerResolver,
+  )
+  const namespace = unwrapModuleNamespace(mod)
+  const compileFn = namespace.compile
+  const transformPlugin = namespace.vanillaExtractTransformPlugin
+  const processVanillaFile = namespace.processVanillaFile
+  const getSourceFromVirtualCssFile = namespace.getSourceFromVirtualCssFile
+
+  if (
+    !compileFn ||
+    !getSourceFromVirtualCssFile ||
+    !transformPlugin ||
+    !processVanillaFile
+  ) {
+    throw new Error(
+      '@knighted/css: Unable to load "@vanilla-extract/integration". Please ensure the package exports compile helpers.',
+    )
+  }
+
+  const identOption = process.env.NODE_ENV === 'production' ? 'short' : 'debug'
+  const { source } = await compileFn({
+    filePath,
+    cwd,
+    identOption,
+    esbuildOptions: {
+      plugins: [transformPlugin({ identOption })],
+    },
+  })
+  const processedSource = await processVanillaFile({
+    source,
+    filePath,
+    identOption,
+    outputCss: true,
+  })
+  const imports: string[] = []
+  const importRegex = /['"](?<id>[^'"]+\.vanilla\.css\?source=[^'"]+)['"]/gimu
+  let match: RegExpExecArray | null
+
+  while ((match = importRegex.exec(processedSource)) !== null) {
+    const id = match.groups?.id ?? match[1]
+    if (!id) continue
+    const virtualFile = await getSourceFromVirtualCssFile(id)
+    if (virtualFile?.source) {
+      imports.push(virtualFile.source)
+    }
+  }
+
+  return imports.join('\n')
+}
+
+const defaultPeerLoader: PeerLoader = name => import(name)
+
+async function optionalPeer<T>(
+  name: string,
+  label: string,
+  loader?: PeerLoader,
+): Promise<T> {
+  const importer = loader ?? defaultPeerLoader
+  try {
+    return (await importer(name)) as T
+  } catch (error) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      typeof (error as { code?: string }).code === 'string' &&
+      /MODULE_NOT_FOUND|ERR_MODULE_NOT_FOUND/.test((error as { code: string }).code)
+    ) {
+      throw new Error(
+        `@knighted/css: Attempted to process ${label}, but "${name}" is not installed. Please add it to your project.`,
+      )
+    }
+    throw error
+  }
+}
+
+function unwrapModuleNamespace<T>(mod: T): T {
+  if (
+    typeof mod === 'object' &&
+    mod !== null &&
+    'default' in (mod as Record<string, unknown>) &&
+    (mod as Record<string, unknown>).default
+  ) {
+    return (mod as Record<string, unknown>).default as T
+  }
+  return mod
+}
+
+function normalizeLightningOptions(
+  config: LightningCssConfig,
+): Partial<Omit<LightningTransformOptions<never>, 'code'>> {
+  if (!config || config === true) {
+    return {}
+  }
+  return config
+}

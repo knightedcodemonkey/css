@@ -1,0 +1,97 @@
+{
+  "name": "@knighted/css",
+  "version": "1.0.0-alpha.0",
+  "description": "A build-time utility that traverses JavaScript/TypeScript module dependency graphs to extract, compile, and optimize all imported CSS into a single, in-memory string.",
+  "type": "module",
+  "main": "./dist/css.js",
+  "types": "./dist/css.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/css.d.ts",
+      "import": "./dist/css.js",
+      "require": "./dist/cjs/css.cjs"
+    }
+  },
+  "engines": {
+    "node": ">= 22.15.0",
+    "npm": ">= 10.9.0"
+  },
+  "engineStrict": true,
+  "keywords": [
+    "css",
+    "extract-css",
+    "styles",
+    "dependency-graph",
+    "module-dependencies",
+    "lit",
+    "web-components",
+    "shadow-dom",
+    "sass",
+    "scss",
+    "less",
+    "vanilla-extract",
+    "lightningcss",
+    "build-time",
+    "static-analysis",
+    "css-in-js-zero-runtime"
+  ],
+  "scripts": {
+    "build": "duel",
+    "test": "c8 --reporter=text --reporter=html tsx --test test/**/*.test.ts",
+    "prettier": "prettier --write .",
+    "lint": "oxlint src test",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "dependency-tree": "^9.0.0",
+    "lightningcss": "^1.30.2"
+  },
+  "peerDependencies": {
+    "@vanilla-extract/integration": "^8.0.0",
+    "less": "^4.2.0",
+    "sass": "^1.80.0"
+  },
+  "peerDependenciesMeta": {
+    "@vanilla-extract/integration": {
+      "optional": true
+    },
+    "less": {
+      "optional": true
+    },
+    "sass": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@knighted/duel": "^2.1.6",
+    "@types/less": "^3.0.8",
+    "@vanilla-extract/css": "^1.15.2",
+    "@vanilla-extract/integration": "^8.0.6",
+    "@vanilla-extract/recipes": "^0.5.7",
+    "c8": "^10.1.2",
+    "less": "^4.2.0",
+    "oxlint": "^0.4.1",
+    "prettier": "^3.7.4",
+    "sass": "^1.80.7",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.3"
+  },
+  "files": [
+    "dist"
+  ],
+  "author": "KCM <knightedcodemonkey@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/knightedcodemonkey/css.git"
+  },
+  "bugs": {
+    "url": "https://github.com/knightedcodemonkey/css/issues"
+  },
+  "prettier": {
+    "arrowParens": "avoid",
+    "printWidth": 90,
+    "semi": false,
+    "singleQuote": true
+  }
+}

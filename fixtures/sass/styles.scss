@@ -1,0 +1,19 @@
+$brand: #5b21b6;
+
+@mixin card($shadow: 0 2px 8px rgba(0, 0, 0, 0.1)) {
+  box-shadow: $shadow;
+  border-radius: 0.75rem;
+}
+
+.sass-styles {
+  color: $brand;
+
+  .cta & {
+    font-weight: 600;
+  }
+
+  &:hover {
+    @include card();
+    background: lighten($brand, 12%);
+  }
+}

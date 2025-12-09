@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json.schemastore.org/oxlintrc",
+  "plugins": ["typescript", "unicorn", "oxc"],
+  "env": {
+    "es2022": true,
+    "node": true
+  },
+  "globals": {
+    "process": "readonly"
+  }
+}

@@ -1,0 +1,17 @@
+@primary: #0ea5e9;
+@gap: 12px;
+
+.button-theme(@bg: @primary) {
+  background: @bg;
+  color: #fff;
+  padding: calc(@gap / 1.5) @gap;
+}
+
+.less-styles {
+  .button-theme();
+
+  &:hover {
+    .button-theme(darken(@primary, 8%));
+    transform: translateY(-1px);
+  }
+}
