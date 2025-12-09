@@ -144,6 +144,35 @@ export class ButtonWrapper extends LitElement {
 
 The loader appends `export const reactStyles = "/* compiled css */"` to the module, so you can wire it directly into Lit’s `static styles` or any other runtime.
 
+### Custom resolver (enhanced-resolve example)
+
+If your project uses aliases or nonstandard resolution, plug in a custom resolver. Here’s how to use [`enhanced-resolve`](https://github.com/webpack/enhanced-resolve):
+
+```ts
+import { ResolverFactory } from 'enhanced-resolve'
+import { css } from '@knighted/css'
+
+const resolver = ResolverFactory.createResolver({
+  extensions: ['.ts', '.tsx', '.js'],
+  mainFiles: ['index'],
+})
+
+async function resolveWithEnhanced(id: string, cwd: string): Promise<string | undefined> {
+  return new Promise((resolve, reject) => {
+    resolver.resolve({}, cwd, id, {}, (err, result) => {
+      if (err) return reject(err)
+      resolve(result ?? undefined)
+    })
+  })
+}
+
+const styles = await css('./src/routes/page.tsx', {
+  resolver: (specifier, { cwd }) => resolveWithEnhanced(specifier, cwd),
+})
+```
+
+This keeps `@knighted/css` resolution in sync with your bundler’s alias/extension rules.
+
 ## Scripts
 
 - `npm run build` – Produce CJS/ESM outputs via `@knighted/duel`.
