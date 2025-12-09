@@ -7,7 +7,7 @@ import { css, cssWithMeta, DEFAULT_EXTENSIONS } from '../src/css.ts'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
-const fixturesDir = path.resolve(__dirname, '../fixtures')
+const fixturesDir = path.resolve(__dirname, './fixtures/dialects')
 const basicEntry = path.join(fixturesDir, 'basic/entry.js')
 const basicCss = path.join(fixturesDir, 'basic/styles.css')
 const sassEntry = path.join(fixturesDir, 'sass/styles.scss')

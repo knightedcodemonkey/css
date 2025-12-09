@@ -15,7 +15,7 @@ function createMockContext(): Partial<LoaderContext<unknown>> & {
 } {
   const added = new Set<string>()
   return {
-    resourcePath: path.resolve(__dirname, 'fixtures/basic/entry.js'),
+    resourcePath: path.resolve(__dirname, 'fixtures/dialects/basic/entry.js'),
     rootContext: path.resolve(__dirname, '..'),
     addDependency: (file: string) => {
       added.add(file)
