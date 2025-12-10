@@ -1,6 +1,10 @@
+*.tgz
 node_modules/
 dist/
 coverage/
 .c8/
-*.tgz
 
+# playwright artifacts
+playwright-report/
+test-results/
+blob-report/

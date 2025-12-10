@@ -40,13 +40,10 @@ test('loader appends CSS export and tracks dependencies', async () => {
 })
 
 test('loader handles style modules and buffer sources', async () => {
-  const resourcePath = path.resolve(
-    __dirname,
-    'fixtures/playwright/src/dialects/vanilla.css.ts',
-  )
+  const resourcePath = path.resolve(__dirname, 'fixtures/dialects/vanilla/styles.css.ts')
   const ctx = createMockContext({
     resourcePath,
-    rootContext: path.resolve(__dirname, 'fixtures/playwright/src'),
+    rootContext: path.resolve(__dirname, 'fixtures'),
   })
   const source = Buffer.from('export const ignored = true')
   const output = await loader.call(ctx as LoaderContext<unknown>, source)
@@ -57,7 +54,7 @@ test('loader handles style modules and buffer sources', async () => {
     /export default \{\};/,
     'should emit empty default export for style',
   )
-  assert.match(output, /\.pw-vanilla/, 'should compile vanilla-extract styles')
+  assert.match(output, /styles_themeClass__/, 'should compile vanilla-extract styles')
   assert.ok(
     ctx.added.has(resourcePath),
     'should register the style module as a dependency',

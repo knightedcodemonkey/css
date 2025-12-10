@@ -4,6 +4,10 @@ coverage:
       default:
         target: 80.0
         threshold: 0.5
+        paths:
+          - packages/css/src
     patch:
       default:
         threshold: 5.0
+        paths:
+          - packages/css/src

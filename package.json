@@ -1,87 +1,29 @@
 {
-  "name": "@knighted/css",
-  "version": "1.0.0-alpha.3",
-  "description": "A build-time utility that traverses JavaScript/TypeScript module dependency graphs to extract, compile, and optimize all imported CSS into a single, in-memory string.",
+  "name": "knighted-monorepo",
+  "private": true,
   "type": "module",
   "workspaces": [
-    "types",
-    "test/fixtures/playwright"
+    "packages/css",
+    "packages/types",
+    "packages/playwright"
   ],
-  "main": "./dist/css.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/css.js",
-      "require": "./dist/cjs/css.cjs"
-    },
-    "./loader": {
-      "types": "./dist/loader.d.ts",
-      "import": "./dist/loader.js",
-      "require": "./dist/cjs/loader.cjs"
-    }
-  },
   "engines": {
     "node": ">= 22.15.0",
     "npm": ">= 10.9.0"
   },
   "engineStrict": true,
-  "keywords": [
-    "css",
-    "extract-css",
-    "styles",
-    "dependency-graph",
-    "module-dependencies",
-    "lit",
-    "web-components",
-    "shadow-dom",
-    "sass",
-    "scss",
-    "less",
-    "vanilla-extract",
-    "lightningcss",
-    "build-time",
-    "static-analysis",
-    "css-in-js-zero-runtime"
-  ],
   "scripts": {
-    "build": "duel",
-    "check-types": "tsc --noEmit",
-    "test": "c8 --reporter=text --reporter=text-summary --reporter=lcov --include \"src/**/*.ts\" tsx --test test/**/*.test.ts",
-    "build:fixture": "npx rspack --config test/fixtures/loader-rspack/rspack.config.js",
-    "preview:fixture": "npm run build:fixture && npx http-server test/fixtures/loader-rspack -p 4173",
-    "prebuild:fixture:playwright": "npm run build",
-    "build:fixture:playwright": "npx rspack --config test/fixtures/playwright/rspack.config.js",
-    "serve:fixture:playwright": "npx http-server test/fixtures/playwright/dist -p 4174",
-    "preview:fixture:playwright": "npm run build:fixture:playwright && npx http-server test/fixtures/playwright -p 4174",
-    "test:e2e": "npx playwright test",
+    "build": "npm run build -w @knighted/css",
+    "test": "npm run test -w @knighted/css",
+    "pretest": "npm run build",
+    "test:e2e": "npm run test -w @knighted/css-playwright-fixture",
+    "pretest:e2e": "npm run build",
+    "lint": "oxlint packages",
     "prettier": "prettier --write .",
     "prettier:check": "prettier --check .",
-    "lint": "oxlint src test",
-    "prepack": "npm run build",
-    "prepare": "husky",
+    "preview:e2e": "npm run preview -w @knighted/css-playwright-fixture",
     "clean": "find . -name node_modules -type d -prune -exec rm -rf {} +",
     "clean:dist": "find . -name dist -type d -prune -exec rm -rf {} +"
-  },
-  "dependencies": {
-    "dependency-tree": "^11.2.0",
-    "lightningcss": "^1.30.2"
-  },
-  "peerDependencies": {
-    "@vanilla-extract/integration": "^8.0.0",
-    "less": "^4.2.0",
-    "sass": "^1.80.0"
-  },
-  "peerDependenciesMeta": {
-    "@vanilla-extract/integration": {
-      "optional": true
-    },
-    "less": {
-      "optional": true
-    },
-    "sass": {
-      "optional": true
-    }
   },
   "devDependencies": {
     "@knighted/duel": "^2.1.6",
@@ -108,18 +50,6 @@
     "module-lookup-amd": {
       "glob": "^9.0.0"
     }
-  },
-  "files": [
-    "dist"
-  ],
-  "author": "KCM <knightedcodemonkey@gmail.com>",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/knightedcodemonkey/css.git"
-  },
-  "bugs": {
-    "url": "https://github.com/knightedcodemonkey/css/issues"
   },
   "prettier": {
     "arrowParens": "avoid",

@@ -33,8 +33,6 @@ jobs:
         with:
           name: npm-debug-log-${{ hashFiles('package-lock.json') }}
           path: npm-debug.log
-      - name: Build
-        run: npm run build
       - name: Lint
         run: npm run lint
       - name: Test
@@ -44,4 +42,4 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
       - name: Pack
-        run: npm pack
+        run: npm pack --pack-destination=packages/css --workspace=@knighted/css

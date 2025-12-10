@@ -17,7 +17,7 @@ if (isCI) {
 }
 
 export default defineConfig({
-  testDir: 'test/e2e',
+  testDir: 'test',
   timeout: 60_000,
   expect: {
     timeout: 10_000,
@@ -29,7 +29,7 @@ export default defineConfig({
     video: 'retain-on-failure',
   },
   webServer: {
-    command: 'npm run preview:fixture:playwright',
+    command: 'npm run preview',
     url: 'http://127.0.0.1:4174',
     reuseExistingServer: !isCI,
     timeout: 120_000,
