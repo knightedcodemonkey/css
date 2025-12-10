@@ -17,7 +17,7 @@
     "test": "npm run test -w @knighted/css",
     "pretest": "npm run build",
     "test:e2e": "npm run test -w @knighted/css-playwright-fixture",
-    "pretest:e2e": "npm run build",
+    "pretest:e2e": "npm run setup:jsx-wasm && npm run build",
     "lint": "oxlint packages",
     "prettier": "prettier --write .",
     "prettier:check": "prettier --check .",
@@ -25,10 +25,13 @@
     "check-types": "npm run check-types -w @knighted/css && npm run check-types -w @knighted/css-playwright-fixture",
     "clean:deps": "find . -name node_modules -type d -prune -exec rm -rf {} +",
     "clean:dist": "find . -name dist -type d -prune -exec rm -rf {} +",
-    "clean": "npm run clean:deps && npm run clean:dist"
+    "clean": "npm run clean:deps && npm run clean:dist",
+    "setup:jsx-wasm": "node scripts/setup-jsx-wasm.mjs"
   },
   "devDependencies": {
     "@knighted/duel": "^2.1.6",
+    "@emnapi/core": "^1.2.0",
+    "@emnapi/runtime": "^1.2.0",
     "@playwright/test": "^1.48.2",
     "@rspack/cli": "^1.0.0",
     "@rspack/core": "^1.0.0",
@@ -42,6 +45,7 @@
     "husky": "^9.1.7",
     "less": "^4.2.0",
     "lint-staged": "^16.2.7",
+    "@napi-rs/wasm-runtime": "^1.0.7",
     "oxlint": "^0.4.1",
     "prettier": "^3.7.4",
     "sass": "^1.80.7",

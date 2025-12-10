@@ -132,7 +132,7 @@ module.exports = {
 
 ```ts
 // lit wrapper
-import { reactJsx } from '@knighted/jsx'
+import { reactJsx } from '@knighted/jsx/react'
 import { createRoot, type Root } from 'react-dom/client'
 import { LitElement, html, unsafeCSS } from 'lit'
 import { Button } from './button.tsx'

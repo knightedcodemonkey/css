@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { ProvidePlugin } from '@rspack/core'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -17,9 +18,9 @@ export default {
     },
   },
   resolve: {
-    extensions: ['.ts', '.js'],
+    extensions: ['.tsx', '.ts', '.js'],
     extensionAlias: {
-      '.js': ['.js', '.ts'],
+      '.js': ['.js', '.ts', '.tsx'],
     },
   },
   module: {
@@ -40,7 +41,7 @@ export default {
                 target: 'es2022',
                 parser: {
                   syntax: 'typescript',
-                  tsx: false,
+                  tsx: true,
                 },
               },
             },
@@ -65,7 +66,7 @@ export default {
                 target: 'es2022',
                 parser: {
                   syntax: 'typescript',
-                  tsx: false,
+                  tsx: true,
                 },
               },
             },
@@ -76,6 +77,9 @@ export default {
         test: /\.tsx?$/,
         exclude: /node_modules/,
         use: [
+          {
+            loader: '@knighted/jsx/loader',
+          },
           {
             loader: 'builtin:swc-loader',
             options: {
@@ -104,4 +108,9 @@ export default {
       },
     ],
   },
+  plugins: [
+    new ProvidePlugin({
+      React: 'react',
+    }),
+  ],
 }

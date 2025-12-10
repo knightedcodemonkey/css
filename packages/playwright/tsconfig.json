@@ -6,7 +6,8 @@
     "strict": true,
     "outDir": "dist",
     "skipLibCheck": true,
-    "declaration": true
+    "declaration": true,
+    "jsx": "react-jsx"
   },
   "include": ["src/**/*"]
 }
