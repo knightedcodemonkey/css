@@ -5,6 +5,7 @@ export function renderLitReactDemo(root: HTMLElement): void {
   ensureButtonWrapperDefined()
   const host = document.createElement(BUTTON_WRAPPER_TAG)
   host.dataset.testid = LIT_REACT_TEST_ID
+  host.setAttribute('cta-label', 'Launch CSS Build')
   root.appendChild(host)
 }
 
