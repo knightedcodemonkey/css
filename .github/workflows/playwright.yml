@@ -20,7 +20,5 @@ jobs:
         run: npm ci
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium webkit
-      - name: Build Playwright fixture
-        run: npm run build:fixture:playwright
       - name: Run Playwright
         run: npm run test:e2e

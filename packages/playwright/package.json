@@ -1,0 +1,20 @@
+{
+  "name": "@knighted/css-playwright-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "npx rspack --config rspack.config.js",
+    "check-types": "tsc --noEmit",
+    "preview": "npm run build && npx http-server . -p 4174",
+    "serve": "npx http-server dist -p 4174",
+    "test": "npx playwright test",
+    "pretest": "npm run build"
+  },
+  "dependencies": {
+    "@knighted/css": "1.0.0-alpha.3"
+  },
+  "devDependencies": {
+    "@types/knighted__css": "1.0.0-alpha.3"
+  }
+}
