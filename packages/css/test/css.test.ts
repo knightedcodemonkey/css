@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 
 import { css, cssWithMeta, DEFAULT_EXTENSIONS } from '../src/css.ts'
+import { buildSpecificityVisitor, serializeSelector } from '../src/helpers.ts'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -14,6 +15,9 @@ const sassEntry = path.join(fixturesDir, 'sass/styles.scss')
 const sassIndentedEntry = path.join(fixturesDir, 'sass/indented.sass')
 const lessEntry = path.join(fixturesDir, 'less/theme.less')
 const vanillaEntry = path.join(fixturesDir, 'vanilla/styles.css.ts')
+const miscFixturesDir = path.resolve(__dirname, './fixtures/misc')
+const selectorsCss = path.join(miscFixturesDir, 'selectors.css')
+const unsupportedStyle = path.join(miscFixturesDir, 'unsupported.noop')
 
 test('extracts CSS from JS dependency graph', async () => {
   const result = await css(basicEntry)
@@ -66,6 +70,40 @@ test('optionally compiles with lightningcss', async () => {
   )
 })
 
+test('supports boolean lightningcss option', async () => {
+  const result = await css(basicEntry, { lightningcss: true })
+  assert.match(result, /\.demo/)
+})
+
+test('composes lightningcss visitors with specificity visitor', async () => {
+  const calls: string[] = []
+  const result = await css(selectorsCss, {
+    lightningcss: {
+      visitor: {
+        Rule: {
+          style(rule) {
+            calls.push('user')
+            return rule
+          },
+        },
+      },
+    },
+    specificityBoost: {
+      visitor: {
+        Rule: {
+          style(rule) {
+            calls.push('boost')
+            return rule
+          },
+        },
+      },
+    },
+  })
+  assert.ok(result.length > 0)
+  assert.ok(calls.includes('user'), 'expected user visitor to execute')
+  assert.ok(calls.includes('boost'), 'expected specificity visitor to execute')
+})
+
 test('applies specificityBoost strategy (repeat-class)', async () => {
   const result = await css(basicEntry, {
     lightningcss: { minify: true, sourceMap: false },
@@ -94,6 +132,102 @@ test('applies specificityBoost strategy (append-where)', async () => {
   )
 })
 
+test('string specificityBoost repeat-class targets matches only', async () => {
+  const result = await css(selectorsCss, {
+    specificityBoost: {
+      strategy: { type: 'repeat-class', times: 1 },
+      match: ['match-target'],
+    },
+  })
+  assert.match(result, /\.match-target\.match-target/)
+  assert.ok(
+    !/\.skip-target\.skip-target/.test(result),
+    'skip-target should remain single',
+  )
+})
+
+test('string specificityBoost append-where targets matches only', async () => {
+  const result = await css(selectorsCss, {
+    specificityBoost: {
+      strategy: { type: 'append-where', token: '.extra' },
+      match: [/append-target/],
+    },
+  })
+  assert.match(result, /\.append-target:where\(\.extra\)/)
+  assert.ok(
+    !/\.append-skip:where\(\.extra\)/.test(result),
+    'append-skip should remain unchanged',
+  )
+})
+
+test('buildSpecificityVisitor repeat-class mutates matching selectors', () => {
+  const visitor = buildSpecificityVisitor({
+    strategy: { type: 'repeat-class', times: 2 },
+    match: ['.never-match', /match-target/],
+  })
+  assert.ok(visitor?.Rule, 'expected repeat-class visitor to be defined')
+
+  const rule = {
+    selectors: [
+      [
+        { type: 'class', value: 'match-target' },
+        { type: 'combinator', value: ' ' },
+        { type: 'id', value: 'hero' },
+        { type: 'combinator', value: '>' },
+        { type: 'type', name: 'button' },
+        { type: 'class', value: 'primary' },
+        { type: 'pseudo-class', kind: 'hover' },
+      ],
+      [{ type: 'class', value: 'skip-target' }],
+    ],
+  }
+
+  const ruleVisitor = visitor.Rule as any
+  const updated = ruleVisitor.style(rule as any)
+  const [matchSel, skipSel] = (updated.selectors ?? []) as typeof rule.selectors
+
+  const appended = matchSel.slice(-2)
+  assert.equal(appended.length, 2, 'expected two duplicate class nodes')
+  for (const node of appended) {
+    assert.equal(node.type, 'class')
+    assert.equal(node.value, 'primary')
+  }
+  assert.equal(
+    serializeSelector(skipSel),
+    '.skip-target',
+    'non-matching selectors should remain untouched',
+  )
+})
+
+test('buildSpecificityVisitor append-where applies token selectively', () => {
+  const visitor = buildSpecificityVisitor({
+    strategy: { type: 'append-where', token: '.boost' },
+    match: ['.unused', /append-target/],
+  })
+  assert.ok(visitor?.Rule, 'expected append-where visitor')
+
+  const rule = {
+    selectors: [
+      [{ type: 'class', value: 'append-target' }],
+      [{ type: 'class', value: 'append-skip' }],
+    ],
+  }
+
+  const ruleVisitor = visitor.Rule as any
+  const updated = ruleVisitor.style(rule as any)
+  const [matchSel, skipSel] = (updated.selectors ?? []) as typeof rule.selectors
+
+  const pseudo = matchSel.at(-1) as any
+  assert.equal(pseudo?.type, 'pseudo-class', 'expected pseudo-class at end of selector')
+  assert.equal(pseudo?.kind, 'where')
+  assert.deepEqual(pseudo?.selectors, [[{ type: 'class', value: 'boost' }]])
+  assert.equal(
+    serializeSelector(skipSel),
+    '.append-skip',
+    'non-matching selectors should remain unchanged',
+  )
+})
+
 test('filters dependency graph via option', async () => {
   const result = await css(basicEntry, {
     filter: filePath => !filePath.endsWith('styles.css'),
@@ -106,6 +240,17 @@ test('falls back when resolver returns undefined', async () => {
     resolver: async () => undefined,
   })
   assert.match(result, /\.demo/)
+})
+
+test('skips unsupported extensions while tracking files', async () => {
+  const result = await cssWithMeta(unsupportedStyle, {
+    extensions: ['.noop'],
+  })
+  assert.equal(result.css, '')
+  assert.ok(
+    result.files.some(file => file.endsWith('unsupported.noop')),
+    'expected unsupported file to still be reported',
+  )
 })
 
 test('exposes default extensions', () => {
@@ -129,6 +274,41 @@ test('throws when optional peer is missing', async () => {
   assert.ok(
     /less/i.test(error?.message ?? ''),
     'expected error message to mention missing peer',
+  )
+})
+
+test('rethrows unexpected optional peer errors', async () => {
+  await assert.rejects(
+    () =>
+      css(lessEntry, {
+        peerResolver: async name => {
+          if (name === 'less') {
+            const err = new Error('permission denied') as NodeJS.ErrnoException
+            err.code = 'EACCES'
+            throw err
+          }
+          throw new Error(`unexpected module: ${name}`)
+        },
+      }),
+    (error: Error) => {
+      assert.match(error.message, /permission denied/)
+      return true
+    },
+  )
+})
+
+test('throws when vanilla-extract helpers are missing', async () => {
+  await assert.rejects(
+    () =>
+      css(vanillaEntry, {
+        peerResolver: async name => {
+          if (name === '@vanilla-extract/integration') {
+            return {}
+          }
+          throw new Error(`unexpected module: ${name}`)
+        },
+      }),
+    /Unable to load/,
   )
 })
 

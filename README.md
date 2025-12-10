@@ -53,8 +53,9 @@ type CssOptions = {
   filter?: (filePath: string) => boolean
   lightningcss?: boolean | LightningTransformOptions
   specificityBoost?: {
-    // supply a Lightning CSS visitor to raise specificity for targeted selectors
-    visitor: LightningTransformOptions['visitor']
+    visitor?: LightningTransformOptions<never>['visitor']
+    strategy?: SpecificityStrategy
+    match?: SpecificitySelector[]
   }
   dependencyTree?: DependencyTreeOptions
   resolver?: (
@@ -219,19 +220,6 @@ If you omit `match`, the strategy applies to all selectors. Use `append-where` w
 
 > [!TIP]
 > See [docs/specificity-boost-visitor.md](./docs/specificity-boost-visitor.md) for a concrete visitor example.
-
-## Scripts
-
-- `npm run build` – Produce CJS/ESM outputs via `@knighted/duel`.
-- `npm test` – Runs the Node test suite with `tsx` and reports coverage via `c8`.
-- `npm run lint` – Static analysis through `oxlint`.
-
-## Contributing
-
-1. Clone the repo and install dependencies with `npm install`.
-2. Run `npm test` to ensure fixtures compile across Sass/Less/vanilla-extract.
-3. Add/adjust fixtures in `fixtures/` when adding new language features to keep coverage high.
-4. Open a PR with a description of the change and tests.
 
 ## License
 
