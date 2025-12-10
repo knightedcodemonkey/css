@@ -24,8 +24,11 @@ export default {
           {
             loader: '@knighted/css/loader',
             options: {
-              exportName: 'reactStyles',
               lightningcss: { minify: true },
+              specificityBoost: {
+                match: [/^\.text/],
+                strategy: { type: 'repeat-class', times: 1 },
+              },
             },
           },
         ],

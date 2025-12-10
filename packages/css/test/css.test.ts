@@ -66,6 +66,34 @@ test('optionally compiles with lightningcss', async () => {
   )
 })
 
+test('applies specificityBoost strategy (repeat-class)', async () => {
+  const result = await css(basicEntry, {
+    lightningcss: { minify: true, sourceMap: false },
+    specificityBoost: {
+      strategy: { type: 'repeat-class', times: 1 },
+    },
+  })
+  assert.match(
+    result,
+    /\.demo\.demo/,
+    'expected repeat-class strategy to duplicate the class selector',
+  )
+})
+
+test('applies specificityBoost strategy (append-where)', async () => {
+  const result = await css(basicEntry, {
+    lightningcss: { minify: true, sourceMap: false },
+    specificityBoost: {
+      strategy: { type: 'append-where', token: '.boost' },
+    },
+  })
+  assert.match(
+    result,
+    /\.demo:where\(\.boost\)/,
+    'expected append-where strategy to append :where(.boost)',
+  )
+})
+
 test('filters dependency graph via option', async () => {
   const result = await css(basicEntry, {
     filter: filePath => !filePath.endsWith('styles.css'),

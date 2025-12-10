@@ -1,0 +1,8 @@
+.text.body.emphasis {
+  color: teal;
+  font-weight: 600;
+}
+
+.text.body.emphasis .child {
+  color: darkcyan;
+}

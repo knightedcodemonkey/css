@@ -51,6 +51,10 @@ The concatenation order we produce aligns with the "**Order of Appearance**" par
 - Unknown/modern at-rules (e.g., `@scope`) are passed through as written; we do not strip or reorder them.
 - If you need polyfills for non-supporting browsers, add a follow-on CSS transform step; we leave them intact.
 
+## Optional specificity boosts
+
+If you need to raise specificity for targeted selectors, you can supply a Lightning CSS visitor via the `specificityBoost` option (available in both the helper and loader). We compose your visitor with any existing `lightningcss.visitor` you provide; order of rules stays the same.
+
 ## What to expect
 
 - Cascade behavior should match running the same module graph in a bundler that respects import order.
