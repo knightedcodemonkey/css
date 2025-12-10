@@ -17,6 +17,7 @@ import VanillaComp, {
   tokenClass,
 } from './dialects/vanilla.js'
 import { knightedCss as vanillaCss } from './dialects/vanilla.css.js?knighted-css'
+import { renderLitReactDemo } from './lit-react/index.js'
 
 const dialects = [
   { label: Basic(), className: basicClass, css: basicCss, testId: 'dialect-basic' },
@@ -53,10 +54,12 @@ function render() {
     el.textContent = dialect.label
     root.appendChild(el)
   }
+  return root
 }
 
 if (typeof document !== 'undefined') {
-  render()
+  const root = render()
+  renderLitReactDemo(root)
 }
 
 export { render }
