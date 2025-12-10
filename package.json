@@ -1,8 +1,12 @@
 {
   "name": "@knighted/css",
-  "version": "1.0.0-alpha.2",
+  "version": "1.0.0-alpha.3",
   "description": "A build-time utility that traverses JavaScript/TypeScript module dependency graphs to extract, compile, and optimize all imported CSS into a single, in-memory string.",
   "type": "module",
+  "workspaces": [
+    "types",
+    "test/fixtures/playwright"
+  ],
   "main": "./dist/css.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -42,7 +46,6 @@
   ],
   "scripts": {
     "build": "duel",
-    "postbuild": "cp src/types/*.d.ts dist/",
     "check-types": "tsc --noEmit",
     "test": "c8 --reporter=text --reporter=text-summary --reporter=lcov --include \"src/**/*.ts\" tsx --test test/**/*.test.ts",
     "build:fixture": "npx rspack --config test/fixtures/loader-rspack/rspack.config.js",
@@ -56,7 +59,9 @@
     "prettier:check": "prettier --check .",
     "lint": "oxlint src test",
     "prepack": "npm run build",
-    "prepare": "husky"
+    "prepare": "husky",
+    "clean": "find . -name node_modules -type d -prune -exec rm -rf {} +",
+    "clean:dist": "find . -name dist -type d -prune -exec rm -rf {} +"
   },
   "dependencies": {
     "dependency-tree": "^11.2.0",
@@ -98,6 +103,11 @@
     "sass": "^1.80.7",
     "tsx": "^4.19.2",
     "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "module-lookup-amd": {
+      "glob": "^9.0.0"
+    }
   },
   "files": [
     "dist"

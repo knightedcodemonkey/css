@@ -143,6 +143,17 @@ export class ButtonWrapper extends LitElement {
 
 The loader appends `export const knightedCss = "/* compiled css */"` to the module when imported with `?knighted-css`. Keep your main module import separate to preserve its typing; use the query import only for the CSS string.
 
+#### TypeScript ambient module for `?knighted-css`
+
+If your tsconfig doesn’t already pick up the ambient modules, add a small shim so query imports type-check:
+
+```ts
+// knighted-css.d.ts (anywhere under your tsconfig include)
+declare module '*?knighted-css' {
+  export const knightedCss: string
+}
+```
+
 ### Custom resolver (enhanced-resolve example)
 
 If your project uses aliases or nonstandard resolution, plug in a custom resolver. Here’s how to use [`enhanced-resolve`](https://github.com/webpack/enhanced-resolve):
