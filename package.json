@@ -22,6 +22,7 @@
     "prettier": "prettier --write .",
     "prettier:check": "prettier --check .",
     "preview:e2e": "npm run preview -w @knighted/css-playwright-fixture",
+    "check-types": "npm run check-types -w @knighted/css && npm run check-types -w @knighted/css-playwright-fixture",
     "clean": "find . -name node_modules -type d -prune -exec rm -rf {} +",
     "clean:dist": "find . -name dist -type d -prune -exec rm -rf {} +"
   },

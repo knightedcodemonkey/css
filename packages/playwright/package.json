@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "npx rspack --config rspack.config.js",
+    "check-types": "tsc --noEmit",
     "preview": "npm run build && npx http-server . -p 4174",
     "serve": "npx http-server dist -p 4174",
     "test": "npx playwright test",
