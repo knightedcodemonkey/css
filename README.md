@@ -132,33 +132,74 @@ module.exports = {
 
 ```ts
 // lit wrapper
+import { reactJsx } from '@knighted/jsx'
+import { createRoot, type Root } from 'react-dom/client'
 import { LitElement, html, unsafeCSS } from 'lit'
 import { Button } from './button.tsx'
 import { knightedCss as reactStyles } from './button.tsx?knighted-css'
 
 export class ButtonWrapper extends LitElement {
   static styles = [unsafeCSS(reactStyles)]
+  #reactRoot?: Root
+
+  firstUpdated(): void {
+    this.#mountReact()
+  }
+
+  disconnectedCallback(): void {
+    this.#reactRoot?.unmount()
+    super.disconnectedCallback()
+  }
+
+  #mountReact() {
+    const outlet = this.renderRoot.querySelector(
+      '[data-react-root]',
+    ) as HTMLDivElement | null
+    if (!outlet) return
+    this.#reactRoot = createRoot(outlet)
+    this.#reactRoot.render(reactJsx`<${Button} />`)
+  }
+
   render() {
-    return html`<${Button} />`
+    return html`<div data-react-root></div>`
   }
 }
 
-// Prefer import aliasing when you need a different local name:
-// import { knightedCss as cardCss } from './button.tsx?knighted-css'
+customElements.define('button-wrapper', ButtonWrapper)
 ```
 
 The loader appends `export const knightedCss = "/* compiled css */"` to the module when imported with `?knighted-css`. Keep your main module import separate to preserve its typing; use the query import only for the CSS string.
 
-#### TypeScript ambient module for `?knighted-css`
+#### TypeScript support for loader queries
 
-If your tsconfig doesn’t already pick up the ambient modules, add a small shim so query imports type-check:
+Until we publish the ambient declarations to npm, copy [`packages/types/loader-queries.d.ts`](./packages/types/loader-queries.d.ts) into your project (or reference it directly via `typeRoots`). That file declares the two query patterns we rely on:
+
+- `*?knighted-css` imports expose a `knightedCss: string` export.
+- `*?knighted-css&combined` (and permutations that include both flags) also gain a default export typed as `KnightedCssCombinedModule<Record<string, unknown>>` so you can narrow it to your source module.
+
+> [!NOTE]
+> We plan to publish these under an `@types/knighted__css` package. Until then, vendoring the declaration file keeps your project unblocked.
+
+#### Combined module + CSS import
+
+If you prefer a single import that returns both your module exports and the compiled stylesheet, append `&combined` to the query:
 
 ```ts
-// knighted-css.d.ts (anywhere under your tsconfig include)
-declare module '*?knighted-css' {
-  export const knightedCss: string
-}
+import { Button, knightedCss } from './button.tsx?knighted-css&combined'
 ```
+
+This keeps your bundler’s other CSS loaders intact while guaranteeing that `knightedCss` is only computed once. The trade-off is that TypeScript can’t infer the original module shape automatically. To restore those typings, use the helper type exported by the loader:
+
+```ts
+import type { KnightedCssCombinedModule } from '@knighted/css/loader'
+import combined from './button.tsx?knighted-css&combined'
+
+const { Button, knightedCss } = combined as KnightedCssCombinedModule<
+  typeof import('./button')
+>
+```
+
+You can mix and match: regular `?knighted-css` imports keep strong module typings and just add the CSS string, while `?knighted-css&combined` dedupes your CSS loader pipeline when you need everything at once.
 
 ### Custom resolver (enhanced-resolve example)
 

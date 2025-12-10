@@ -5,3 +5,23 @@
 declare module '*?knighted-css' {
   export const knightedCss: string
 }
+
+/**
+ * Ambient declaration for combined loader imports (e.g. "./file.tsx?knighted-css&combined").
+ * These modules behave like the original module with an additional `knightedCss` export.
+ * TypeScript cannot infer the underlying module automatically, so consumers can
+ * import the default export and narrow it with `KnightedCssCombinedModule<typeof import('./file')>`.
+ */
+type KnightedCssCombinedModule<TModule> = TModule & { knightedCss: string }
+
+declare module '*?*knighted-css*combined*' {
+  const combined: KnightedCssCombinedModule<Record<string, unknown>>
+  export default combined
+  export const knightedCss: string
+}
+
+declare module '*?*combined*knighted-css*' {
+  const combined: KnightedCssCombinedModule<Record<string, unknown>>
+  export default combined
+  export const knightedCss: string
+}
