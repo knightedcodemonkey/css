@@ -132,33 +132,53 @@ module.exports = {
 
 ```ts
 // lit wrapper
+import { reactJsx } from '@knighted/jsx'
+import { createRoot, type Root } from 'react-dom/client'
 import { LitElement, html, unsafeCSS } from 'lit'
 import { Button } from './button.tsx'
 import { knightedCss as reactStyles } from './button.tsx?knighted-css'
 
 export class ButtonWrapper extends LitElement {
   static styles = [unsafeCSS(reactStyles)]
+  #reactRoot?: Root
+
+  firstUpdated(): void {
+    this.#mountReact()
+  }
+
+  disconnectedCallback(): void {
+    this.#reactRoot?.unmount()
+    super.disconnectedCallback()
+  }
+
+  #mountReact() {
+    const outlet = this.renderRoot.querySelector(
+      '[data-react-root]',
+    ) as HTMLDivElement | null
+    if (!outlet) return
+    this.#reactRoot = createRoot(outlet)
+    this.#reactRoot.render(reactJsx`<${Button} />`)
+  }
+
   render() {
-    return html`<${Button} />`
+    return html`<div data-react-root></div>`
   }
 }
 
-// Prefer import aliasing when you need a different local name:
-// import { knightedCss as cardCss } from './button.tsx?knighted-css'
+customElements.define('button-wrapper', ButtonWrapper)
 ```
 
 The loader appends `export const knightedCss = "/* compiled css */"` to the module when imported with `?knighted-css`. Keep your main module import separate to preserve its typing; use the query import only for the CSS string.
 
 #### TypeScript support for loader queries
 
-Install the published declarations and the loader queries will type-check automatically:
-
-```bash
-npm install -D @types/knighted__css
-```
+Until we publish the ambient declarations to npm, copy [`packages/types/loader-queries.d.ts`](./packages/types/loader-queries.d.ts) into your project (or reference it directly via `typeRoots`). That file declares the two query patterns we rely on:
 
 - `*?knighted-css` imports expose a `knightedCss: string` export.
 - `*?knighted-css&combined` (and permutations that include both flags) also gain a default export typed as `KnightedCssCombinedModule<Record<string, unknown>>` so you can narrow it to your source module.
+
+> [!NOTE]
+> We plan to publish these under an `@types/knighted__css` package. Until then, vendoring the declaration file keeps your project unblocked.
 
 #### Combined module + CSS import
 
