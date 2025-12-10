@@ -5,14 +5,20 @@ import test from 'node:test'
 
 import type { LoaderContext } from 'webpack'
 
-import loader from '../src/loader.js'
+import loader, { type KnightedCssLoaderOptions, pitch } from '../src/loader.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
+type MockLoaderContext = Partial<LoaderContext<KnightedCssLoaderOptions>> & {
+  added: Set<string>
+}
+
 function createMockContext(
-  overrides: Partial<LoaderContext<unknown>> & { added?: Set<string> } = {},
-): Partial<LoaderContext<unknown>> & { added: Set<string> } {
+  overrides: Partial<LoaderContext<KnightedCssLoaderOptions>> & {
+    added?: Set<string>
+  } = {},
+): MockLoaderContext {
   const added = overrides.added ?? new Set<string>()
   return {
     resourcePath:
@@ -24,7 +30,11 @@ function createMockContext(
       ((file: string) => {
         added.add(file)
       }),
-    async: undefined,
+    getOptions: overrides.getOptions ?? (() => ({}) as KnightedCssLoaderOptions),
+    loadModule: overrides.loadModule,
+    resourceQuery: overrides.resourceQuery,
+    context: overrides.context,
+    utils: overrides.utils,
     added,
     ...overrides,
   }
@@ -33,7 +43,9 @@ function createMockContext(
 test('loader appends CSS export and tracks dependencies', async () => {
   const ctx = createMockContext()
   const source = "export default function Button() { return 'ok' }"
-  const output = await loader.call(ctx as LoaderContext<unknown>, source)
+  const output = String(
+    await loader.call(ctx as LoaderContext<KnightedCssLoaderOptions>, source),
+  )
 
   assert.match(output, /export const knightedCss = /, 'should inject default export name')
   assert.ok(ctx.added.size > 0, 'should register at least one dependency')
@@ -46,7 +58,12 @@ test('loader handles style modules and buffer sources', async () => {
     rootContext: path.resolve(__dirname, 'fixtures'),
   })
   const source = Buffer.from('export const ignored = true')
-  const output = await loader.call(ctx as LoaderContext<unknown>, source)
+  const output = String(
+    await loader.call(
+      ctx as LoaderContext<KnightedCssLoaderOptions>,
+      source as unknown as string,
+    ),
+  )
 
   assert.match(output, /export const knightedCss = /, 'should inject css variable export')
   assert.match(
@@ -69,9 +86,11 @@ test('loader reads options from getOptions and honors cwd override', async () =>
     rootContext: undefined,
     getOptions: () => ({ cwd }),
   })
-  const output = await loader.call(
-    ctx as LoaderContext<unknown>,
-    "export const noop = ''",
+  const output = String(
+    await loader.call(
+      ctx as LoaderContext<KnightedCssLoaderOptions>,
+      "export const noop = ''",
+    ),
   )
 
   assert.match(output, /export const knightedCss = /, 'should inject css variable export')
@@ -88,11 +107,112 @@ test('loader falls back to process.cwd when no cwd hints are provided', async ()
     rootContext: undefined,
     getOptions: () => ({}),
   })
-  const output = await loader.call(
-    ctx as LoaderContext<unknown>,
-    "export const noop = ''",
+  const output = String(
+    await loader.call(
+      ctx as LoaderContext<KnightedCssLoaderOptions>,
+      "export const noop = ''",
+    ),
   )
 
   assert.match(output, /export const knightedCss = /, 'should inject css variable export')
   assert.ok(ctx.added.size > 0, 'should still register dependencies')
+})
+
+test('pitch returns combined module when query includes combined flag', async () => {
+  const resourcePath = path.resolve(__dirname, 'fixtures/dialects/basic/entry.js')
+  const ctx = createMockContext({
+    resourcePath,
+    resourceQuery: '?knighted-css&combined',
+    loadModule: (_request, callback) => {
+      callback(null, "export const Button = () => 'ok';")
+    },
+  })
+
+  const result = await pitch.call(
+    ctx as LoaderContext<KnightedCssLoaderOptions>,
+    `${resourcePath}?knighted-css&combined`,
+    '',
+    {},
+  )
+
+  const combinedOutput = String(result ?? '')
+
+  assert.match(combinedOutput, /import \* as __knightedModule from/)
+  assert.match(combinedOutput, /export \* from/)
+  assert.match(combinedOutput, /export default __knightedDefault/)
+  assert.match(combinedOutput, /export const knightedCss = /)
+  assert.ok(ctx.added.size > 0, 'pitch should still register dependencies')
+})
+
+test('pitch returns undefined when combined flag is missing', async () => {
+  const resourcePath = path.resolve(__dirname, 'fixtures/dialects/basic/entry.js')
+  const ctx = createMockContext({
+    resourcePath,
+    resourceQuery: '?knighted-css',
+  })
+
+  const result = await pitch.call(
+    ctx as LoaderContext<KnightedCssLoaderOptions>,
+    `${resourcePath}?knighted-css`,
+    '',
+    {},
+  )
+
+  assert.equal(result, undefined)
+  assert.equal(ctx.added.size, 0, 'pitch should exit before tracking dependencies')
+})
+
+test('pitch contextifies proxy request when loader utils are available', async () => {
+  const resourcePath = path.resolve(__dirname, 'fixtures/dialects/basic/entry.js')
+  const contextPath = path.resolve(__dirname, 'fixtures')
+  const calls: Array<{ context: string; request: string }> = []
+  const ctx = createMockContext({
+    resourcePath,
+    context: contextPath,
+    resourceQuery: '?knighted-css&combined&chunk=demo',
+    utils: {
+      contextify: (ctxPath: string, request: string) => {
+        calls.push({ context: ctxPath, request })
+        return './__contextified__'
+      },
+    } as LoaderContext<unknown>['utils'],
+  })
+
+  const result = await pitch.call(
+    ctx as LoaderContext<KnightedCssLoaderOptions>,
+    `${resourcePath}?knighted-css&combined&chunk=demo`,
+    '',
+    {},
+  )
+
+  const combinedOutput = String(result ?? '')
+
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0]?.context, contextPath)
+  assert.equal(calls[0]?.request, `${resourcePath}?chunk=demo`)
+  assert.match(
+    combinedOutput,
+    /import \* as __knightedModule from "\.\/__contextified__";/,
+  )
+  assert.match(combinedOutput, /export \* from "\.\/__contextified__";/)
+})
+
+test('pitch preserves undecodable query fragments when sanitizing requests', async () => {
+  const resourcePath = path.resolve(__dirname, 'fixtures/dialects/basic/entry.js')
+  const ctx = createMockContext({
+    resourcePath,
+    resourceQuery: '?knighted-css&combined&%',
+  })
+
+  const result = await pitch.call(
+    ctx as LoaderContext<KnightedCssLoaderOptions>,
+    `${resourcePath}?knighted-css&combined&%`,
+    '',
+    {},
+  )
+
+  assert.ok(
+    result?.includes('?%'),
+    'should keep undecodable fragment in the proxy request',
+  )
 })

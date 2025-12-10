@@ -68,6 +68,25 @@ test('loader exports knightedCss via query (rspack)', async () => {
     'text styles should duplicate a class for specificity boost',
   )
 
+  assert.ok(
+    typeof mod.CombinedButton === 'function',
+    'combined import should expose module exports',
+  )
+  assert.ok(
+    typeof mod.combinedCss === 'string',
+    'combined import should expose css string',
+  )
+  assert.equal(
+    mod.CombinedButton(),
+    mod.Button(),
+    'combined module should preserve original exports',
+  )
+  assert.equal(
+    mod.combinedCss,
+    mod.reactStyles,
+    'combined css should match standalone css extraction',
+  )
+
   await fs.rm(distDir, { recursive: true, force: true })
 })
 
@@ -100,6 +119,10 @@ test('loader fixture renders style and element (rspack)', async () => {
   assert.ok(
     appended.some(el => el.className === 'rspack-loader-style'),
     'element with expected class should be appended',
+  )
+  assert.ok(
+    appended.some(el => el.className === 'combined-entry'),
+    'combined import output should render as well',
   )
 
   const html = await fs.readFile(path.join(distDir, 'index.html'), 'utf8')
