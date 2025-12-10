@@ -1,0 +1,17 @@
+.match-target,
+.skip-target {
+  color: #111;
+}
+
+.append-target,
+.append-skip {
+  color: #222;
+}
+
+.outer #hero > button.primary:hover {
+  color: #333;
+}
+
+.regex-target .child {
+  color: #444;
+}

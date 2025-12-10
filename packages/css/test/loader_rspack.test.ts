@@ -52,8 +52,20 @@ test('loader exports knightedCss via query (rspack)', async () => {
   assert.ok(typeof mod.reactStyles === 'string', 'export should be a string')
   assert.match(
     mod.reactStyles,
-    /\.rspack-loader-style/,
-    'should contain compiled css from styles.css',
+    /color:#639/,
+    'should contain compiled css from styles.css with color',
+  )
+  assert.doesNotMatch(
+    mod.reactStyles,
+    /\.rspack-loader-style\.rspack-loader-style/,
+    'button styles should not be boosted when match excludes them',
+  )
+
+  assert.ok(typeof mod.textStyles === 'string', 'text export should be a string')
+  assert.match(
+    mod.textStyles,
+    /\.text\.text\.body\.emphasis/,
+    'text styles should duplicate a class for specificity boost',
   )
 
   await fs.rm(distDir, { recursive: true, force: true })

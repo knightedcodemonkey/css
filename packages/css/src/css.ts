@@ -4,9 +4,16 @@ import { promises as fs } from 'node:fs'
 import dependencyTree from 'dependency-tree'
 import type { Options as DependencyTreeOpts } from 'dependency-tree'
 import {
+  composeVisitors,
   transform as lightningTransform,
   type TransformOptions as LightningTransformOptions,
 } from 'lightningcss'
+import {
+  applyStringSpecificityBoost,
+  buildSpecificityVisitor,
+  type SpecificitySelector,
+  type SpecificityStrategy,
+} from './helpers.js'
 
 export const DEFAULT_EXTENSIONS = ['.css', '.scss', '.sass', '.less', '.css.ts']
 
@@ -26,6 +33,11 @@ export interface CssOptions {
   cwd?: string
   filter?: (filePath: string) => boolean
   lightningcss?: LightningCssConfig
+  specificityBoost?: {
+    visitor?: LightningTransformOptions<never>['visitor']
+    strategy?: SpecificityStrategy
+    match?: SpecificitySelector[]
+  }
   dependencyTree?: Partial<Omit<DependencyTreeOpts, 'filename' | 'directory'>>
   resolver?: CssResolver
   peerResolver?: PeerLoader
@@ -85,12 +97,24 @@ export async function cssWithMeta(
 
   if (options.lightningcss) {
     const lightningOptions = normalizeLightningOptions(options.lightningcss)
+    const boostVisitor = buildSpecificityVisitor(options.specificityBoost)
+    const combinedVisitor =
+      boostVisitor && lightningOptions.visitor
+        ? composeVisitors([boostVisitor, lightningOptions.visitor])
+        : (boostVisitor ?? lightningOptions.visitor)
+    if (combinedVisitor) {
+      lightningOptions.visitor = combinedVisitor
+    }
     const { code } = lightningTransform({
       ...lightningOptions,
       filename: lightningOptions.filename ?? 'extracted.css',
       code: Buffer.from(output),
     })
     output = code.toString()
+  }
+
+  if (options.specificityBoost?.strategy && !options.specificityBoost.visitor) {
+    output = applyStringSpecificityBoost(output, options.specificityBoost)
   }
 
   return { css: output, files: files.map(file => file.path) }

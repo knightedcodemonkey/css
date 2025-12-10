@@ -52,6 +52,11 @@ type CssOptions = {
   cwd?: string // working directory (defaults to process.cwd())
   filter?: (filePath: string) => boolean
   lightningcss?: boolean | LightningTransformOptions
+  specificityBoost?: {
+    visitor?: LightningTransformOptions<never>['visitor']
+    strategy?: SpecificityStrategy
+    match?: SpecificitySelector[]
+  }
   dependencyTree?: DependencyTreeOptions
   resolver?: (
     specifier: string,
@@ -68,6 +73,7 @@ Typical customizations:
 - **filter** – Skip certain paths (e.g., storybook-only styles) before compilation.
 - **resolver** – Resolve virtual specifiers the way your bundler does (the repo ships test fixtures for webpack, Vite, and Rspack).
 - **lightningcss** – Pass `true` for defaults or a config object for minification/autoprefixing.
+- **specificityBoost** – Provide a Lightning CSS visitor to bump specificity on selected selectors (e.g., duplicate a class for matching selectors). We compose this with your `lightningcss.visitor`, if provided.
 
 ## Examples
 
@@ -183,18 +189,37 @@ const styles = await css('./src/routes/page.tsx', {
 
 This keeps `@knighted/css` resolution in sync with your bundler’s alias/extension rules.
 
-## Scripts
+### Specificity boost
 
-- `npm run build` – Produce CJS/ESM outputs via `@knighted/duel`.
-- `npm test` – Runs the Node test suite with `tsx` and reports coverage via `c8`.
-- `npm run lint` – Static analysis through `oxlint`.
+Use `specificityBoost` to tweak selector behavior:
 
-## Contributing
+- **Strategies (built-in)**:
+  - `repeat-class` duplicates the last class in matching selectors to raise specificity (useful when you need a real specificity bump).
+  - `append-where` appends `:where(.token)` (zero specificity) for a harmless, order-based tie-breaker without changing matching.
+- **Custom visitor**: Supply your own Lightning CSS visitor via `specificityBoost.visitor` for full control.
+- **match filtering**: Provide `match: (string | RegExp)[]` to target selectors. Matches are OR’d; if any entry matches, the strategy applies. If omitted/empty, all selectors are eligible.
 
-1. Clone the repo and install dependencies with `npm install`.
-2. Run `npm test` to ensure fixtures compile across Sass/Less/vanilla-extract.
-3. Add/adjust fixtures in `fixtures/` when adding new language features to keep coverage high.
-4. Open a PR with a description of the change and tests.
+Example:
+
+```ts
+import { css } from '@knighted/css'
+
+const styles = await css('./src/entry.ts', {
+  lightningcss: { minify: true },
+  specificityBoost: {
+    match: ['.card', /^\.btn/], // OR match
+    strategy: { type: 'repeat-class', times: 1 },
+  },
+})
+```
+
+If you omit `match`, the strategy applies to all selectors. Use `append-where` when you don’t want to change specificity; use `repeat-class` when you do.
+
+> [!NOTE]
+> For the built-in strategies, the last class in a matching selector is the one that gets duplicated/appended. If you have multiple similar classes, tighten your `match` (string or RegExp) to target exactly the selector you want boosted.
+
+> [!TIP]
+> See [docs/specificity-boost-visitor.md](./docs/specificity-boost-visitor.md) for a concrete visitor example.
 
 ## License
 

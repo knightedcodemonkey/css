@@ -42,10 +42,18 @@ Concatenation order:
 
 If a file is imported multiple times, only its first-seen position is kept; later repeats are ignored to keep cascade order stable.
 
+### The role of specificity and order
+
+The concatenation order we produce aligns with the "**Order of Appearance**" part of the CSS cascade. **Specificity** (e.g. whether a selector is an ID, class or element name) still wins when selectors differ, but when specificity is the _same_, later rules win. Because we preserve import order in a depth-first, preorder traversal, foundational styles (earlier imports) land before overrides (later imports). We never alter selector specificity; we only guarantee that file order mirrors the import structure so equal-specificity overrides behave as authored.
+
 ## At-rules and modern syntax
 
 - Unknown/modern at-rules (e.g., `@scope`) are passed through as written; we do not strip or reorder them.
 - If you need polyfills for non-supporting browsers, add a follow-on CSS transform step; we leave them intact.
+
+## Optional specificity boosts
+
+If you need to raise specificity for targeted selectors, you can supply a Lightning CSS visitor via the `specificityBoost` option (available in both the helper and loader). We compose your visitor with any existing `lightningcss.visitor` you provide; order of rules stays the same.
 
 ## What to expect
 
