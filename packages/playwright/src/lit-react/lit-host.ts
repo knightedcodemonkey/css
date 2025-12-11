@@ -1,13 +1,37 @@
 import { reactJsx } from '@knighted/jsx/react'
 import { createRoot, type Root } from 'react-dom/client'
-import { LitElement, html, unsafeCSS, type PropertyValues } from 'lit'
+import { LitElement, css, html, unsafeCSS, type PropertyValues } from 'lit'
 
 import { Showcase } from './showcase.js'
 import { knightedCss as reactStyles } from './showcase.js?knighted-css'
+import { knightedCss as basicDialectCss } from './cards/basic-card/basic-card.js?knighted-css'
+import { knightedCss as lessDialectCss } from './cards/less-card/less-card.js?knighted-css'
 import { LIT_HOST_TAG } from './constants.js'
 
+const hostManagedDialects = css`
+  ${unsafeCSS(basicDialectCss)}
+  ${unsafeCSS(lessDialectCss)}
+
+  [data-host-styled] {
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.4);
+  }
+
+  [data-host-styled] .host-managed-hint {
+    position: absolute;
+    bottom: 0.75rem;
+    right: 1rem;
+    margin: 0;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #38bdf8;
+  }
+`
+
 export class LitHost extends LitElement {
-  static styles = [unsafeCSS(reactStyles)]
+  static styles = [unsafeCSS(reactStyles), hostManagedDialects]
   static properties = {
     ctaLabel: { type: String, attribute: 'cta-label' },
   }

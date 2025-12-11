@@ -185,6 +185,9 @@ customElements.define('button-wrapper', ButtonWrapper)
 
 The loader appends `export const knightedCss = "/* compiled css */"` to the module when imported with `?knighted-css`. Keep your main module import separate to preserve its typing; use the query import only for the CSS string.
 
+> [!TIP]
+> The Playwright Rspack demo shows how a Lit host can import specific dialects with `?knighted-css` and pipe them straight into `LitElement.styles`. See [packages/playwright/src/lit-react/lit-host.ts](packages/playwright/src/lit-react/lit-host.ts) for the shadow-root wiring.
+
 #### TypeScript support for loader queries
 
 Until we publish the ambient declarations to npm, copy [`packages/types/loader-queries.d.ts`](./packages/types/loader-queries.d.ts) into your project (or reference it directly via `typeRoots`). That file declares the two query patterns we rely on:
