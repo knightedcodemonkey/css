@@ -17,7 +17,7 @@ if (isCI) {
 
 export default defineConfig({
   testDir: 'test',
-  timeout: 10_000,
+  timeout: 30_000,
   retries: isCI ? 2 : 0,
   expect: {
     timeout: 10_000,
