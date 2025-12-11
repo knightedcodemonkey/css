@@ -1,13 +1,26 @@
 {
   "name": "@knighted/css",
-  "version": "1.0.0-rc.1",
+  "version": "1.0.0-rc.2",
   "description": "A build-time utility that traverses JavaScript/TypeScript module dependency graphs to extract, compile, and optimize all imported CSS into a single, in-memory string.",
   "type": "module",
   "main": "./dist/css.js",
-  "types": "./dist/css.d.ts",
+  "types": "./types.d.ts",
+  "typesVersions": {
+    "*": {
+      "loader": [
+        "./dist/loader.d.ts"
+      ],
+      "loader-queries": [
+        "./loader-queries.d.ts"
+      ],
+      "*": [
+        "./types.d.ts"
+      ]
+    }
+  },
   "exports": {
     ".": {
-      "types": "./dist/css.d.ts",
+      "types": "./types.d.ts",
       "import": "./dist/css.js",
       "require": "./dist/cjs/css.cjs"
     },
@@ -15,6 +28,10 @@
       "types": "./dist/loader.d.ts",
       "import": "./dist/loader.js",
       "require": "./dist/cjs/loader.cjs"
+    },
+    "./loader-queries": {
+      "types": "./loader-queries.d.ts",
+      "default": "./loader-queries.d.ts"
     }
   },
   "keywords": [
@@ -56,7 +73,9 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "loader-queries.d.ts",
+    "types.d.ts"
   ],
   "author": "KCM <knightedcodemonkey@gmail.com>",
   "license": "MIT",

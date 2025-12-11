@@ -14,14 +14,13 @@
     "pretest": "npm run build"
   },
   "dependencies": {
-    "@knighted/css": "1.0.0-rc.1",
+    "@knighted/css": "1.0.0-rc.2",
     "@knighted/jsx": "^1.2.1",
     "lit": "^3.2.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@types/knighted__css": "1.0.0-rc.1",
     "@types/react": "^19.0.4",
     "@types/react-dom": "^19.0.2",
     "@vanilla-extract/webpack-plugin": "^2.3.15",

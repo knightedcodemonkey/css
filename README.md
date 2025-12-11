@@ -190,13 +190,12 @@ The loader appends `export const knightedCss = "/* compiled css */"` to the modu
 
 #### TypeScript support for loader queries
 
-Until we publish the ambient declarations to npm, copy [`packages/types/loader-queries.d.ts`](./packages/types/loader-queries.d.ts) into your project (or reference it directly via `typeRoots`). That file declares the two query patterns we rely on:
+Loader query types ship directly with `@knighted/css`. Reference them once in your project—either by adding `"types": ["@knighted/css/loader-queries"]` to `tsconfig.json` or dropping `/// <reference types="@knighted/css/loader-queries" />` into a global `.d.ts`—and the following ambient modules become available everywhere:
 
 - `*?knighted-css` imports expose a `knightedCss: string` export.
-- `*?knighted-css&combined` (and permutations that include both flags) also gain a default export typed as `KnightedCssCombinedModule<Record<string, unknown>>` so you can narrow it to your source module.
+- `*?knighted-css&combined` (and any query that includes both flags) expose `knightedCss` and return the original module exports, which you can narrow with `KnightedCssCombinedModule` before destructuring named members.
 
-> [!NOTE]
-> We plan to publish these under an `@types/knighted__css` package. Until then, vendoring the declaration file keeps your project unblocked.
+No vendor copies are necessary—the declarations live inside `@knighted/css`, you just need to point your TypeScript config at the shipped `loader-queries` subpath once.
 
 #### Combined module + CSS import
 
