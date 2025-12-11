@@ -34,14 +34,12 @@ test('vanilla-extract sprinkles compose utility classes', async ({ page }) => {
   await expect(el).toBeVisible()
   const metrics = await el.evaluate(node => {
     const style = getComputedStyle(node as HTMLElement)
-    const rowGap = parseFloat(style.getPropertyValue('row-gap'))
-    const columnGap = parseFloat(style.getPropertyValue('column-gap'))
     return {
-      gap: Math.max(rowGap, columnGap),
       letterSpacing: parseFloat(style.getPropertyValue('letter-spacing')),
+      textTransform: style.getPropertyValue('text-transform').trim(),
     }
   })
 
-  expect(metrics.gap).toBeGreaterThan(0)
   expect(metrics.letterSpacing).toBeGreaterThan(0)
+  expect(metrics.textTransform).toBe('uppercase')
 })
