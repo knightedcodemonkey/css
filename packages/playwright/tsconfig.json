@@ -7,7 +7,8 @@
     "outDir": "dist",
     "skipLibCheck": true,
     "declaration": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "types": ["@knighted/css/loader-queries"]
   },
   "include": ["src"]
 }
