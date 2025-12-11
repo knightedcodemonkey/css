@@ -6,19 +6,28 @@
 
 `@knighted/css` is a build-time helper that walks a JavaScript/TypeScript module graph, finds every CSS-like dependency (plain CSS, Sass/SCSS, Less, vanilla-extract), compiles them, and returns a single concatenated stylesheet string. It is designed for workflows where you want fully materialized styles ahead of time—feeding Lit components, server-rendered routes, static site builds, or any pipeline that needs all CSS for a specific entry point without running a full bundler.
 
+## Quick Links
+
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [API](#api)
+- [Examples](#examples)
+
 ## Features
 
 - Traverses module graphs using [`dependency-tree`](https://github.com/dependents/node-dependency-tree) to find transitive style imports.
 - Compiles `*.css`, `*.scss`, `*.sass`, `*.less`, and `*.css.ts` (vanilla-extract) files out of the box.
-- Optional post-processing via [`lightningcss`](https://github.com/parcel-bundler/lightningcss) for minification, prefixing, and media query optimizations.
+- Optional post-processing via [`lightningcss`](https://github.com/parcel-bundler/lightningcss) for minification, prefixing, media query optimizations, or specificity boosts.
 - Pluggable resolver/filter hooks for custom module resolution (e.g., Rspack/Vite/webpack aliases) or selective inclusion.
-- Peer-resolution helper for optional toolchains (`sass`, `less`, `@vanilla-extract/integration`) so consumers control their dependency graph.
+- First-class loader (`@knighted/css/loader`) so bundlers can import compiled CSS alongside their modules via `?knighted-css`.
 
 ## Requirements
 
 - Node.js `>= 22.15.0`
 - npm `>= 10.9.0`
-- Install peer toolchains you intend to use (`sass`, `less`, `@vanilla-extract/integration`, `@vanilla-extract/recipes`, etc.).
+- Install peer toolchains you intend to use (`sass`, `less`, `@vanilla-extract/integration`, etc.).
 
 ## Installation
 
@@ -76,6 +85,12 @@ Typical customizations:
 - **specificityBoost** – Provide a Lightning CSS visitor to bump specificity on selected selectors (e.g., duplicate a class for matching selectors). We compose this with your `lightningcss.visitor`, if provided.
 
 ## Examples
+
+- [Generate standalone stylesheets](#generate-standalone-stylesheets)
+- [Inline CSS during SSR](#inline-css-during-ssr)
+- [Bundler loader](#bundler-loader-knighted-css-query)
+- [Custom resolver](#custom-resolver-enhanced-resolve-example)
+- [Specificity boost](#specificity-boost)
 
 ### Generate standalone stylesheets
 
@@ -170,6 +185,9 @@ customElements.define('button-wrapper', ButtonWrapper)
 
 The loader appends `export const knightedCss = "/* compiled css */"` to the module when imported with `?knighted-css`. Keep your main module import separate to preserve its typing; use the query import only for the CSS string.
 
+> [!TIP]
+> The Playwright Rspack demo shows how a Lit host can import specific dialects with `?knighted-css` and pipe them straight into `LitElement.styles`. See [packages/playwright/src/lit-react/lit-host.ts](packages/playwright/src/lit-react/lit-host.ts) for the shadow-root wiring.
+
 #### TypeScript support for loader queries
 
 Until we publish the ambient declarations to npm, copy [`packages/types/loader-queries.d.ts`](./packages/types/loader-queries.d.ts) into your project (or reference it directly via `typeRoots`). That file declares the two query patterns we rely on:
@@ -201,7 +219,7 @@ const { Button, knightedCss } = combined as KnightedCssCombinedModule<
 
 You can mix and match: regular `?knighted-css` imports keep strong module typings and just add the CSS string, while `?knighted-css&combined` dedupes your CSS loader pipeline when you need everything at once.
 
-### vanilla-extract loader guidance
+#### vanilla-extract loader guidance
 
 vanilla-extract files (`*.css.ts`) compile down to CommonJS by default. That works out of the box for the loader—both `?knighted-css` and `?knighted-css&combined` queries emit `module.exports` artifacts plus the injected `knightedCss` string. Most bundlers happily consume that shape. When you _also_ need the compiled module to behave like a native ESM module (e.g., your bundler expects `export` statements so it can treeshake or when you import via extension aliases), enable the loader’s opt-in transform:
 
@@ -226,6 +244,17 @@ The `vanilla.transformToEsm` flag runs a small post-pass that strips the CJS boi
 
 > [!IMPORTANT]
 > Only enable `vanilla.transformToEsm` when your bundler really requires ESM output. Leaving the transform off keeps the vanilla-extract module identical to what the upstream compiler produced, which is often preferable if the rest of your toolchain expects CommonJS. The loader no longer toggles this transform automatically—combined imports stay fast, but you remain in full control of when the conversion occurs.
+
+If your build pipeline can gracefully consume both module syntaxes (for example, webpack or Rspack projects that treat the vanilla-extract integration bundle as CommonJS), you may get the desired behavior simply by forcing those files through the “auto” parser instead of rewriting them:
+
+```js
+{
+  test: /@vanilla-extract\/integration/,
+  type: 'javascript/auto',
+}
+```
+
+That hint keeps the upstream CommonJS helpers intact while still letting the rest of your app compile as native ESM. It’s worth trying first if you’d rather avoid the transform and your bundler already mixes module systems without issue. Flip `vanilla.transformToEsm` back on whenever you hit a toolchain that insists on pure ESM output.
 
 ### Custom resolver (enhanced-resolve example)
 
