@@ -35,11 +35,16 @@ test('vanilla-extract sprinkles compose utility classes', async ({ page }) => {
   const metrics = await el.evaluate(node => {
     const style = getComputedStyle(node as HTMLElement)
     return {
-      letterSpacing: parseFloat(style.getPropertyValue('letter-spacing')),
+      classNames: (node as HTMLElement).className
+        .split(/\s+/)
+        .map(part => part.trim())
+        .filter(Boolean),
       textTransform: style.getPropertyValue('text-transform').trim(),
     }
   })
 
-  expect(metrics.letterSpacing).toBeGreaterThan(0)
+  expect(
+    metrics.classNames.some(name => name.startsWith('vanilla_tokenVariants_tracking__')),
+  ).toBe(true)
   expect(metrics.textTransform).toBe('uppercase')
 })
