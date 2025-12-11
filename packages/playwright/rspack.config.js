@@ -32,6 +32,7 @@ export default {
             loader: '@knighted/css/loader',
             options: {
               lightningcss: { minify: true },
+              vanilla: { transformToEsm: true },
             },
           },
           {
@@ -75,7 +76,7 @@ export default {
       },
       {
         test: /\.tsx?$/,
-        exclude: /node_modules/,
+        exclude: [/node_modules/, /\.css\.ts$/],
         use: [
           {
             loader: '@knighted/jsx/loader',

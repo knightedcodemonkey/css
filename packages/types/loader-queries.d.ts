@@ -14,13 +14,7 @@ declare module '*?knighted-css' {
  */
 type KnightedCssCombinedModule<TModule> = TModule & { knightedCss: string }
 
-declare module '*?*knighted-css*combined*' {
-  const combined: KnightedCssCombinedModule<Record<string, unknown>>
-  export default combined
-  export const knightedCss: string
-}
-
-declare module '*?*combined*knighted-css*' {
+declare module '*?knighted-css&combined' {
   const combined: KnightedCssCombinedModule<Record<string, unknown>>
   export default combined
   export const knightedCss: string

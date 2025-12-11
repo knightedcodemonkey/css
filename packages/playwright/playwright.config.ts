@@ -1,7 +1,6 @@
 import { defineConfig, devices } from '@playwright/test'
 
 const isCI = process.env.CI === 'true'
-
 const projects = [
   {
     name: 'chromium',
@@ -19,6 +18,7 @@ if (isCI) {
 export default defineConfig({
   testDir: 'test',
   timeout: 10_000,
+  retries: isCI ? 2 : 0,
   expect: {
     timeout: 10_000,
   },

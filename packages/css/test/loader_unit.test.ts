@@ -66,16 +66,31 @@ test('loader handles style modules and buffer sources', async () => {
   )
 
   assert.match(output, /export const knightedCss = /, 'should inject css variable export')
-  assert.match(
-    output,
-    /export default \{\};/,
-    'should emit empty default export for style',
-  )
+  assert.match(output, /module\.exports/, 'should retain vanilla cjs output by default')
   assert.match(output, /styles_themeClass__/, 'should compile vanilla-extract styles')
   assert.ok(
     ctx.added.has(resourcePath),
     'should register the style module as a dependency',
   )
+})
+
+test('loader transforms vanilla modules to esm when opted in', async () => {
+  const resourcePath = path.resolve(__dirname, 'fixtures/dialects/vanilla/styles.css.ts')
+  const ctx = createMockContext({
+    resourcePath,
+    rootContext: path.resolve(__dirname, 'fixtures'),
+    getOptions: () => ({ vanilla: { transformToEsm: true } }),
+  })
+  const output = String(
+    await loader.call(
+      ctx as LoaderContext<KnightedCssLoaderOptions>,
+      'export const ignored = true',
+    ),
+  )
+
+  assert.match(output, /export const knightedCss = /, 'should inject css variable export')
+  assert.ok(!/module\.exports\s*=/.test(output), 'should remove cjs export boilerplate')
+  assert.match(output, /export \{ badge, themeClass, token, vars \};/)
 })
 
 test('loader reads options from getOptions and honors cwd override', async () => {
