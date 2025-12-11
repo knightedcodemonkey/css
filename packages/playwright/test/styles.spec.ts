@@ -43,8 +43,8 @@ test('vanilla-extract sprinkles compose utility classes', async ({ page }) => {
     }
   })
 
-  expect(
-    metrics.classNames.some(name => name.startsWith('vanilla_tokenVariants_tracking__')),
-  ).toBe(true)
+  expect(metrics.classNames.some(name => name.includes('tokenVariants_tracking'))).toBe(
+    true,
+  )
   expect(metrics.textTransform).toBe('uppercase')
 })

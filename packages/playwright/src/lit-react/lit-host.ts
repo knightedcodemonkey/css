@@ -2,12 +2,11 @@ import { reactJsx } from '@knighted/jsx/react'
 import { createRoot, type Root } from 'react-dom/client'
 import { LitElement, html, unsafeCSS, type PropertyValues } from 'lit'
 
-import type { DialectSample } from '../dialects/registry.js'
 import { Showcase } from './showcase.js'
 import { knightedCss as reactStyles } from './showcase.js?knighted-css'
-import { BUTTON_WRAPPER_TAG } from './constants.js'
+import { LIT_HOST_TAG } from './constants.js'
 
-export class ButtonWrapper extends LitElement {
+export class LitHost extends LitElement {
   static styles = [unsafeCSS(reactStyles)]
   static properties = {
     ctaLabel: { type: String, attribute: 'cta-label' },
@@ -19,7 +18,6 @@ export class ButtonWrapper extends LitElement {
    * shadow Lit's accessors and prevent attr -> prop updates (see Lit warning).
    */
   declare ctaLabel: string
-  #dialects: DialectSample[] = []
   #reactRoot?: Root
 
   firstUpdated(): void {
@@ -42,19 +40,10 @@ export class ButtonWrapper extends LitElement {
     this.#renderReactTree()
   }
 
-  setDialects(dialects: DialectSample[]): void {
-    this.#dialects = dialects
-    if (this.isConnected) {
-      this.#renderReactTree()
-    }
-  }
-
   #renderReactTree(): void {
-    if (!this.#reactRoot || this.#dialects.length === 0) return
+    if (!this.#reactRoot) return
     const label = this.ctaLabel ?? 'React Button'
-    this.#reactRoot.render(
-      reactJsx`<${Showcase} label=${label} dialects=${this.#dialects} />`,
-    )
+    this.#reactRoot.render(reactJsx`<${Showcase} label=${label} />`)
   }
 
   protected updated(changed: PropertyValues<this>): void {
@@ -69,8 +58,8 @@ export class ButtonWrapper extends LitElement {
   }
 }
 
-export function ensureButtonWrapperDefined(): void {
-  if (!customElements.get(BUTTON_WRAPPER_TAG)) {
-    customElements.define(BUTTON_WRAPPER_TAG, ButtonWrapper)
+export function ensureLitHostDefined(): void {
+  if (!customElements.get(LIT_HOST_TAG)) {
+    customElements.define(LIT_HOST_TAG, LitHost)
   }
 }
