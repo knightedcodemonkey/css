@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npx rspack --config rspack.config.js",
+    "build": "npm run build:rspack && npm run build:webpack",
+    "build:rspack": "npx rspack --config rspack.config.js",
+    "build:webpack": "npx webpack --config webpack.config.js",
     "check-types": "tsc --noEmit",
     "preview": "npm run build && npx http-server . -p 4174",
     "serve": "npx http-server dist -p 4174",
@@ -21,6 +23,10 @@
   "devDependencies": {
     "@types/knighted__css": "1.0.0-rc.1",
     "@types/react": "^19.0.4",
-    "@types/react-dom": "^19.0.2"
+    "@types/react-dom": "^19.0.2",
+    "@vanilla-extract/webpack-plugin": "^2.3.15",
+    "ts-loader": "^9.5.1",
+    "webpack": "^5.97.1",
+    "webpack-cli": "^5.1.4"
   }
 }

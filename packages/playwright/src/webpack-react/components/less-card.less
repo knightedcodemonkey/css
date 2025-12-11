@@ -1,0 +1,35 @@
+@panel-bg: #1e293b;
+@panel-border: #fb7185;
+@panel-shadow: rgba(15, 23, 42, 0.55);
+@badge-bg: #ffedd5;
+@badge-color: #9a3412;
+
+.less-card {
+  background: @panel-bg;
+  color: #f8fafc;
+  border-radius: 28px;
+  padding: 1.5rem;
+  border: 2px solid fade(@panel-border, 75%);
+  box-shadow: 0 25px 50px @panel-shadow;
+
+  h3 {
+    margin: 0 0 0.35rem;
+    color: @panel-border;
+  }
+
+  p {
+    margin: 0;
+  }
+
+  .less-badge {
+    margin-top: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: @badge-bg;
+    color: @badge-color;
+    padding: 0.25rem 0.9rem;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+}

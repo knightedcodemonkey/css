@@ -1,0 +1,56 @@
+:host {
+  display: block;
+  font-family:
+    'Satoshi',
+    'Sora',
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  background: radial-gradient(circle at 10% 20%, #0f172a, #020617 55%);
+  min-height: 100vh;
+  color: #f8fafc;
+}
+
+.webpack-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 2.5rem;
+}
+
+.webpack-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.webpack-hero h1 {
+  font-size: clamp(2rem, 3vw, 3rem);
+  letter-spacing: -0.03em;
+  margin: 0;
+}
+
+.webpack-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.5rem;
+}
+
+.webpack-card {
+  border-radius: 32px;
+  padding: 1.5rem;
+  box-shadow: 0 25px 50px rgba(2, 6, 23, 0.6);
+}
+
+.webpack-card h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.15rem;
+}
+
+.webpack-card p {
+  margin: 0;
+  line-height: 1.5;
+  color: rgba(248, 250, 252, 0.85);
+}
