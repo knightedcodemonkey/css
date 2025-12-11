@@ -93,6 +93,31 @@ test('loader transforms vanilla modules to esm when opted in', async () => {
   assert.match(output, /export \{ badge, themeClass, token, vars \};/)
 })
 
+test('loader leaves vanilla modules without exports untouched during esm transform', async () => {
+  const resourcePath = path.resolve(
+    __dirname,
+    'fixtures/dialects/vanilla/global-only.css.ts',
+  )
+  const ctx = createMockContext({
+    resourcePath,
+    rootContext: path.resolve(__dirname, 'fixtures'),
+    getOptions: () => ({ vanilla: { transformToEsm: true } }),
+  })
+  const output = String(
+    await loader.call(
+      ctx as LoaderContext<KnightedCssLoaderOptions>,
+      'export const ignored = true',
+    ),
+  )
+
+  assert.match(
+    output,
+    /require\("@vanilla-extract\/css"\)/,
+    'should retain cjs require calls',
+  )
+  assert.ok(!/export \{/.test(output), 'should not emit esm re-export block')
+})
+
 test('loader reads options from getOptions and honors cwd override', async () => {
   const resourcePath = path.resolve(__dirname, 'fixtures/dialects/basic/entry.js')
   const cwd = path.resolve(__dirname, 'fixtures')
@@ -230,4 +255,54 @@ test('pitch preserves undecodable query fragments when sanitizing requests', asy
     result?.includes('?%'),
     'should keep undecodable fragment in the proxy request',
   )
+})
+
+test('pitch reuses rawRequest when building proxy module', async () => {
+  const resourcePath = path.resolve(__dirname, 'fixtures/dialects/basic/entry.js')
+  const ctx = createMockContext({
+    resourcePath,
+    resourceQuery: '?knighted-css&combined&chunk=demo',
+    _module: {
+      rawRequest: './aliased/entry.js?loaderFlag=1',
+    } as LoaderContext<KnightedCssLoaderOptions>['_module'],
+    loadModule: (_request, callback) => {
+      callback(null, 'export const stub = 1;')
+    },
+  })
+
+  const result = await pitch.call(
+    ctx as LoaderContext<KnightedCssLoaderOptions>,
+    `${resourcePath}?knighted-css&combined&chunk=demo`,
+    '',
+    {},
+  )
+
+  const combinedOutput = String(result ?? '')
+  assert.match(
+    combinedOutput,
+    /import \* as __knightedModule from "\.\/aliased\/entry\.js\?chunk=demo";/,
+  )
+  assert.match(combinedOutput, /export \* from "\.\/aliased\/entry\.js\?chunk=demo";/)
+})
+
+test('combined modules skip default export for vanilla style entries', async () => {
+  const resourcePath = path.resolve(__dirname, 'fixtures/dialects/vanilla/styles.css.ts')
+  const ctx = createMockContext({
+    resourcePath,
+    resourceQuery: '?knighted-css&combined',
+    loadModule: (_request, callback) => {
+      callback(null, 'export const badge = 1;')
+    },
+  })
+
+  const result = await pitch.call(
+    ctx as LoaderContext<KnightedCssLoaderOptions>,
+    `${resourcePath}?knighted-css&combined`,
+    '',
+    {},
+  )
+
+  const combinedOutput = String(result ?? '')
+  assert.ok(!/export default __knightedDefault/.test(combinedOutput))
+  assert.match(combinedOutput, /export \* from/)
 })
