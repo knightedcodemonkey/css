@@ -1,0 +1,38 @@
+.readme-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  padding: 2rem;
+  background: #020617;
+  color: #f1f5f9;
+  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+}
+
+.readme-hero {
+  display: flex;
+  justify-content: center;
+}
+
+.dialect-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.25rem;
+  padding: 0;
+  margin: 0;
+}
+
+.dialect-card {
+  position: relative;
+  background: linear-gradient(135deg, #020617 0%, #0f172a 100%);
+  border: 1px solid #1f2937;
+  border-radius: 18px;
+  padding: 1.25rem;
+  min-height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dialect-card style[data-dialect-style] {
+  display: none;
+}

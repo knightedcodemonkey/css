@@ -201,6 +201,32 @@ const { Button, knightedCss } = combined as KnightedCssCombinedModule<
 
 You can mix and match: regular `?knighted-css` imports keep strong module typings and just add the CSS string, while `?knighted-css&combined` dedupes your CSS loader pipeline when you need everything at once.
 
+### vanilla-extract loader guidance
+
+vanilla-extract files (`*.css.ts`) compile down to CommonJS by default. That works out of the box for the loader—both `?knighted-css` and `?knighted-css&combined` queries emit `module.exports` artifacts plus the injected `knightedCss` string. Most bundlers happily consume that shape. When you _also_ need the compiled module to behave like a native ESM module (e.g., your bundler expects `export` statements so it can treeshake or when you import via extension aliases), enable the loader’s opt-in transform:
+
+```js
+// rspack.config.js (excerpt)
+{
+  test: /\.css\.ts$/,
+  use: [
+    {
+      loader: '@knighted/css/loader',
+      options: {
+        lightningcss: { minify: true },
+        vanilla: { transformToEsm: true },
+      },
+    },
+    // swc/esbuild/etc.
+  ],
+}
+```
+
+The `vanilla.transformToEsm` flag runs a small post-pass that strips the CJS boilerplate emitted by `@vanilla-extract/integration` and re-exports the discovered bindings via native `export { name }` statements. That makes combined imports behave exactly like the source module, which is useful for frameworks that rely on strict ESM semantics (our Lit + React Playwright app is the canonical example in this repo).
+
+> [!IMPORTANT]
+> Only enable `vanilla.transformToEsm` when your bundler really requires ESM output. Leaving the transform off keeps the vanilla-extract module identical to what the upstream compiler produced, which is often preferable if the rest of your toolchain expects CommonJS. The loader no longer toggles this transform automatically—combined imports stay fast, but you remain in full control of when the conversion occurs.
+
 ### Custom resolver (enhanced-resolve example)
 
 If your project uses aliases or nonstandard resolution, plug in a custom resolver. Here’s how to use [`enhanced-resolve`](https://github.com/webpack/enhanced-resolve):

@@ -48,6 +48,11 @@ interface StyleModule {
   ext: string
 }
 
+export interface VanillaCompileResult {
+  source: string
+  css: string
+}
+
 /**
  * Extract and compile all CSS-like dependencies for a given module.
  */
@@ -204,7 +209,7 @@ async function compileStyleModule(
     case '.less':
       return compileLess(file.path, peerResolver)
     case '.css.ts':
-      return compileVanillaExtract(file.path, cwd, peerResolver)
+      return (await compileVanillaModule(file.path, cwd, peerResolver)).css
     default:
       return ''
   }
@@ -235,11 +240,11 @@ async function compileLess(filePath: string, peerResolver?: PeerLoader): Promise
   return result.css
 }
 
-async function compileVanillaExtract(
+export async function compileVanillaModule(
   filePath: string,
   cwd: string,
   peerResolver?: PeerLoader,
-): Promise<string> {
+): Promise<VanillaCompileResult> {
   const mod = await optionalPeer<typeof import('@vanilla-extract/integration')>(
     '@vanilla-extract/integration',
     'Vanilla Extract',
@@ -290,7 +295,10 @@ async function compileVanillaExtract(
     }
   }
 
-  return imports.join('\n')
+  return {
+    source,
+    css: imports.join('\n'),
+  }
 }
 
 const defaultPeerLoader: PeerLoader = name => import(name)

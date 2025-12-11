@@ -2,6 +2,14 @@ import { expect, test } from '@playwright/test'
 
 import { LIT_REACT_TEST_ID } from '../src/lit-react/constants.js'
 
+const dialectCases = [
+  { id: 'dialect-basic', property: 'color' },
+  { id: 'dialect-scss', property: 'color' },
+  { id: 'dialect-sass-indented', property: 'color' },
+  { id: 'dialect-less', property: 'color' },
+  { id: 'dialect-vanilla', property: 'color' },
+]
+
 test.describe('Lit + React wrapper demo', () => {
   test.beforeEach(async ({ page }) => {
     page.on('console', msg => {
@@ -71,5 +79,36 @@ test.describe('Lit + React wrapper demo', () => {
     expect(metrics.badge.text).toBe('Synced Styles')
     expect(metrics.badge.background).toBe('rgb(252, 211, 77)')
     expect(metrics.badge.color).toBe('rgb(15, 23, 42)')
+  })
+
+  for (const item of dialectCases) {
+    test(`applies styles for ${item.id}`, async ({ page }) => {
+      const el = page.getByTestId(item.id)
+      await expect(el).toBeVisible()
+      await expect
+        .poll(
+          async () =>
+            await el.evaluate((node, prop) => {
+              const style = getComputedStyle(node as HTMLElement)
+              return style.getPropertyValue(prop as string).trim()
+            }, item.property),
+          { timeout: 5000 },
+        )
+        .not.toBe('')
+    })
+  }
+
+  test('vanilla-extract sprinkles compose utility classes within Lit demo', async ({
+    page,
+  }) => {
+    const el = page.getByTestId('dialect-vanilla')
+    await expect(el).toBeVisible()
+    const metrics = await el.evaluate(node => {
+      const style = getComputedStyle(node as HTMLElement)
+      return style.getPropertyValue('gap').trim()
+    })
+
+    expect(metrics).not.toBe('')
+    expect(metrics).not.toBe('0px')
   })
 })
