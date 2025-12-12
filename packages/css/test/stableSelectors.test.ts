@@ -20,6 +20,11 @@ test('stableToken allows overriding namespace', () => {
   assert.equal(result, 'acme-cta')
 })
 
+test('stableToken omits namespace when trimmed value is empty', () => {
+  const result = stableToken('cta', { namespace: '   ' })
+  assert.equal(result, 'cta')
+})
+
 test('stableClass returns a class name without dot', () => {
   assert.equal(stableClass('badge'), 'knighted-badge')
 })
