@@ -7,6 +7,7 @@ const dialectCases = [
   { id: 'dialect-scss', property: 'color' },
   { id: 'dialect-sass-indented', property: 'color' },
   { id: 'dialect-less', property: 'color' },
+  { id: 'dialect-css-modules', property: 'color' },
   { id: 'dialect-vanilla', property: 'color' },
 ]
 

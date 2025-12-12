@@ -23,6 +23,9 @@ export default {
       '.js': ['.js', '.ts', '.tsx'],
     },
   },
+  experiments: {
+    css: true,
+  },
   module: {
     rules: [
       {
@@ -48,6 +51,10 @@ export default {
             },
           },
         ],
+      },
+      {
+        test: /\.module\.css$/,
+        type: 'css/module',
       },
       {
         test: /\.[jt]sx?$/,
@@ -97,6 +104,7 @@ export default {
       },
       {
         test: /\.css$/,
+        exclude: /\.module\.css$/,
         type: 'asset/source',
       },
       {
