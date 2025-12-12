@@ -14,6 +14,11 @@ import {
   STABLE_SELECTORS_TEST_ID,
 } from './cards/stable-selectors-card/stable-selectors-card.js'
 import { knightedCss as stableSelectorsCss } from './cards/stable-selectors-card/stable-selectors-card.js?knighted-css'
+import {
+  VanillaStableSelectorsCard,
+  VANILLA_STABLE_TEST_ID,
+} from './cards/vanilla-stable-card/vanilla-stable-card.js'
+import { knightedCss as vanillaStableCss } from './cards/vanilla-stable-card/vanilla-stable-card.js?knighted-css'
 import { SassCard, SASS_TEST_ID } from './cards/sass-card/sass-card.js'
 import { knightedCss as sassCss } from './cards/sass-card/sass-card.js?knighted-css'
 import { ScssCard, SCSS_TEST_ID } from './cards/scss-card/scss-card.js'
@@ -39,6 +44,11 @@ const cards: DialectCard[] = [
     id: STABLE_SELECTORS_TEST_ID,
     css: stableSelectorsCss,
     Component: StableSelectorsCard,
+  },
+  {
+    id: VANILLA_STABLE_TEST_ID,
+    css: vanillaStableCss,
+    Component: VanillaStableSelectorsCard,
   },
   { id: SCSS_TEST_ID, css: scssCss, Component: ScssCard },
   { id: SASS_TEST_ID, css: sassCss, Component: SassCard },
