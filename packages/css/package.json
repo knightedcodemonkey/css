@@ -1,6 +1,6 @@
 {
   "name": "@knighted/css",
-  "version": "1.0.0-rc.3",
+  "version": "1.0.0-rc.4",
   "description": "A build-time utility that traverses JavaScript/TypeScript module dependency graphs to extract, compile, and optimize all imported CSS into a single, in-memory string.",
   "type": "module",
   "main": "./dist/css.js",
@@ -32,6 +32,18 @@
     "./loader-queries": {
       "types": "./loader-queries.d.ts",
       "default": "./loader-queries.d.ts"
+    },
+    "./stableSelectors": {
+      "types": "./dist/stableSelectors.d.ts",
+      "import": "./dist/stableSelectors.js",
+      "require": "./dist/cjs/stableSelectors.cjs"
+    },
+    "./stable": {
+      "sass": "./stable/_index.scss",
+      "default": "./stable/_index.scss"
+    },
+    "./stable/stable.css": {
+      "default": "./stable/stable.css"
     }
   },
   "keywords": [
@@ -80,7 +92,8 @@
   "files": [
     "dist",
     "loader-queries.d.ts",
-    "types.d.ts"
+    "types.d.ts",
+    "stable"
   ],
   "author": "KCM <knightedcodemonkey@gmail.com>",
   "license": "MIT",

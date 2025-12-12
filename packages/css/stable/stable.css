@@ -1,0 +1,15 @@
+@layer knighted.stable;
+
+:root {
+  --knighted-stable-namespace: 'knighted';
+}
+
+/*
+Usage:
+  @import '@knighted/css/stable/stable.css';
+  @layer knighted.stable {
+    .knighted-button {
+      declarations go here;
+    }
+  }
+*/
