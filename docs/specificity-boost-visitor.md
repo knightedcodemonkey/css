@@ -31,4 +31,4 @@ const styles = await css('./src/entry.ts', {
 })
 ```
 
-You can plug any Lightning CSS visitor here; we compose it with your `lightningcss.visitor` if provided. Keep the match as narrow as possible to avoid unexpected cascade shifts.
+You can plug any Lightning CSS visitor into `specificityBoost.visitor`; it runs after the built-in `strategy` helpers. Keep the match as narrow as possible to avoid unexpected cascade shifts.

@@ -82,7 +82,7 @@ Typical customizations:
 - **filter** – Skip certain paths (e.g., storybook-only styles) before compilation.
 - **resolver** – Resolve virtual specifiers the way your bundler does (the repo ships test fixtures for webpack, Vite, and Rspack).
 - **lightningcss** – Pass `true` for defaults or a config object for minification/autoprefixing.
-- **specificityBoost** – Provide a Lightning CSS visitor to bump specificity on selected selectors (e.g., duplicate a class for matching selectors). We compose this with your `lightningcss.visitor`, if provided.
+- **specificityBoost** – Provide a Lightning CSS visitor to bump specificity on selected selectors (e.g., duplicate a class for matching selectors).
 
 ## Examples
 
@@ -150,11 +150,13 @@ module.exports = {
 import { reactJsx } from '@knighted/jsx/react'
 import { createRoot, type Root } from 'react-dom/client'
 import { LitElement, html, unsafeCSS } from 'lit'
-import { Button } from './button.tsx'
-import { knightedCss as reactStyles } from './button.tsx?knighted-css'
+import { customElement } from 'lit/decorators.js'
+import { Showcase } from './showcase.tsx'
+import { knightedCss as showcaseCss } from './showcase.tsx?knighted-css'
 
-export class ButtonWrapper extends LitElement {
-  static styles = [unsafeCSS(reactStyles)]
+@customElement('lit-host')
+export class LitHost extends LitElement {
+  static styles = [unsafeCSS(showcaseCss)]
   #reactRoot?: Root
 
   firstUpdated(): void {
@@ -166,21 +168,21 @@ export class ButtonWrapper extends LitElement {
     super.disconnectedCallback()
   }
 
-  #mountReact() {
-    const outlet = this.renderRoot.querySelector(
-      '[data-react-root]',
-    ) as HTMLDivElement | null
-    if (!outlet) return
-    this.#reactRoot = createRoot(outlet)
-    this.#reactRoot.render(reactJsx`<${Button} />`)
+  #mountReact(): void {
+    if (!this.#reactRoot) {
+      const outlet = this.renderRoot.querySelector(
+        '[data-react-root]',
+      ) as HTMLDivElement | null
+      if (!outlet) return
+      this.#reactRoot = createRoot(outlet)
+    }
+    this.#reactRoot.render(reactJsx`<${Showcase} label="Launch CSS Build" />`)
   }
 
   render() {
     return html`<div data-react-root></div>`
   }
 }
-
-customElements.define('button-wrapper', ButtonWrapper)
 ```
 
 The loader appends `export const knightedCss = "/* compiled css */"` to the module when imported with `?knighted-css`. Keep your main module import separate to preserve its typing; use the query import only for the CSS string.
