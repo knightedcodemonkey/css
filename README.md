@@ -222,7 +222,7 @@ function Badge() {
 }
 ```
 
-`stableClass('token')` returns just the selector string, while `createStableClassFactory({ namespace: 'docs' })` gives you a scoped generator you can reuse across components. Both helpers sanitize tokens automatically so the emitted selectors stay deterministic.
+`stableClass('token')` returns a class name you can drop straight into `className`, and `createStableClassFactory({ namespace: 'docs' })` gives you a scoped generator to reuse across components. Need the literal CSS selector? Call `stableSelector('token')`. All helpers sanitize tokens automatically so the emitted hooks stay deterministic.
 
 Need a zero-JS approach? Import the optional layer helper and co-locate your fallback selectors:
 

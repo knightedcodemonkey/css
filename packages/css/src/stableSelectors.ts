@@ -31,6 +31,10 @@ export function stableToken(token: string, options?: StableSelectorOptions): str
 }
 
 export function stableClass(token: string, options?: StableSelectorOptions): string {
+  return stableToken(token, options)
+}
+
+export function stableSelector(token: string, options?: StableSelectorOptions): string {
   return `.${stableToken(token, options)}`
 }
 

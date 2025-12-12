@@ -1,0 +1,28 @@
+.cardShell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.25rem 1.35rem;
+  border-radius: 22px;
+  position: relative;
+  min-height: 170px;
+  color: #0f172a;
+}
+
+.cardChip {
+  align-self: flex-start;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+}
+
+.cardCopy {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: rgba(15, 23, 42, 0.85);
+}

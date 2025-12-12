@@ -7,6 +7,7 @@ const dialectCases = [
   { id: 'dialect-scss', property: 'color' },
   { id: 'dialect-sass-indented', property: 'color' },
   { id: 'dialect-less', property: 'color' },
+  { id: 'dialect-stable-selectors', property: 'color' },
   { id: 'dialect-css-modules', property: 'color' },
   { id: 'dialect-vanilla', property: 'color' },
 ]
@@ -98,6 +99,24 @@ test.describe('Lit + React wrapper demo', () => {
         .not.toBe('')
     })
   }
+
+  test('stable selector card exposes deterministic hooks', async ({ page }) => {
+    const card = page.getByTestId('dialect-stable-selectors')
+    await expect(card).toBeVisible()
+    const metrics = await card.evaluate(node => {
+      const el = node as HTMLElement
+      const style = getComputedStyle(el)
+      const chip = el.querySelector('.knighted-stable-chip') as HTMLElement | null
+      const chipStyle = chip ? getComputedStyle(chip) : null
+      return {
+        background: style.getPropertyValue('background-image').trim(),
+        chipCase: chipStyle?.getPropertyValue('text-transform').trim() ?? null,
+      }
+    })
+
+    expect(metrics.background).toContain('linear-gradient')
+    expect(metrics.chipCase).toBe('uppercase')
+  })
 
   test('vanilla-extract sprinkles compose utility classes within Lit demo', async ({
     page,
