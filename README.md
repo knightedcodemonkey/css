@@ -190,6 +190,14 @@ The loader appends `export const knightedCss = "/* compiled css */"` to the modu
 > [!TIP]
 > The Playwright Rspack demo shows how a Lit host can import specific dialects with `?knighted-css` and pipe them straight into `LitElement.styles`. See [packages/playwright/src/lit-react/lit-host.ts](packages/playwright/src/lit-react/lit-host.ts) for the shadow-root wiring.
 
+#### CSS Modules and stable selectors
+
+CSS Modules hash class names after the loader extracts selectors, so the stylesheet captured by `?knighted-css` never sees those hashed tokens. Provide a second, stable selector (class or data attribute) alongside the module-generated one so both the DOM and the Lit host share a common hook. A minimal example:
+
+```tsx
+<div className={`${styles['css-modules-badge']} css-modules-badge`}>
+```
+
 #### TypeScript support for loader queries
 
 Loader query types ship directly with `@knighted/css`. Reference them once in your project—either by adding `"types": ["@knighted/css/loader-queries"]` to `tsconfig.json` or dropping `/// <reference types="@knighted/css/loader-queries" />` into a global `.d.ts`—and the following ambient modules become available everywhere:

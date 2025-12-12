@@ -4,6 +4,11 @@ import type { JSX } from 'react'
 
 import { BasicCard, BASIC_TEST_ID } from './cards/basic-card/basic-card.js'
 import { LessCard, LESS_TEST_ID } from './cards/less-card/less-card.js'
+import {
+  CssModulesCard,
+  CSS_MODULES_TEST_ID,
+} from './cards/css-modules-card/css-modules-card.js'
+import { knightedCss as cssModulesCss } from './cards/css-modules-card/css-modules-card.js?knighted-css'
 import { SassCard, SASS_TEST_ID } from './cards/sass-card/sass-card.js'
 import { knightedCss as sassCss } from './cards/sass-card/sass-card.js?knighted-css'
 import { ScssCard, SCSS_TEST_ID } from './cards/scss-card/scss-card.js'
@@ -27,6 +32,7 @@ type HostManagedDialect = {
 const cards: DialectCard[] = [
   { id: SCSS_TEST_ID, css: scssCss, Component: ScssCard },
   { id: SASS_TEST_ID, css: sassCss, Component: SassCard },
+  { id: CSS_MODULES_TEST_ID, css: cssModulesCss, Component: CssModulesCard },
   { id: VANILLA_TEST_ID, css: vanillaCss, Component: VanillaCard },
 ]
 
