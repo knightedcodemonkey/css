@@ -7,6 +7,8 @@ const dialectCases = [
   { id: 'dialect-scss', property: 'color' },
   { id: 'dialect-sass-indented', property: 'color' },
   { id: 'dialect-less', property: 'color' },
+  { id: 'dialect-stable-selectors', property: 'color' },
+  { id: 'dialect-vanilla-stable', property: 'color' },
   { id: 'dialect-css-modules', property: 'color' },
   { id: 'dialect-vanilla', property: 'color' },
 ]
@@ -98,6 +100,59 @@ test.describe('Lit + React wrapper demo', () => {
         .not.toBe('')
     })
   }
+
+  test('stable selector card exposes deterministic hooks', async ({ page }) => {
+    const card = page.getByTestId('dialect-stable-selectors')
+    await expect(card).toBeVisible()
+    const metrics = await card.evaluate(node => {
+      const el = node as HTMLElement
+      const style = getComputedStyle(el)
+      const chip = el.querySelector('.knighted-stable-chip') as HTMLElement | null
+      const chipStyle = chip ? getComputedStyle(chip) : null
+      return {
+        background: style.getPropertyValue('background-image').trim(),
+        chipCase: chipStyle?.getPropertyValue('text-transform').trim() ?? null,
+      }
+    })
+
+    expect(metrics.background).toContain('linear-gradient')
+    expect(metrics.chipCase).toBe('uppercase')
+  })
+
+  test('vanilla-extract stable selectors expose deterministic hooks', async ({
+    page,
+  }) => {
+    const card = page.getByTestId('dialect-vanilla-stable')
+    await expect(card).toBeVisible()
+    const metrics = await card.evaluate(node => {
+      const el = node as HTMLElement
+      const stableShell = el.querySelector(
+        '.knighted-vanilla-stable-shell',
+      ) as HTMLElement | null
+      const stableChip = el.querySelector(
+        '.knighted-vanilla-stable-chip',
+      ) as HTMLElement | null
+      const stableCopy = el.querySelector(
+        '.knighted-vanilla-stable-copy',
+      ) as HTMLElement | null
+      const shellStyle = stableShell
+        ? getComputedStyle(stableShell)
+        : getComputedStyle(el)
+      return {
+        gradient: shellStyle.getPropertyValue('background-image').trim(),
+        chipCase: stableChip
+          ? getComputedStyle(stableChip).getPropertyValue('text-transform').trim()
+          : null,
+        copyColor: stableCopy
+          ? getComputedStyle(stableCopy).getPropertyValue('color').trim()
+          : null,
+      }
+    })
+
+    expect(metrics.gradient).toContain('linear-gradient')
+    expect(metrics.chipCase).toBe('uppercase')
+    expect(metrics.copyColor).toBe('rgba(15, 23, 42, 0.82)')
+  })
 
   test('vanilla-extract sprinkles compose utility classes within Lit demo', async ({
     page,

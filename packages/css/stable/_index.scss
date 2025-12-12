@@ -1,0 +1,57 @@
+// Knighted stable selector mixins
+// Usage: @use '@knighted/css/stable' as knighted;
+//        .button { @include knighted.stable('button') { ... } }
+
+@use 'sass:meta';
+
+$knighted-stable-namespace: 'knighted' !default;
+
+@function _knighted-normalize-token($token) {
+  @if meta.type-of($token) == 'number' {
+    @return $token;
+  }
+  @return $token;
+}
+
+@function stable-token($token, $namespace: $knighted-stable-namespace) {
+  $normalized-token: _knighted-normalize-token($token);
+  @if $namespace == '' {
+    @return $normalized-token;
+  }
+  @return '#{$namespace}-#{$normalized-token}';
+}
+
+@function stable-class($token, $namespace: $knighted-stable-namespace) {
+  $token-value: stable-token($token, $namespace);
+  @return '.#{$token-value}';
+}
+
+@mixin stable($token, $namespace: $knighted-stable-namespace) {
+  @if not & {
+    @error 'The knighted.stable mixin must be used within a selector context so that "&" is defined.';
+  }
+
+  $stable-selector: stable-class($token, $namespace);
+  @at-root #{&},
+    #{$stable-selector} {
+    @content;
+  }
+}
+
+@mixin stable-at-root($selector, $token, $namespace: $knighted-stable-namespace) {
+  $stable-selector: stable-class($token, $namespace);
+  @at-root #{$selector},
+    #{$stable-selector} {
+    @content;
+  }
+}
+
+@function stable-class-name($token, $namespace: $knighted-stable-namespace) {
+  @return stable-token($token, $namespace);
+}
+
+@mixin stable-only($token, $namespace: $knighted-stable-namespace) {
+  @at-root #{stable-class($token, $namespace)} {
+    @content;
+  }
+}

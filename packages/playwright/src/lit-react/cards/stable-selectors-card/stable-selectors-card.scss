@@ -1,0 +1,19 @@
+@use '@knighted/css/stable' as knighted;
+
+@include knighted.stable-only('stable-card') {
+  background: linear-gradient(130deg, #a5f3fc 0%, #fef08a 50%, #f9a8d4 100%);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  box-shadow:
+    0 25px 55px rgba(14, 165, 233, 0.35),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+@include knighted.stable-only('stable-chip') {
+  color: #0f172a;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+@include knighted.stable-only('stable-body') {
+  color: rgba(15, 23, 42, 0.85);
+}

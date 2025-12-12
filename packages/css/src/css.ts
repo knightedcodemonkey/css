@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { promises as fs } from 'node:fs'
+import { existsSync, promises as fs } from 'node:fs'
 
 import dependencyTree from 'dependency-tree'
 import type { Options as DependencyTreeOpts } from 'dependency-tree'
@@ -228,8 +228,29 @@ async function compileSass(
   const sass = sassModule
   const result = sass.compile(filePath, {
     style: 'expanded',
+    loadPaths: buildSassLoadPaths(filePath),
   })
   return result.css
+}
+
+// Ensure Sass can resolve bare module specifiers by walking node_modules folders.
+function buildSassLoadPaths(filePath: string): string[] {
+  const loadPaths = new Set<string>()
+  let cursor = path.dirname(filePath)
+  const root = path.parse(cursor).root
+
+  while (true) {
+    loadPaths.add(cursor)
+    loadPaths.add(path.join(cursor, 'node_modules'))
+    if (cursor === root) break
+    cursor = path.dirname(cursor)
+  }
+
+  const cwd = process.cwd()
+  loadPaths.add(cwd)
+  loadPaths.add(path.join(cwd, 'node_modules'))
+
+  return Array.from(loadPaths).filter(dir => dir && existsSync(dir))
 }
 
 async function compileLess(filePath: string, peerResolver?: PeerLoader): Promise<string> {

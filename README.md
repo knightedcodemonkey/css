@@ -192,11 +192,51 @@ The loader appends `export const knightedCss = "/* compiled css */"` to the modu
 
 #### CSS Modules and stable selectors
 
-CSS Modules hash class names after the loader extracts selectors, so the stylesheet captured by `?knighted-css` never sees those hashed tokens. Provide a second, stable selector (class or data attribute) alongside the module-generated one so both the DOM and the Lit host share a common hook. A minimal example:
+CSS Modules hash class names after the loader extracts selectors, so the stylesheet captured by `?knighted-css` never sees those hashed tokens. Provide a second, stable selector (class or data attribute) alongside the module-generated one so both the DOM and the loader share a common hook. A minimal example:
 
 ```tsx
 <div className={`${styles['css-modules-badge']} css-modules-badge`}>
 ```
+
+Sass/Less projects can import the shared mixins directly:
+
+```scss
+@use '@knighted/css/stable' as knighted;
+
+.button {
+  @include knighted.stable('button') {
+    // declarations duplicated for .button and .knighted-button
+  }
+}
+```
+
+Set `$knighted-stable-namespace: 'acme'` before the `@use` statement to change the default prefix, or override per call with `$namespace: 'storybook'`. Additional helpers let you emit only the fallback selector (`@include knighted.stable-only('token')`) or supply explicit `@at-root` selectors when nesting is inconvenient (`@include knighted.stable-at-root('.card', 'card')`).
+
+For runtime usage (vanilla-extract, CSS Modules, JSX utilities), pull in the TypeScript helpers:
+
+```ts
+import { stableClassName } from '@knighted/css/stableSelectors'
+
+function Badge() {
+  return <span className={stableClassName(styles, 'badge')} />
+}
+```
+
+`stableClass('token')` returns a class name you can drop straight into `className`, and `createStableClassFactory({ namespace: 'docs' })` gives you a scoped generator to reuse across components. Need the literal CSS selector? Call `stableSelector('token')`. All helpers sanitize tokens automatically so the emitted hooks stay deterministic.
+
+Need a zero-JS approach? Import the optional layer helper and co-locate your fallback selectors:
+
+```css
+@import '@knighted/css/stable/stable.css';
+
+@layer knighted.stable {
+  .knighted-alert {
+    /* declarations */
+  }
+}
+```
+
+Override the namespace via `:root { --knighted-stable-namespace: 'acme'; }` if you want a different prefix in pure CSS.
 
 #### TypeScript support for loader queries
 
