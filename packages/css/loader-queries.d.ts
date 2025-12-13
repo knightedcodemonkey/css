@@ -20,10 +20,14 @@ declare module '*?knighted-css&combined' {
   export const knightedCss: string
 }
 
-declare module '*?knighted-css&combined&named-only*' {
+declare module '*?knighted-css&combined&named-only' {
+  const combined: KnightedCssCombinedModule<Record<string, unknown>>
+  export default combined
   export const knightedCss: string
 }
 
-declare module '*?knighted-css&combined&no-default*' {
+declare module '*?knighted-css&combined&no-default' {
+  const combined: KnightedCssCombinedModule<Record<string, unknown>>
+  export default combined
   export const knightedCss: string
 }
