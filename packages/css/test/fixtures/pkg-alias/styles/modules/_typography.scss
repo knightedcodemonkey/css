@@ -1,0 +1,7 @@
+@use './tokens.scss';
+
+$stack: tokens.$base-stack;
+
+@mixin apply-stack {
+  font-family: $stack;
+}
