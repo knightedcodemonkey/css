@@ -21,6 +21,9 @@ const { Component, knightedCss } = combined as KnightedCssCombinedModule<
 >
 ```
 
+> [!NOTE]
+> Namespace imports (`import * as combined …`) are the most reliable pattern for `&named-only` queries because you intentionally drop the default export. Keep using the helper type to narrow the namespace.
+
 ## Default export only
 
 ```ts
