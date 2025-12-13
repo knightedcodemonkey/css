@@ -268,7 +268,7 @@ import combined from './button.tsx?knighted-css&combined&named-only'
 
 The `named-only` flag suppresses the synthetic default entirely, which is handy for codebases that consistently destructure combined modules or rely on namespace imports for type narrowing.
 
-You can mix and match: regular `?knighted-css` imports keep strong module typings and just add the CSS string, while `?knighted-css&combined` dedupes your CSS loader pipeline when you need everything at once.
+You can mix and match: regular `?knighted-css` imports keep strong module typings and just add the CSS string, while `?knighted-css&combined` dedupes your CSS loader pipeline when you need everything at once. Need a quick reference for which query to use? Check the [Combined query matrix](./docs/combined-queries.md).
 
 #### vanilla-extract loader guidance
 
