@@ -19,3 +19,11 @@ declare module '*?knighted-css&combined' {
   export default combined
   export const knightedCss: string
 }
+
+declare module '*?knighted-css&combined&named-only*' {
+  export const knightedCss: string
+}
+
+declare module '*?knighted-css&combined&no-default*' {
+  export const knightedCss: string
+}

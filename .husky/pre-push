@@ -1,6 +1,7 @@
 #!/usr/bin/env sh
 set -euo pipefail
 
+npm run check:cycles
 npm run lint
 npm run prettier:check
 npm run check-types

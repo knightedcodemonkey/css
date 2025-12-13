@@ -1,6 +1,6 @@
 {
   "name": "@knighted/css",
-  "version": "1.0.0-rc.5",
+  "version": "1.0.0-rc.6",
   "description": "A build-time utility that traverses JavaScript/TypeScript module dependency graphs to extract, compile, and optimize all imported CSS into a single, in-memory string.",
   "type": "module",
   "main": "./dist/css.js",
@@ -66,6 +66,7 @@
   },
   "dependencies": {
     "dependency-tree": "^11.2.0",
+    "es-module-lexer": "^2.0.0",
     "lightningcss": "^1.30.2"
   },
   "overrides": {

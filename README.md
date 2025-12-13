@@ -249,13 +249,7 @@ No vendor copies are necessary—the declarations live inside `@knighted/css`, y
 
 #### Combined module + CSS import
 
-If you prefer a single import that returns both your module exports and the compiled stylesheet, append `&combined` to the query:
-
-```ts
-import { Button, knightedCss } from './button.tsx?knighted-css&combined'
-```
-
-This keeps your bundler’s other CSS loaders intact while guaranteeing that `knightedCss` is only computed once. The trade-off is that TypeScript can’t infer the original module shape automatically. To restore those typings, use the helper type exported by the loader:
+If you prefer a single import that returns both your module exports and the compiled stylesheet, append `&combined` to the query. Then narrow the import once so TypeScript understands the shape:
 
 ```ts
 import type { KnightedCssCombinedModule } from '@knighted/css/loader'
@@ -265,6 +259,14 @@ const { Button, knightedCss } = combined as KnightedCssCombinedModule<
   typeof import('./button')
 >
 ```
+
+Combined imports mirror the source module’s default export strategy. Need to guarantee “named exports only” regardless of what the source module does? Append `&named-only` (alias: `&no-default`) to the query—the typing stays the same:
+
+```ts
+import combined from './button.tsx?knighted-css&combined&named-only'
+```
+
+The `named-only` flag suppresses the synthetic default entirely, which is handy for codebases that consistently destructure combined modules or rely on namespace imports for type narrowing.
 
 You can mix and match: regular `?knighted-css` imports keep strong module typings and just add the CSS string, while `?knighted-css&combined` dedupes your CSS loader pipeline when you need everything at once.
 

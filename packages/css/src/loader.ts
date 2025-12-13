@@ -5,6 +5,16 @@ import type {
 } from 'webpack'
 
 import { cssWithMeta, compileVanillaModule, type CssOptions } from './css.js'
+import { detectModuleDefaultExport, type ModuleDefaultSignal } from './moduleInfo.js'
+import {
+  buildSanitizedQuery,
+  COMBINED_QUERY_FLAG,
+  isQueryFlag,
+  NAMED_ONLY_QUERY_FLAGS,
+  shouldEmitCombinedDefault,
+  shouldForwardDefaultExport,
+  splitQuery,
+} from './loaderInternals.js'
 
 export type KnightedCssCombinedModule<TModule> = TModule & {
   knightedCss: string
@@ -19,7 +29,6 @@ export interface KnightedCssLoaderOptions extends CssOptions {
 }
 
 const DEFAULT_EXPORT_NAME = 'knightedCss'
-const COMBINED_QUERY_FLAG = 'combined'
 
 const loader: LoaderDefinitionFunction<KnightedCssLoaderOptions> = async function loader(
   source: string | Buffer,
@@ -83,8 +92,21 @@ export const pitch: PitchLoaderDefinitionFunction<KnightedCssLoaderOptions> =
 
     const request = buildProxyRequest(this)
     const { cssOptions } = resolveLoaderOptions(this)
+    const skipSyntheticDefault = hasNamedOnlyQueryFlag(this.resourceQuery)
+    const defaultSignalPromise = skipSyntheticDefault
+      ? Promise.resolve<ModuleDefaultSignal>('unknown')
+      : detectModuleDefaultExport(this.resourcePath)
 
-    return extractCss(this, cssOptions).then(css => createCombinedModule(request, css))
+    return Promise.all([extractCss(this, cssOptions), defaultSignalPromise]).then(
+      ([css, defaultSignal]) => {
+        const emitDefault = shouldEmitCombinedDefault({
+          request,
+          skipSyntheticDefault,
+          detection: defaultSignal,
+        })
+        return createCombinedModule(request, css, { emitDefault })
+      },
+    )
   }
 ;(loader as LoaderDefinitionFunction & { pitch?: typeof pitch }).pitch = pitch
 
@@ -138,6 +160,14 @@ function hasCombinedQuery(query?: string | null): boolean {
     .some(part => isQueryFlag(part, COMBINED_QUERY_FLAG))
 }
 
+function hasNamedOnlyQueryFlag(query?: string | null): boolean {
+  if (!query) return false
+  const entries = splitQuery(query)
+  return entries.some(part =>
+    NAMED_ONLY_QUERY_FLAGS.some(flag => isQueryFlag(part, flag)),
+  )
+}
+
 function buildProxyRequest(ctx: LoaderContext<KnightedCssLoaderOptions>): string {
   const sanitizedQuery = buildSanitizedQuery(ctx.resourceQuery)
   const rawRequest = getRawRequest(ctx)
@@ -171,37 +201,23 @@ function stripResourceQuery(request: string): string {
   return idx >= 0 ? request.slice(0, idx) : request
 }
 
-function buildSanitizedQuery(query?: string | null): string {
-  if (!query) return ''
-  const entries = splitQuery(query).filter(part => {
-    return !isQueryFlag(part, COMBINED_QUERY_FLAG) && !isQueryFlag(part, 'knighted-css')
-  })
-  return entries.length > 0 ? `?${entries.join('&')}` : ''
+interface CombinedModuleOptions {
+  emitDefault?: boolean
 }
 
-function splitQuery(query: string): string[] {
-  const trimmed = query.startsWith('?') ? query.slice(1) : query
-  if (!trimmed) return []
-  return trimmed.split('&').filter(Boolean)
-}
-
-function isQueryFlag(entry: string, flag: string): boolean {
-  const [rawKey] = entry.split('=')
-  try {
-    return decodeURIComponent(rawKey) === flag
-  } catch {
-    return rawKey === flag
-  }
-}
-
-function createCombinedModule(request: string, css: string): string {
+function createCombinedModule(
+  request: string,
+  css: string,
+  options?: CombinedModuleOptions,
+): string {
+  const shouldEmitDefault = options?.emitDefault ?? shouldForwardDefaultExport(request)
   const requestLiteral = JSON.stringify(request)
   const lines = [
     `import * as __knightedModule from ${requestLiteral};`,
     `export * from ${requestLiteral};`,
   ]
 
-  if (shouldForwardDefaultExport(request)) {
+  if (shouldEmitDefault) {
     lines.push(
       `const __knightedDefault =
 typeof __knightedModule.default !== 'undefined'
@@ -213,14 +229,4 @@ typeof __knightedModule.default !== 'undefined'
 
   lines.push(buildInjection(css))
   return lines.join('\n')
-}
-
-function shouldForwardDefaultExport(request: string): boolean {
-  const [pathPart] = request.split('?')
-  if (!pathPart) return true
-  const lower = pathPart.toLowerCase()
-  if (lower.endsWith('.css.ts') || lower.endsWith('.css.js')) {
-    return false
-  }
-  return true
 }
