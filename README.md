@@ -334,6 +334,10 @@ const styles = await css('./src/routes/page.tsx', {
 
 This keeps `@knighted/css` resolution in sync with your bundler’s alias/extension rules.
 
+### Sass alias specifiers
+
+If your Sass files rely on virtual specifiers such as `pkg:#styles/modules/typography.scss`, forward the same resolver you use for JavaScript imports. `@knighted/css` normalizes any resolver-backed custom scheme to a real `file://` URL before Dart Sass evaluates it, so a file loaded via `pkg:#…` still has a stable canonical URL. That keeps Sass’s internal `new URL('./tokens.scss', context.containingUrl)` calls working, which means relative `@use`/`@import` statements inside those alias-backed files continue to resolve just like they do in your bundler.
+
 ### Specificity boost
 
 Use `specificityBoost` to tweak selector behavior:

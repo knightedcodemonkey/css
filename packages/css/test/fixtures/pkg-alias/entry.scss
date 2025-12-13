@@ -1,0 +1,6 @@
+@use 'pkg:#styles/modules/typography.scss' as typography;
+
+.alias-demo {
+  @include typography.apply-stack;
+  font-size: 1rem;
+}

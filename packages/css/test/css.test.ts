@@ -18,6 +18,8 @@ const vanillaEntry = path.join(fixturesDir, 'vanilla/styles.css.ts')
 const miscFixturesDir = path.resolve(__dirname, './fixtures/misc')
 const selectorsCss = path.join(miscFixturesDir, 'selectors.css')
 const unsupportedStyle = path.join(miscFixturesDir, 'unsupported.noop')
+const pkgAliasDir = path.resolve(__dirname, './fixtures/pkg-alias')
+const pkgAliasEntry = path.join(pkgAliasDir, 'entry.scss')
 
 test('extracts CSS from JS dependency graph', async () => {
   const result = await css(basicEntry)
@@ -39,6 +41,19 @@ test('supports indented sass compilation', async () => {
     'expected mixin output to include pseudo content',
   )
   assert.match(result, /padding-inline:\s*1\.25rem/)
+})
+
+test('normalizes custom scheme specifiers before Sass resolves relatives', async () => {
+  const result = await css(pkgAliasEntry, {
+    resolver: async specifier => {
+      if (!specifier.startsWith('pkg:#')) return undefined
+      const relativePath = specifier.replace(/^pkg:#/, '')
+      return path.join(pkgAliasDir, relativePath)
+    },
+  })
+
+  assert.match(result, /\.alias-demo/)
+  assert.match(result, /font-family:\s*["']Space Grotesk["'], sans-serif/)
 })
 
 test('supports less compilation', async () => {
