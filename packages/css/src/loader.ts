@@ -4,17 +4,22 @@ import type {
   PitchLoaderDefinitionFunction,
 } from 'webpack'
 
+import { transform as lightningTransform } from 'lightningcss'
+
 import { cssWithMeta, compileVanillaModule, type CssOptions } from './css.js'
 import { detectModuleDefaultExport, type ModuleDefaultSignal } from './moduleInfo.js'
 import {
   buildSanitizedQuery,
   COMBINED_QUERY_FLAG,
-  isQueryFlag,
+  getQueryParam,
+  hasQueryFlag,
   NAMED_ONLY_QUERY_FLAGS,
   shouldEmitCombinedDefault,
   shouldForwardDefaultExport,
-  splitQuery,
+  STABLE_NAMESPACE_QUERY_PARAM,
+  TYPES_QUERY_FLAG,
 } from './loaderInternals.js'
+import { escapeRegex, serializeSelector } from './helpers.js'
 
 export type KnightedCssCombinedModule<TModule> = TModule & {
   knightedCss: string
@@ -26,16 +31,33 @@ export interface KnightedCssVanillaOptions {
 
 export interface KnightedCssLoaderOptions extends CssOptions {
   vanilla?: KnightedCssVanillaOptions
+  stableNamespace?: string
 }
 
 const DEFAULT_EXPORT_NAME = 'knightedCss'
+const DEFAULT_STABLE_NAMESPACE = 'knighted'
 
 const loader: LoaderDefinitionFunction<KnightedCssLoaderOptions> = async function loader(
   source: string | Buffer,
 ) {
-  const { cssOptions, vanillaOptions } = resolveLoaderOptions(this)
+  const {
+    cssOptions,
+    vanillaOptions,
+    stableNamespace: optionNamespace,
+  } = resolveLoaderOptions(this)
+  const queryNamespace = getQueryParam(this.resourceQuery, STABLE_NAMESPACE_QUERY_PARAM)
+  const resolvedNamespace = resolveStableNamespace(optionNamespace, queryNamespace)
+  const typesRequested = hasQueryFlag(this.resourceQuery, TYPES_QUERY_FLAG)
   const css = await extractCss(this, cssOptions)
-  const injection = buildInjection(css)
+  const stableSelectorsLiteral = typesRequested
+    ? buildStableSelectorsLiteral({
+        css,
+        namespace: resolvedNamespace,
+        resourcePath: this.resourcePath,
+        emitWarning: message => emitKnightedWarning(this, message),
+      })
+    : undefined
+  const injection = buildInjection(css, { stableSelectorsLiteral })
   const isStyleModule = this.resourcePath.endsWith('.css.ts')
   if (isStyleModule) {
     const { source: compiledSource } = await compileVanillaModule(
@@ -91,7 +113,10 @@ export const pitch: PitchLoaderDefinitionFunction<KnightedCssLoaderOptions> =
     }
 
     const request = buildProxyRequest(this)
-    const { cssOptions } = resolveLoaderOptions(this)
+    const { cssOptions, stableNamespace: optionNamespace } = resolveLoaderOptions(this)
+    const typesRequested = hasQueryFlag(this.resourceQuery, TYPES_QUERY_FLAG)
+    const queryNamespace = getQueryParam(this.resourceQuery, STABLE_NAMESPACE_QUERY_PARAM)
+    const resolvedNamespace = resolveStableNamespace(optionNamespace, queryNamespace)
     const skipSyntheticDefault = hasNamedOnlyQueryFlag(this.resourceQuery)
     const defaultSignalPromise = skipSyntheticDefault
       ? Promise.resolve<ModuleDefaultSignal>('unknown')
@@ -104,7 +129,18 @@ export const pitch: PitchLoaderDefinitionFunction<KnightedCssLoaderOptions> =
           skipSyntheticDefault,
           detection: defaultSignal,
         })
-        return createCombinedModule(request, css, { emitDefault })
+        const stableSelectorsLiteral = typesRequested
+          ? buildStableSelectorsLiteral({
+              css,
+              namespace: resolvedNamespace,
+              resourcePath: this.resourcePath,
+              emitWarning: message => emitKnightedWarning(this, message),
+            })
+          : undefined
+        return createCombinedModule(request, css, {
+          emitDefault,
+          stableSelectorsLiteral,
+        })
       },
     )
   }
@@ -115,11 +151,12 @@ export default loader
 function resolveLoaderOptions(ctx: LoaderContext<KnightedCssLoaderOptions>): {
   cssOptions: CssOptions
   vanillaOptions?: KnightedCssVanillaOptions
+  stableNamespace?: string
 } {
   const rawOptions = (
     typeof ctx.getOptions === 'function' ? ctx.getOptions() : {}
   ) as KnightedCssLoaderOptions
-  const { vanilla, ...rest } = rawOptions
+  const { vanilla, stableNamespace, ...rest } = rawOptions
   const cssOptions: CssOptions = {
     ...rest,
     cwd: rest.cwd ?? ctx.rootContext ?? process.cwd(),
@@ -127,6 +164,7 @@ function resolveLoaderOptions(ctx: LoaderContext<KnightedCssLoaderOptions>): {
   return {
     cssOptions,
     vanillaOptions: vanilla,
+    stableNamespace,
   }
 }
 
@@ -146,26 +184,23 @@ function toSourceString(source: string | Buffer): string {
   return typeof source === 'string' ? source : source.toString('utf8')
 }
 
-function buildInjection(css: string): string {
-  return `\n\nexport const ${DEFAULT_EXPORT_NAME} = ${JSON.stringify(css)};\n`
+function buildInjection(
+  css: string,
+  extras?: { stableSelectorsLiteral?: string },
+): string {
+  const lines = [`\n\nexport const ${DEFAULT_EXPORT_NAME} = ${JSON.stringify(css)};\n`]
+  if (extras?.stableSelectorsLiteral) {
+    lines.push(extras.stableSelectorsLiteral)
+  }
+  return lines.join('')
 }
 
 function hasCombinedQuery(query?: string | null): boolean {
-  if (!query) return false
-  const trimmed = query.startsWith('?') ? query.slice(1) : query
-  if (!trimmed) return false
-  return trimmed
-    .split('&')
-    .filter(Boolean)
-    .some(part => isQueryFlag(part, COMBINED_QUERY_FLAG))
+  return hasQueryFlag(query, COMBINED_QUERY_FLAG)
 }
 
 function hasNamedOnlyQueryFlag(query?: string | null): boolean {
-  if (!query) return false
-  const entries = splitQuery(query)
-  return entries.some(part =>
-    NAMED_ONLY_QUERY_FLAGS.some(flag => isQueryFlag(part, flag)),
-  )
+  return NAMED_ONLY_QUERY_FLAGS.some(flag => hasQueryFlag(query, flag))
 }
 
 function buildProxyRequest(ctx: LoaderContext<KnightedCssLoaderOptions>): string {
@@ -203,6 +238,7 @@ function stripResourceQuery(request: string): string {
 
 interface CombinedModuleOptions {
   emitDefault?: boolean
+  stableSelectorsLiteral?: string
 }
 
 function createCombinedModule(
@@ -227,6 +263,149 @@ typeof __knightedModule.default !== 'undefined'
     )
   }
 
-  lines.push(buildInjection(css))
+  lines.push(
+    buildInjection(css, { stableSelectorsLiteral: options?.stableSelectorsLiteral }),
+  )
   return lines.join('\n')
+}
+
+function resolveStableNamespace(
+  optionNamespace?: string,
+  queryNamespace?: string,
+): string {
+  if (typeof queryNamespace === 'string') {
+    return queryNamespace
+  }
+  if (typeof optionNamespace === 'string') {
+    return optionNamespace
+  }
+  return DEFAULT_STABLE_NAMESPACE
+}
+
+function buildStableSelectorsLiteral(options: {
+  css: string
+  namespace: string
+  resourcePath: string
+  emitWarning: (message: string) => void
+}): string {
+  const trimmedNamespace = options.namespace.trim()
+  if (!trimmedNamespace) {
+    options.emitWarning(
+      `stableSelectors requested for ${options.resourcePath} but "stableNamespace" resolved to an empty value.`,
+    )
+    return 'export const stableSelectors = {} as const;\n'
+  }
+
+  const selectorMap = collectStableSelectors(
+    options.css,
+    trimmedNamespace,
+    options.resourcePath,
+  )
+  if (selectorMap.size === 0) {
+    options.emitWarning(
+      `stableSelectors requested for ${options.resourcePath} but no selectors matched namespace "${trimmedNamespace}".`,
+    )
+  }
+
+  const literal = formatStableSelectorMap(selectorMap)
+  return `export const stableSelectors = ${literal} as const;\n`
+}
+
+function collectStableSelectors(
+  css: string,
+  namespace: string,
+  filename?: string,
+): Map<string, string> {
+  if (!namespace) return new Map<string, string>()
+  const astResult = collectStableSelectorsFromAst(css, namespace, filename)
+  if (astResult) {
+    return astResult
+  }
+  return collectStableSelectorsByRegex(css, namespace)
+}
+
+function collectStableSelectorsFromAst(
+  css: string,
+  namespace: string,
+  filename?: string,
+): Map<string, string> | undefined {
+  try {
+    const tokens = new Map<string, string>()
+    const escaped = escapeRegex(namespace)
+    const pattern = new RegExp(`\\.${escaped}-([A-Za-z0-9_-]+)`, 'g')
+    lightningTransform({
+      filename: filename ?? 'knighted-types-probe.css',
+      code: Buffer.from(css),
+      minify: false,
+      visitor: {
+        Rule: {
+          style(rule: any) {
+            const target = Array.isArray(rule?.selectors)
+              ? rule
+              : rule?.value && Array.isArray(rule.value.selectors)
+                ? rule.value
+                : undefined
+            if (!target) return rule
+            for (const selector of target.selectors) {
+              const selectorStr = serializeSelector(selector as any)
+              pattern.lastIndex = 0
+              let match: RegExpExecArray | null
+              while ((match = pattern.exec(selectorStr)) !== null) {
+                const token = match[1]
+                if (!token) continue
+                tokens.set(token, `${namespace}-${token}`)
+              }
+            }
+            return rule
+          },
+        },
+      },
+    })
+    return tokens
+  } catch {
+    return undefined
+  }
+}
+
+function collectStableSelectorsByRegex(
+  css: string,
+  namespace: string,
+): Map<string, string> {
+  const matches = new Map<string, string>()
+  const escaped = escapeRegex(namespace)
+  const pattern = new RegExp(`\\.${escaped}-([A-Za-z0-9_-]+)`, 'g')
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(css)) !== null) {
+    const token = match[1]
+    if (!token) continue
+    const className = `${namespace}-${token}`
+    matches.set(token, className)
+  }
+  return matches
+}
+
+function formatStableSelectorMap(map: Map<string, string>): string {
+  if (map.size === 0) {
+    return '{}'
+  }
+  const entries = Array.from(map.entries()).sort((a, b) =>
+    a[0].localeCompare(b[0], undefined, { sensitivity: 'base' }),
+  )
+  const lines = entries.map(
+    ([key, value]) => `  ${JSON.stringify(key)}: ${JSON.stringify(value)}`,
+  )
+  return `{\n${lines.join(',\n')}\n}`
+}
+
+function emitKnightedWarning(
+  ctx: LoaderContext<KnightedCssLoaderOptions>,
+  message: string,
+): void {
+  const formatted = `\x1b[33m@knighted/css warning\x1b[0m ${message}`
+  if (typeof ctx.emitWarning === 'function') {
+    ctx.emitWarning(new Error(formatted))
+    return
+  }
+  // eslint-disable-next-line no-console
+  console.warn(formatted)
 }

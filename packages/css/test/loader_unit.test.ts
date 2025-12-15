@@ -158,6 +158,73 @@ test('loader falls back to process.cwd when no cwd hints are provided', async ()
   assert.ok(ctx.added.size > 0, 'should still register dependencies')
 })
 
+test('loader emits stableSelectors export when ?types flag is present', async () => {
+  const resourcePath = path.resolve(__dirname, 'fixtures/dialects/basic/entry.js')
+  const ctx = createMockContext({
+    resourcePath,
+    resourceQuery: '?knighted-css&types',
+  })
+  const output = String(
+    await loader.call(
+      ctx as LoaderContext<KnightedCssLoaderOptions>,
+      "export const noop = ''",
+    ),
+  )
+
+  assert.match(output, /export const stableSelectors = /)
+  assert.match(
+    output,
+    /export const stableSelectors = \{\s*"demo": "knighted-demo",\s*"icon": "knighted-icon"\s*\} as const;/,
+    'should emit map of detected selectors using default namespace',
+  )
+})
+
+test('loader respects stableNamespace overrides from query', async () => {
+  const resourcePath = path.resolve(__dirname, 'fixtures/dialects/basic/entry.js')
+  const ctx = createMockContext({
+    resourcePath,
+    resourceQuery: '?knighted-css&types&stableNamespace=acme',
+  })
+  const output = String(
+    await loader.call(
+      ctx as LoaderContext<KnightedCssLoaderOptions>,
+      "export const noop = ''",
+    ),
+  )
+
+  assert.match(
+    output,
+    /export const stableSelectors = \{\s*"card": "acme-card"\s*\} as const;/,
+    'should scope selector discovery to provided namespace',
+  )
+})
+
+test('loader warns when stableNamespace resolves to empty value', async () => {
+  const resourcePath = path.resolve(__dirname, 'fixtures/dialects/basic/entry.js')
+  const warnings: string[] = []
+  const ctx = createMockContext({
+    resourcePath,
+    resourceQuery: '?knighted-css&types&stableNamespace=',
+    emitWarning: (err: Error) => {
+      warnings.push(err.message)
+    },
+  })
+  const output = String(
+    await loader.call(
+      ctx as LoaderContext<KnightedCssLoaderOptions>,
+      "export const noop = ''",
+    ),
+  )
+
+  assert.match(output, /export const stableSelectors = \{\} as const;/)
+  assert.equal(warnings.length, 1)
+  assert.match(
+    warnings[0] ?? '',
+    /empty value/,
+    'warning should describe empty namespace configuration',
+  )
+})
+
 test('pitch returns combined module when query includes combined flag', async () => {
   const resourcePath = path.resolve(__dirname, 'fixtures/dialects/basic/entry.js')
   const ctx = createMockContext({
@@ -182,6 +249,31 @@ test('pitch returns combined module when query includes combined flag', async ()
   assert.match(combinedOutput, /export default __knightedDefault/)
   assert.match(combinedOutput, /export const knightedCss = /)
   assert.ok(ctx.added.size > 0, 'pitch should still register dependencies')
+})
+
+test('pitch injects stableSelectors export when combined types query is used', async () => {
+  const resourcePath = path.resolve(__dirname, 'fixtures/dialects/basic/entry.js')
+  const ctx = createMockContext({
+    resourcePath,
+    resourceQuery: '?knighted-css&combined&types',
+    loadModule: (_request, callback) => {
+      callback(null, 'export const Button = () => "ok";')
+    },
+  })
+
+  const result = await pitch.call(
+    ctx as LoaderContext<KnightedCssLoaderOptions>,
+    `${resourcePath}?knighted-css&combined&types`,
+    '',
+    {},
+  )
+
+  const combinedOutput = String(result ?? '')
+  assert.match(
+    combinedOutput,
+    /export const stableSelectors = \{\s*"demo": "knighted-demo",\s*"icon": "knighted-icon"\s*\} as const;/,
+    'combined proxy should forward stable selector map',
+  )
 })
 
 test('pitch returns undefined when combined flag is missing', async () => {

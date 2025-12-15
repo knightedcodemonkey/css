@@ -6,6 +6,13 @@ declare module '*?knighted-css' {
   export const knightedCss: string
 }
 
+type KnightedCssStableSelectorMap = Readonly<Record<string, string>>
+
+declare module '*?knighted-css&types' {
+  export const knightedCss: string
+  export const stableSelectors: KnightedCssStableSelectorMap
+}
+
 /**
  * Ambient declaration for combined loader imports (e.g. "./file.tsx?knighted-css&combined").
  * These modules behave like the original module with an additional `knightedCss` export.
@@ -30,4 +37,25 @@ declare module '*?knighted-css&combined&no-default' {
   const combined: KnightedCssCombinedModule<Record<string, unknown>>
   export default combined
   export const knightedCss: string
+}
+
+declare module '*?knighted-css&combined&types' {
+  const combined: KnightedCssCombinedModule<Record<string, unknown>>
+  export default combined
+  export const knightedCss: string
+  export const stableSelectors: KnightedCssStableSelectorMap
+}
+
+declare module '*?knighted-css&combined&named-only&types' {
+  const combined: KnightedCssCombinedModule<Record<string, unknown>>
+  export default combined
+  export const knightedCss: string
+  export const stableSelectors: KnightedCssStableSelectorMap
+}
+
+declare module '*?knighted-css&combined&no-default&types' {
+  const combined: KnightedCssCombinedModule<Record<string, unknown>>
+  export default combined
+  export const knightedCss: string
+  export const stableSelectors: KnightedCssStableSelectorMap
 }

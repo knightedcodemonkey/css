@@ -1,3 +1,15 @@
 .demo {
   color: rebeccapurple;
 }
+
+.knighted-demo {
+  color: teal;
+}
+
+.knighted-icon {
+  display: inline-flex;
+}
+
+.acme-card {
+  border: 1px solid currentColor;
+}

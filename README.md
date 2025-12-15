@@ -238,12 +238,51 @@ Need a zero-JS approach? Import the optional layer helper and co-locate your fal
 
 Override the namespace via `:root { --knighted-stable-namespace: 'acme'; }` if you want a different prefix in pure CSS.
 
+#### Type-safe selector maps (`?knighted-css&types`)
+
+Append `&types` to any loader import to receive a literal map of the discovered stable selectors alongside the raw CSS:
+
+```ts
+import { knightedCss, stableSelectors } from './styles.css?knighted-css&types'
+
+stableSelectors.demo // "knighted-demo"
+type StableSelectors = typeof stableSelectors
+```
+
+The map ships as `as const`, so every key/value pair is type-safe without additional tooling. Need the combined import? Add the flag there too and destructure everything from one place:
+
+```ts
+import type { KnightedCssCombinedModule } from '@knighted/css/loader'
+import combined, { stableSelectors } from './button.js?knighted-css&combined&types'
+
+const { knightedCss } = combined as KnightedCssCombinedModule<
+  typeof import('./button.js')
+>
+
+stableSelectors.demo // "knighted-demo"
+```
+
+Namespaces default to `knighted`, but you can configure a global fallback via the loader’s `stableNamespace` option:
+
+```js
+{
+  loader: '@knighted/css/loader',
+  options: {
+    stableNamespace: 'storybook',
+  },
+}
+```
+
+Per-import overrides stay easy—just append `&stableNamespace=acme` (e.g., `./styles.css?knighted-css&types&stableNamespace=acme`). The loader emits highlighted warnings when a namespace trims to an empty string or when no selectors match, helping CI logs surface misconfigurations immediately. For best editor support, keep `&types` at the end of the query (`?knighted-css&combined&types`, `?knighted-css&combined&named-only&types`, etc.).
+
 #### TypeScript support for loader queries
 
 Loader query types ship directly with `@knighted/css`. Reference them once in your project—either by adding `"types": ["@knighted/css/loader-queries"]` to `tsconfig.json` or dropping `/// <reference types="@knighted/css/loader-queries" />` into a global `.d.ts`—and the following ambient modules become available everywhere:
 
 - `*?knighted-css` imports expose a `knightedCss: string` export.
-- `*?knighted-css&combined` (and any query that includes both flags) expose `knightedCss` and return the original module exports, which you can narrow with `KnightedCssCombinedModule` before destructuring named members.
+- `*?knighted-css&types` (and variants that append `&stableNamespace=...`) expose both `knightedCss` and `stableSelectors`, the readonly selector map.
+- `*?knighted-css&combined` (plus `&named-only` / `&no-default`) mirror the source module exports while adding `knightedCss`, which you can narrow with `KnightedCssCombinedModule` before destructuring named members.
+- `*?knighted-css&combined&types` variants add the same `stableSelectors` map on top of the combined behavior so a single import can surface everything.
 
 No vendor copies are necessary—the declarations live inside `@knighted/css`, you just need to point your TypeScript config at the shipped `loader-queries` subpath once.
 
