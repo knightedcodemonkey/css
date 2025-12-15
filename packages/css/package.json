@@ -13,6 +13,9 @@
       "loader-queries": [
         "./loader-queries.d.ts"
       ],
+      "generate-types": [
+        "./dist/generateTypes.d.ts"
+      ],
       "*": [
         "./types.d.ts"
       ]
@@ -32,6 +35,11 @@
     "./loader-queries": {
       "types": "./loader-queries.d.ts",
       "default": "./loader-queries.d.ts"
+    },
+    "./generate-types": {
+      "types": "./dist/generateTypes.d.ts",
+      "import": "./dist/generateTypes.js",
+      "default": "./dist/generateTypes.js"
     },
     "./stableSelectors": {
       "types": "./dist/stableSelectors.d.ts",
@@ -58,6 +66,9 @@
     "vanilla-extract",
     "lightningcss"
   ],
+  "bin": {
+    "knighted-css-generate-types": "./bin/generate-types.js"
+  },
   "scripts": {
     "build": "duel",
     "check-types": "tsc --noEmit",
@@ -94,7 +105,8 @@
     "dist",
     "loader-queries.d.ts",
     "types.d.ts",
-    "stable"
+    "stable",
+    "bin"
   ],
   "author": "KCM <knightedcodemonkey@gmail.com>",
   "license": "MIT",

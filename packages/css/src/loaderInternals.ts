@@ -2,8 +2,8 @@ import type { ModuleDefaultSignal } from './moduleInfo.js'
 
 export const COMBINED_QUERY_FLAG = 'combined'
 export const TYPES_QUERY_FLAG = 'types'
-export const STABLE_NAMESPACE_QUERY_PARAM = 'stableNamespace'
 export const NAMED_ONLY_QUERY_FLAGS = ['named-only', 'no-default'] as const
+export type SelectorTypeVariant = 'types' | 'combined' | 'combinedWithoutDefault'
 
 export function splitQuery(query: string): string[] {
   const trimmed = query.startsWith('?') ? query.slice(1) : query
@@ -35,11 +35,6 @@ export function buildSanitizedQuery(query?: string | null): string {
     if (NAMED_ONLY_QUERY_FLAGS.some(flag => isQueryFlag(part, flag))) {
       return false
     }
-    const [rawKey] = part.split('=')
-    const decodedKey = safeDecode(rawKey)
-    if (decodedKey === STABLE_NAMESPACE_QUERY_PARAM) {
-      return false
-    }
     return true
   })
   return entries.length > 0 ? `?${entries.join('&')}` : ''
@@ -50,25 +45,6 @@ export function hasQueryFlag(query: string | null | undefined, flag: string): bo
   const entries = splitQuery(query)
   if (entries.length === 0) return false
   return entries.some(part => isQueryFlag(part, flag))
-}
-
-export function getQueryParam(
-  query: string | null | undefined,
-  key: string,
-): string | undefined {
-  if (!query) return undefined
-  const entries = splitQuery(query)
-  for (const entry of entries) {
-    const [rawKey, ...rawValueParts] = entry.split('=')
-    if (!rawKey) continue
-    if (safeDecode(rawKey) !== key) continue
-    const rawValue = rawValueParts.join('=')
-    if (rawValue.length === 0) {
-      return ''
-    }
-    return safeDecode(rawValue)
-  }
-  return undefined
 }
 
 function safeDecode(value: string): string {
@@ -87,6 +63,21 @@ export function shouldForwardDefaultExport(request: string): boolean {
     return false
   }
   return true
+}
+
+export function hasCombinedQuery(query?: string | null): boolean {
+  return hasQueryFlag(query, COMBINED_QUERY_FLAG)
+}
+
+export function hasNamedOnlyQueryFlag(query?: string | null): boolean {
+  return NAMED_ONLY_QUERY_FLAGS.some(flag => hasQueryFlag(query, flag))
+}
+
+export function determineSelectorVariant(query?: string | null): SelectorTypeVariant {
+  if (hasCombinedQuery(query)) {
+    return hasNamedOnlyQueryFlag(query) ? 'combinedWithoutDefault' : 'combined'
+  }
+  return 'types'
 }
 
 export function shouldEmitCombinedDefault(options: {

@@ -174,16 +174,17 @@ test('loader emits stableSelectors export when ?types flag is present', async ()
   assert.match(output, /export const stableSelectors = /)
   assert.match(
     output,
-    /export const stableSelectors = \{\s*"demo": "knighted-demo",\s*"icon": "knighted-icon"\s*\} as const;/,
+    /export const stableSelectors = Object\.freeze\(\{\s*"demo": "knighted-demo",\s*"icon": "knighted-icon"\s*\}\) as const;/,
     'should emit map of detected selectors using default namespace',
   )
 })
 
-test('loader respects stableNamespace overrides from query', async () => {
+test('loader respects stableNamespace loader option', async () => {
   const resourcePath = path.resolve(__dirname, 'fixtures/dialects/basic/entry.js')
   const ctx = createMockContext({
     resourcePath,
-    resourceQuery: '?knighted-css&types&stableNamespace=acme',
+    resourceQuery: '?knighted-css&types',
+    getOptions: () => ({ stableNamespace: 'acme' }),
   })
   const output = String(
     await loader.call(
@@ -194,17 +195,18 @@ test('loader respects stableNamespace overrides from query', async () => {
 
   assert.match(
     output,
-    /export const stableSelectors = \{\s*"card": "acme-card"\s*\} as const;/,
+    /export const stableSelectors = Object\.freeze\(\{\s*"card": "acme-card"\s*\}\) as const;/,
     'should scope selector discovery to provided namespace',
   )
 })
 
-test('loader warns when stableNamespace resolves to empty value', async () => {
+test('loader warns when stableNamespace option resolves to empty value', async () => {
   const resourcePath = path.resolve(__dirname, 'fixtures/dialects/basic/entry.js')
   const warnings: string[] = []
   const ctx = createMockContext({
     resourcePath,
-    resourceQuery: '?knighted-css&types&stableNamespace=',
+    resourceQuery: '?knighted-css&types',
+    getOptions: () => ({ stableNamespace: '   ' }),
     emitWarning: (err: Error) => {
       warnings.push(err.message)
     },
@@ -271,7 +273,7 @@ test('pitch injects stableSelectors export when combined types query is used', a
   const combinedOutput = String(result ?? '')
   assert.match(
     combinedOutput,
-    /export const stableSelectors = \{\s*"demo": "knighted-demo",\s*"icon": "knighted-icon"\s*\} as const;/,
+    /export const stableSelectors = Object\.freeze\(\{\s*"demo": "knighted-demo",\s*"icon": "knighted-icon"\s*\}\) as const;/,
     'combined proxy should forward stable selector map',
   )
 })
