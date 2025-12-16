@@ -523,7 +523,7 @@ export async function runGenerateTypesCli(argv = process.argv.slice(2)): Promise
   }
 }
 
-interface ParsedCliArgs {
+export interface ParsedCliArgs {
   rootDir: string
   include?: string[]
   outDir?: string
@@ -618,4 +618,16 @@ function reportCliResult(result: GenerateTypesResult): void {
   for (const warning of result.warnings) {
     console.warn(`[knighted-css] ${warning}`)
   }
+}
+
+export const __generateTypesInternals = {
+  stripInlineLoader,
+  splitResourceAndQuery,
+  buildDeclarationFileName,
+  formatModuleDeclaration,
+  formatSelectorType,
+  normalizeIncludeOptions,
+  parseCliArgs,
+  printHelp,
+  reportCliResult,
 }

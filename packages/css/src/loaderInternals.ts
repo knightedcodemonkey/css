@@ -103,4 +103,5 @@ export function shouldEmitCombinedDefault(options: {
 export const __loaderInternals = {
   buildSanitizedQuery,
   shouldEmitCombinedDefault,
+  determineSelectorVariant,
 }

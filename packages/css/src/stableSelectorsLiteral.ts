@@ -123,3 +123,9 @@ export function formatStableSelectorMap(map: Map<string, string>): string {
   })
   return `Object.freeze({\n${lines.join(',\n')}\n})`
 }
+
+export const __stableSelectorsLiteralInternals = {
+  collectStableSelectors,
+  collectStableSelectorsByRegex,
+  formatStableSelectorMap,
+}
