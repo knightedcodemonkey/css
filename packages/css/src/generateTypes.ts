@@ -42,6 +42,10 @@ interface TsconfigResolutionContext {
   matchPath?: MatchPath
 }
 
+type CssWithMetaFn = typeof cssWithMeta
+
+let activeCssWithMeta: CssWithMetaFn = cssWithMeta
+
 interface GenerateTypesInternalOptions {
   rootDir: string
   include: string[]
@@ -93,12 +97,17 @@ const SUPPORTED_EXTENSIONS = new Set([
   '.cjs',
 ])
 
+type ModuleTypeDetector = () => ReturnType<typeof moduleType>
+
+let moduleTypeDetector: ModuleTypeDetector = moduleType
+let importMetaUrlProvider: () => string | undefined = getImportMetaUrl
+
 function resolvePackageRoot(): string {
-  const detectedType = moduleType()
+  const detectedType = moduleTypeDetector()
   if (detectedType === 'commonjs' && typeof __dirname === 'string') {
     return path.resolve(__dirname, '..')
   }
-  const moduleUrl = getImportMetaUrl()
+  const moduleUrl = importMetaUrlProvider()
   if (moduleUrl) {
     return path.resolve(path.dirname(fileURLToPath(moduleUrl)), '..')
   }
@@ -186,7 +195,7 @@ async function generateDeclarations(
       let selectorMap = selectorCache.get(cacheKey)
       if (!selectorMap) {
         try {
-          const { css } = await cssWithMeta(resolvedPath, {
+          const { css } = await activeCssWithMeta(resolvedPath, {
             cwd: options.rootDir,
             peerResolver,
           })
@@ -535,10 +544,11 @@ async function resolveWithTsconfigPaths(
 
 function loadTsconfigResolutionContext(
   rootDir: string,
+  loader: typeof getTsconfig = getTsconfig,
 ): TsconfigResolutionContext | undefined {
   let result: TsConfigResult | null
   try {
-    result = getTsconfig(rootDir) as TsConfigResult | null
+    result = loader(rootDir) as TsConfigResult | null
   } catch {
     return undefined
   }
@@ -746,15 +756,40 @@ function reportCliResult(result: GenerateTypesResult): void {
   }
 }
 
+function setCssWithMetaImplementation(impl?: CssWithMetaFn): void {
+  activeCssWithMeta = impl ?? cssWithMeta
+}
+
+function setModuleTypeDetector(detector?: ModuleTypeDetector): void {
+  moduleTypeDetector = detector ?? moduleType
+}
+
+function setImportMetaUrlProvider(provider?: () => string | undefined): void {
+  importMetaUrlProvider = provider ?? getImportMetaUrl
+}
+
 export const __generateTypesInternals = {
+  writeTypesIndex,
   stripInlineLoader,
   splitResourceAndQuery,
+  findSpecifierImports,
+  resolveImportPath,
+  resolvePackageRoot,
   buildDeclarationFileName,
   formatModuleDeclaration,
   formatSelectorType,
+  relativeToRoot,
+  collectCandidateFiles,
   normalizeIncludeOptions,
   normalizeTsconfigPaths,
+  setCssWithMetaImplementation,
+  setModuleTypeDetector,
+  setImportMetaUrlProvider,
   isNonRelativeSpecifier,
+  createProjectPeerResolver,
+  getProjectRequire,
+  loadTsconfigResolutionContext,
+  resolveWithTsconfigPaths,
   parseCliArgs,
   printHelp,
   reportCliResult,
