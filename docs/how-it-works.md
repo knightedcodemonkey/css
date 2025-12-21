@@ -3,7 +3,8 @@
 ## Overview
 
 - The loader walks the module graph and gathers style-producing files (`.css`, `.scss`, `.sass`, `.less`, `.css.ts`, etc.).
-- It uses `dependency-tree` (via `precinct`) to follow imports in the order they appear in source.
+- It walks the module graph with a built-in depth-first resolver so imports are visited in source order.
+- Resolution is powered by [`oxc-resolver`](https://github.com/oxc-project/oxc-resolver), so tsconfig `paths`, package `exports` conditions, and extension aliasing (like `.css.js` → `.css.ts`) all map to the same targets you’d get in a bundler.
 - CSS from those files is concatenated in that discovery order and returned as `knightedCss` for injection (e.g., Lit ` css`` `, SSR, SSG).
 - We do **not** sort or reorder; first-seen order is kept, so the CSS cascade mirrors the original import sequence.
 
@@ -16,7 +17,7 @@
 
 ### Example ordering
 
-We rely on `dependency-tree` (via `precinct`) to follow imports in the order they appear in source. We concatenate CSS in depth-first, preorder (parent before children), preserving sibling order as written. Files are deduped: the first time a file is seen, it’s included; later encounters are skipped to avoid reshuffling the cascade. We never sort the list, and `lightningcss` preserves the rule order we provide.
+The walker performs a depth-first, preorder traversal (parent before children) so imports are resolved exactly as they are written in source. Files are deduped: the first time a file is seen, it’s included; later encounters are skipped to avoid reshuffling the cascade. We never sort the list, and `lightningcss` preserves the rule order we provide.
 
 Given:
 

@@ -1,8 +1,6 @@
 import path from 'node:path'
 import { existsSync, promises as fs } from 'node:fs'
 
-import dependencyTree from 'dependency-tree'
-import type { Options as DependencyTreeOpts } from 'dependency-tree'
 import {
   composeVisitors,
   transform as lightningTransform,
@@ -14,10 +12,13 @@ import {
   type SpecificitySelector,
   type SpecificityStrategy,
 } from './helpers.js'
+import { collectStyleImports } from './moduleGraph.js'
+import type { ModuleGraphOptions } from './moduleGraph.js'
 import { createSassImporter } from './sassInternals.js'
-import type { CssResolver } from './sassInternals.js'
+import type { CssResolver } from './types.js'
 
-export type { CssResolver } from './sassInternals.js'
+export type { CssResolver } from './types.js'
+export type { ModuleGraphOptions } from './moduleGraph.js'
 
 export const DEFAULT_EXTENSIONS = ['.css', '.scss', '.sass', '.less', '.css.ts']
 
@@ -37,7 +38,7 @@ export interface CssOptions {
     strategy?: SpecificityStrategy
     match?: SpecificitySelector[]
   }
-  dependencyTree?: Partial<Omit<DependencyTreeOpts, 'filename' | 'directory'>>
+  moduleGraph?: ModuleGraphOptions
   resolver?: CssResolver
   peerResolver?: PeerLoader
 }
@@ -75,11 +76,12 @@ export async function cssWithMeta(
     ext.toLowerCase(),
   )
 
-  const files = collectStyleDependencies(entryPath, {
+  const files = await collectStyleDependencies(entryPath, {
     cwd,
     extensions,
     filter: options.filter,
-    dependencyTreeOptions: options.dependencyTree,
+    graphOptions: options.moduleGraph,
+    resolver: options.resolver,
   })
 
   if (files.length === 0) {
@@ -144,20 +146,22 @@ async function resolveEntry(
   return path.resolve(cwd, entry)
 }
 
-function collectStyleDependencies(
+async function collectStyleDependencies(
   entryPath: string,
   {
     cwd,
     extensions,
     filter,
-    dependencyTreeOptions,
+    graphOptions,
+    resolver,
   }: {
     cwd: string
     extensions: string[]
     filter?: (filePath: string) => boolean
-    dependencyTreeOptions?: Partial<Omit<DependencyTreeOpts, 'filename' | 'directory'>>
+    graphOptions?: ModuleGraphOptions
+    resolver?: CssResolver
   },
-): StyleModule[] {
+): Promise<StyleModule[]> {
   const seen = new Set<string>()
   const order: StyleModule[] = []
 
@@ -167,25 +171,27 @@ function collectStyleDependencies(
       : (filePath: string) => !filePath.includes('node_modules')
 
   const entryIsStyle = Boolean(matchExtension(entryPath, extensions))
-  let treeList: string[] = []
+  let discoveredStyles: string[] = []
 
   if (!entryIsStyle) {
-    const dependencyConfig: DependencyTreeOpts = {
-      ...dependencyTreeOptions,
-      filename: entryPath,
-      directory: cwd,
+    discoveredStyles = await collectStyleImports(entryPath, {
+      cwd,
+      styleExtensions: extensions,
       filter: shouldInclude,
-    }
-    treeList = dependencyTree.toList(dependencyConfig)
+      resolver,
+      graphOptions,
+    })
   }
 
-  const candidates = entryIsStyle ? [entryPath] : [entryPath, ...treeList]
+  const candidates = entryIsStyle ? [entryPath] : [entryPath, ...discoveredStyles]
 
   for (const candidate of candidates) {
     const match = matchExtension(candidate, extensions)
-    if (!match || seen.has(candidate)) continue
-    seen.add(candidate)
-    order.push({ path: path.resolve(candidate), ext: match })
+    if (!match) continue
+    const resolvedCandidate = path.resolve(candidate)
+    if (seen.has(resolvedCandidate)) continue
+    seen.add(resolvedCandidate)
+    order.push({ path: resolvedCandidate, ext: match })
   }
 
   return order
