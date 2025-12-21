@@ -17,7 +17,8 @@
 
 ## Features
 
-- Traverses module graphs using [`dependency-tree`](https://github.com/dependents/node-dependency-tree) to find transitive style imports.
+- Traverses module graphs with a built-in walker to find transitive style imports (no bundler required).
+- Resolution parity via [`oxc-resolver`](https://github.com/oxc-project/oxc-resolver): tsconfig `paths`, package `exports` conditions, and extension aliasing (e.g., `.css.js` → `.css.ts`) are honored without wiring up a bundler.
 - Compiles `*.css`, `*.scss`, `*.sass`, `*.less`, and `*.css.ts` (vanilla-extract) files out of the box.
 - Optional post-processing via [`lightningcss`](https://github.com/parcel-bundler/lightningcss) for minification, prefixing, media query optimizations, or specificity boosts.
 - Pluggable resolver/filter hooks for custom module resolution (e.g., Rspack/Vite/webpack aliases) or selective inclusion.
@@ -25,7 +26,7 @@
 
 ## Requirements
 
-- Node.js `>= 22.15.0`
+- Node.js `>= 22.17.0`
 - npm `>= 10.9.0`
 - Install peer toolchains you intend to use (`sass`, `less`, `@vanilla-extract/integration`, etc.).
 
@@ -66,10 +67,10 @@ type CssOptions = {
     strategy?: SpecificityStrategy
     match?: SpecificitySelector[]
   }
-  dependencyTree?: DependencyTreeOptions
+  moduleGraph?: ModuleGraphOptions
   resolver?: (
     specifier: string,
-    ctx: { cwd: string },
+    ctx: { cwd: string; from?: string },
   ) => string | Promise<string | undefined>
   peerResolver?: (name: string) => Promise<unknown> // for custom module loading
 }
@@ -81,6 +82,7 @@ Typical customizations:
 
 - **filter** – Skip certain paths (e.g., storybook-only styles) before compilation.
 - **resolver** – Resolve virtual specifiers the way your bundler does (the repo ships test fixtures for webpack, Vite, and Rspack).
+- **moduleGraph** – Configure tsconfig path aliases, extra script extensions, or custom `package.json` conditions for the built-in dependency walker.
 - **lightningcss** – Pass `true` for defaults or a config object for minification/autoprefixing.
 - **specificityBoost** – Provide a Lightning CSS visitor to bump specificity on selected selectors (e.g., duplicate a class for matching selectors).
 
@@ -388,7 +390,7 @@ That hint keeps the upstream CommonJS helpers intact while still letting the res
 
 ### Custom resolver (enhanced-resolve example)
 
-If your project uses aliases or nonstandard resolution, plug in a custom resolver. Here’s how to use [`enhanced-resolve`](https://github.com/webpack/enhanced-resolve):
+The built-in walker already leans on [`oxc-resolver`](https://github.com/oxc-project/oxc-resolver), so tsconfig `paths`, package `exports` conditions, and common extension aliases work out of the box. If you still need to mirror bespoke behavior (virtual modules, framework-specific loaders, etc.), plug in a custom resolver. Here’s how to use [`enhanced-resolve`](https://github.com/webpack/enhanced-resolve):
 
 ```ts
 import { ResolverFactory } from 'enhanced-resolve'

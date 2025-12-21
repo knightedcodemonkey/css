@@ -1,6 +1,6 @@
 {
   "name": "@knighted/css",
-  "version": "1.0.0-rc.8",
+  "version": "1.0.0-rc.9",
   "description": "A build-time utility that traverses JavaScript/TypeScript module dependency graphs to extract, compile, and optimize all imported CSS into a single, in-memory string.",
   "type": "module",
   "main": "./dist/css.js",
@@ -76,15 +76,13 @@
     "prepack": "npm run build"
   },
   "dependencies": {
-    "dependency-tree": "^11.2.0",
     "es-module-lexer": "^2.0.0",
     "lightningcss": "^1.30.2",
-    "node-module-type": "^1.0.1"
-  },
-  "overrides": {
-    "module-lookup-amd": {
-      "glob": "^9.0.0"
-    }
+    "node-module-type": "^1.0.1",
+    "get-tsconfig": "^4.13.0",
+    "oxc-parser": "^0.104.0",
+    "oxc-resolver": "^11.16.0",
+    "tsconfig-paths": "^4.2.0"
   },
   "peerDependencies": {
     "@vanilla-extract/integration": "^8.0.0",

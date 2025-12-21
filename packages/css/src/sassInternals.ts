@@ -2,10 +2,9 @@ import path from 'node:path'
 import { existsSync, promises as fs } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-export type CssResolver = (
-  specifier: string,
-  ctx: { cwd: string },
-) => string | Promise<string | undefined>
+import type { CssResolver } from './types.js'
+
+export type { CssResolver } from './types.js'
 
 export function createSassImporter({
   cwd,
@@ -25,8 +24,16 @@ export function createSassImporter({
           console.error('[knighted-css:sass] containing url:', context.containingUrl.href)
         }
       }
+      const containingPath = context?.containingUrl
+        ? fileURLToPath(context.containingUrl)
+        : undefined
       if (shouldNormalizeSpecifier(url)) {
-        const resolvedPath = await resolveAliasSpecifier(url, resolver, cwd)
+        const resolvedPath = await resolveAliasSpecifier(
+          url,
+          resolver,
+          cwd,
+          containingPath,
+        )
         if (!resolvedPath) {
           if (debug) {
             console.error('[knighted-css:sass] resolver returned no result for', url)
@@ -67,8 +74,9 @@ export async function resolveAliasSpecifier(
   specifier: string,
   resolver: CssResolver,
   cwd: string,
+  from?: string,
 ): Promise<string | undefined> {
-  const resolved = await resolver(specifier, { cwd })
+  const resolved = await resolver(specifier, { cwd, from })
   if (!resolved) {
     return undefined
   }
