@@ -70,7 +70,7 @@
     "knighted-css-generate-types": "./bin/generate-types.js"
   },
   "scripts": {
-    "build": "duel && node ./scripts/copy-types-stub.mjs",
+    "build": "duel && node ./scripts/copy-types-stub.js",
     "check-types": "tsc --noEmit",
     "test": "c8 --reporter=text --reporter=text-summary --reporter=lcov --include \"src/**/*.ts\" tsx --test test/**/*.test.ts",
     "prepack": "npm run build"
