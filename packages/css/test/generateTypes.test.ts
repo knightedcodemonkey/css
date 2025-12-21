@@ -184,7 +184,13 @@ test('generateTypes internals format selector-aware declarations', () => {
     console.log = originalLog
     console.warn = originalWarn
   }
-  assert.ok(summaryLogs.some(log => log.includes('No ?knighted-css&types imports found')))
+  assert.ok(
+    summaryLogs.some(log =>
+      log.includes(
+        'No changes to ?knighted-css&types declarations (cache is up to date).',
+      ),
+    ),
+  )
   assert.ok(summaryLogs.some(log => log.includes('Updated 2 declaration(s)')))
   assert.equal(summaryWarns.length, 1)
 })

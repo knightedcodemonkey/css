@@ -608,7 +608,9 @@ Options:
 
 function reportCliResult(result: GenerateTypesResult): void {
   if (result.written === 0 && result.removed === 0) {
-    console.log('[knighted-css] No ?knighted-css&types imports found.')
+    console.log(
+      '[knighted-css] No changes to ?knighted-css&types declarations (cache is up to date).',
+    )
   } else {
     console.log(
       `[knighted-css] Updated ${result.written} declaration(s), removed ${result.removed}, output in ${result.outDir}.`,
