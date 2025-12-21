@@ -26,7 +26,7 @@
 
 ## Requirements
 
-- Node.js `>= 22.15.0`
+- Node.js `>= 22.17.0`
 - npm `>= 10.9.0`
 - Install peer toolchains you intend to use (`sass`, `less`, `@vanilla-extract/integration`, etc.).
 
