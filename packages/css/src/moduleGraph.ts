@@ -3,12 +3,20 @@ import { builtinModules } from 'node:module'
 import { existsSync, promises as fs, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
+import { parseSync, Visitor } from 'oxc-parser'
+import type {
+  Argument,
+  Expression,
+  ImportExpression,
+  TSImportEqualsDeclaration,
+} from 'oxc-parser'
 import {
   ResolverFactory,
   type NapiResolveOptions,
   type TsconfigOptions as ResolverTsconfigOptions,
 } from 'oxc-resolver'
-import ts from 'typescript'
+import { createMatchPath } from 'tsconfig-paths'
+import { getTsconfig } from 'get-tsconfig'
 
 import type { CssResolver } from './types.js'
 
@@ -18,6 +26,9 @@ const BUILTIN_SPECIFIERS = new Set<string>([
   ...builtinModules,
   ...builtinModules.map(mod => `node:${mod}`),
 ])
+
+const tsconfigResultCache = new Map<string, TsconfigPathsResult | null>()
+const tsconfigFsCache = new Map<string, unknown>()
 
 export interface ModuleGraphOptions {
   tsConfig?: string | Record<string, unknown>
@@ -36,8 +47,8 @@ interface CollectOptions {
 type TsconfigLike = string | Record<string, unknown>
 
 interface TsconfigPathsResult {
-  baseUrl: string
-  paths: Record<string, readonly string[]>
+  absoluteBaseUrl: string
+  paths: Record<string, string[]>
 }
 
 export async function collectStyleImports(
@@ -192,68 +203,61 @@ async function readSourceFile(filePath: string): Promise<string | undefined> {
 }
 
 function extractModuleSpecifiers(sourceText: string, filePath: string): string[] {
-  const specifiers: string[] = []
-  const source = ts.createSourceFile(
-    filePath,
-    sourceText,
-    ts.ScriptTarget.Latest,
-    true,
-    getScriptKind(filePath),
-  )
+  let program
+  try {
+    ;({ program } = parseSync(filePath, sourceText, { sourceType: 'unambiguous' }))
+  } catch {
+    return []
+  }
 
-  const addSpecifier = (raw: string) => {
+  const specifiers: string[] = []
+  const addSpecifier = (raw?: string | null) => {
+    if (!raw) {
+      return
+    }
     const normalized = normalizeSpecifier(raw)
     if (normalized) {
       specifiers.push(normalized)
     }
   }
 
-  const visit = (node: ts.Node) => {
-    if (
-      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-      node.moduleSpecifier &&
-      ts.isStringLiteralLike(node.moduleSpecifier)
-    ) {
-      addSpecifier(node.moduleSpecifier.text)
-    } else if (ts.isImportEqualsDeclaration(node)) {
-      if (
-        ts.isExternalModuleReference(node.moduleReference) &&
-        node.moduleReference.expression &&
-        ts.isStringLiteralLike(node.moduleReference.expression)
-      ) {
-        addSpecifier(node.moduleReference.expression.text)
+  const visitor = new Visitor({
+    ImportDeclaration(node) {
+      addSpecifier(node.source?.value)
+    },
+    ExportNamedDeclaration(node) {
+      if (node.source) {
+        addSpecifier(node.source.value)
       }
-    } else if (ts.isCallExpression(node)) {
-      if (isRequireCall(node) || isDynamicImport(node)) {
-        const [argument] = node.arguments
-        if (argument && ts.isStringLiteralLike(argument)) {
-          addSpecifier(argument.text)
-        }
+    },
+    ExportAllDeclaration(node) {
+      addSpecifier(node.source?.value)
+    },
+    TSImportEqualsDeclaration(node: TSImportEqualsDeclaration) {
+      const specifier = extractImportEqualsSpecifier(node)
+      if (specifier) {
+        addSpecifier(specifier)
       }
-    }
-    ts.forEachChild(node, visit)
-  }
+    },
+    ImportExpression(node: ImportExpression) {
+      const specifier = getStringFromExpression(node.source)
+      if (specifier) {
+        addSpecifier(specifier)
+      }
+    },
+    CallExpression(node) {
+      if (!isRequireLikeCallee(node.callee)) {
+        return
+      }
+      const specifier = getStringFromArgument(node.arguments[0])
+      if (specifier) {
+        addSpecifier(specifier)
+      }
+    },
+  })
 
-  visit(source)
+  visitor.visit(program)
   return specifiers
-}
-
-function getScriptKind(filePath: string): ts.ScriptKind {
-  const ext = path.extname(filePath).toLowerCase()
-  switch (ext) {
-    case '.ts':
-      return ts.ScriptKind.TS
-    case '.tsx':
-      return ts.ScriptKind.TSX
-    case '.mts':
-      return ts.ScriptKind.TS
-    case '.cts':
-      return ts.ScriptKind.TS
-    case '.jsx':
-      return ts.ScriptKind.JSX
-    default:
-      return ts.ScriptKind.JS
-  }
 }
 
 function normalizeSpecifier(raw: string): string {
@@ -273,21 +277,65 @@ function normalizeSpecifier(raw: string): string {
   return withoutQuery
 }
 
-function isRequireCall(node: ts.CallExpression): boolean {
-  if (!ts.isIdentifier(node.expression)) {
-    if (
-      ts.isPropertyAccessExpression(node.expression) &&
-      ts.isIdentifier(node.expression.expression)
-    ) {
-      return node.expression.expression.text === 'require'
-    }
-    return false
+function extractImportEqualsSpecifier(
+  node: TSImportEqualsDeclaration,
+): string | undefined {
+  if (node.moduleReference.type === 'TSExternalModuleReference') {
+    return node.moduleReference.expression.value
   }
-  return node.expression.text === 'require'
+  return undefined
 }
 
-function isDynamicImport(node: ts.CallExpression): boolean {
-  return node.expression.kind === ts.SyntaxKind.ImportKeyword
+function getStringFromArgument(argument: Argument | undefined): string | undefined {
+  if (!argument || argument.type === 'SpreadElement') {
+    return undefined
+  }
+  return getStringFromExpression(argument)
+}
+
+function getStringFromExpression(
+  expression: Expression | null | undefined,
+): string | undefined {
+  if (!expression) {
+    return undefined
+  }
+  if (expression.type === 'Literal') {
+    const literalValue = (expression as { value: unknown }).value
+    return typeof literalValue === 'string' ? literalValue : undefined
+  }
+  if (expression.type === 'TemplateLiteral' && expression.expressions.length === 0) {
+    const [first] = expression.quasis
+    return first?.value.cooked ?? first?.value.raw ?? undefined
+  }
+  return undefined
+}
+
+function isRequireLikeCallee(expression: Expression): boolean {
+  const target = unwrapExpression(expression)
+  if (target.type === 'Identifier') {
+    return target.name === 'require'
+  }
+  if (target.type === 'MemberExpression') {
+    const object = target.object
+    if (object.type === 'Identifier') {
+      return object.name === 'require'
+    }
+  }
+  return false
+}
+
+function unwrapExpression(expression: Expression): Expression {
+  if (expression.type === 'ChainExpression') {
+    const inner = expression.expression as Expression
+    if (inner.type === 'CallExpression') {
+      return unwrapExpression(inner.callee)
+    }
+    return unwrapExpression(inner)
+  }
+  if (expression.type === 'TSNonNullExpression') {
+    return unwrapExpression(expression.expression)
+  }
+  return expression
 }
 
 function normalizeResolverResult(
@@ -398,63 +446,14 @@ function createTsconfigMatcher(
   if (!config) {
     return undefined
   }
-  const patterns = Object.entries(config.paths).map(([pattern, replacements]) => ({
-    pattern,
-    replacements: Array.isArray(replacements) ? replacements : [replacements],
-  }))
-
+  const matchPath = createMatchPath(config.absoluteBaseUrl, config.paths)
   return (specifier: string) => {
-    for (const { pattern, replacements } of patterns) {
-      if (!pattern.includes('*')) {
-        if (pattern === specifier) {
-          const resolved = resolveReplacements(
-            replacements,
-            '',
-            config.baseUrl,
-            extensions,
-          )
-          if (resolved) {
-            return resolved
-          }
-        }
-        continue
-      }
-      const [prefix, suffix] = pattern.split('*')
-      if (!specifier.startsWith(prefix) || !specifier.endsWith(suffix)) {
-        continue
-      }
-      const wildcard = specifier.slice(prefix.length, specifier.length - suffix.length)
-      const resolved = resolveReplacements(
-        replacements,
-        wildcard,
-        config.baseUrl,
-        extensions,
-      )
-      if (resolved) {
-        return resolved
-      }
+    const matched = matchPath(specifier, undefined, undefined, extensions)
+    if (!matched) {
+      return undefined
     }
-    return undefined
+    return findExistingFile(matched, extensions) ?? matched
   }
-}
-
-function resolveReplacements(
-  replacements: readonly string[],
-  wildcard: string,
-  baseUrl: string,
-  extensions: string[],
-): string | undefined {
-  for (const replacement of replacements) {
-    const substituted = replacement.includes('*')
-      ? replacement.split('*').join(wildcard)
-      : replacement
-    const candidate = path.resolve(baseUrl, substituted)
-    const resolved = findExistingFile(candidate, extensions)
-    if (resolved) {
-      return resolved
-    }
-  }
-  return undefined
 }
 
 function loadTsconfigPaths(
@@ -465,43 +464,59 @@ function loadTsconfigPaths(
     return undefined
   }
   if (typeof input === 'string') {
-    const configPath = resolveTsconfigPath(input, cwd)
-    if (!configPath) {
+    const target = path.isAbsolute(input) ? input : path.resolve(cwd, input)
+    const cached = tsconfigResultCache.get(target)
+    if (cached !== undefined) {
+      return cached ?? undefined
+    }
+    const result = getTsconfig(target, undefined, tsconfigFsCache as Map<string, any>)
+    if (!result) {
+      tsconfigResultCache.set(target, null)
       return undefined
     }
-    const readResult = ts.readConfigFile(configPath, ts.sys.readFile)
-    if (readResult.error) {
-      return undefined
-    }
-    const parsed = ts.parseJsonConfigFileContent(
-      readResult.config,
-      ts.sys,
-      path.dirname(configPath),
-      undefined,
-      configPath,
+    const normalized = normalizeTsconfigCompilerOptions(
+      result.config.compilerOptions,
+      path.dirname(result.path),
     )
-    const baseUrl = parsed.options.baseUrl
-    const paths = parsed.options.paths
-    if (!baseUrl || !paths) {
-      return undefined
-    }
-    return {
-      baseUrl: path.isAbsolute(baseUrl)
-        ? baseUrl
-        : path.resolve(path.dirname(configPath), baseUrl),
-      paths,
-    }
+    tsconfigResultCache.set(target, normalized ?? null)
+    return normalized
   }
   const compilerOptions = (
-    input as { compilerOptions?: { baseUrl?: string; paths?: Record<string, string[]> } }
+    input as {
+      compilerOptions?: { baseUrl?: string; paths?: Record<string, string[] | string> }
+    }
   ).compilerOptions
+  return normalizeTsconfigCompilerOptions(compilerOptions, cwd)
+}
+
+function normalizeTsconfigCompilerOptions(
+  compilerOptions:
+    | {
+        baseUrl?: string
+        paths?: Record<string, string[] | string>
+      }
+    | undefined,
+  configDir: string,
+): TsconfigPathsResult | undefined {
   if (!compilerOptions?.baseUrl || !compilerOptions.paths) {
     return undefined
   }
-  return {
-    baseUrl: path.resolve(cwd, compilerOptions.baseUrl),
-    paths: compilerOptions.paths,
+  const normalizedPaths: Record<string, string[]> = {}
+  for (const [pattern, replacements] of Object.entries(compilerOptions.paths)) {
+    if (!replacements || replacements.length === 0) {
+      continue
+    }
+    normalizedPaths[pattern] = Array.isArray(replacements)
+      ? [...replacements]
+      : [replacements]
   }
+  if (Object.keys(normalizedPaths).length === 0) {
+    return undefined
+  }
+  const absoluteBaseUrl = path.isAbsolute(compilerOptions.baseUrl)
+    ? compilerOptions.baseUrl
+    : path.resolve(configDir, compilerOptions.baseUrl)
+  return { absoluteBaseUrl, paths: normalizedPaths }
 }
 
 function resolveTsconfigPath(tsconfigPath: string, cwd: string): string | undefined {

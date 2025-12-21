@@ -79,8 +79,10 @@
     "es-module-lexer": "^2.0.0",
     "lightningcss": "^1.30.2",
     "node-module-type": "^1.0.1",
+    "get-tsconfig": "^4.13.0",
+    "oxc-parser": "^0.104.0",
     "oxc-resolver": "^11.16.0",
-    "typescript": "^5.9.3"
+    "tsconfig-paths": "^4.2.0"
   },
   "peerDependencies": {
     "@vanilla-extract/integration": "^8.0.0",
