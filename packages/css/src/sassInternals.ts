@@ -4,6 +4,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import type { CssResolver } from './types.js'
 
+export type { CssResolver } from './types.js'
+
 export function createSassImporter({
   cwd,
   resolver,
