@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { css } from '../src/css'
-import { createResolverFixture } from './helpers/resolver-fixture'
+import { css } from '../src/css.js'
+import { createResolverFixture } from './helpers/resolver-fixture.js'
 
 const projects = ['rspack', 'vite', 'webpack'] as const
 

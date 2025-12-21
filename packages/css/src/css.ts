@@ -237,7 +237,7 @@ async function compileSass(
     'Sass',
     peerResolver,
   )
-  const sass = unwrapModuleNamespace(sassModule)
+  const sass = resolveSassNamespace(sassModule)
   const importer = createSassImporter({ cwd, resolver })
   const loadPaths = buildSassLoadPaths(filePath)
 
@@ -408,6 +408,31 @@ async function optionalPeer<T>(
     }
     throw error
   }
+}
+
+function resolveSassNamespace(mod: unknown): typeof import('sass') {
+  if (isSassNamespace(mod)) {
+    return mod
+  }
+  if (
+    typeof mod === 'object' &&
+    mod !== null &&
+    'default' in (mod as Record<string, unknown>)
+  ) {
+    const candidate = (mod as Record<string, unknown>).default
+    if (isSassNamespace(candidate)) {
+      return candidate
+    }
+  }
+  return mod as typeof import('sass')
+}
+
+function isSassNamespace(candidate: unknown): candidate is typeof import('sass') {
+  if (typeof candidate !== 'object' || !candidate) {
+    return false
+  }
+  const namespace = candidate as Record<string, unknown>
+  return typeof namespace.compile === 'function' || typeof namespace.render === 'function'
 }
 
 function unwrapModuleNamespace<T>(mod: T): T {
