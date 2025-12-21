@@ -237,14 +237,62 @@ async function compileSass(
     'Sass',
     peerResolver,
   )
-  const sass = sassModule
+  const sass = unwrapModuleNamespace(sassModule)
   const importer = createSassImporter({ cwd, resolver })
-  const result = await sass.compileAsync(filePath, {
-    style: 'expanded',
-    loadPaths: buildSassLoadPaths(filePath),
-    importers: importer ? [importer] : undefined,
+  const loadPaths = buildSassLoadPaths(filePath)
+
+  if (typeof (sass as { compileAsync?: Function }).compileAsync === 'function') {
+    const result = await (
+      sass as { compileAsync: typeof import('sass').compileAsync }
+    ).compileAsync(filePath, {
+      style: 'expanded',
+      loadPaths,
+      importers: importer ? [importer] : undefined,
+    })
+    return result.css
+  }
+
+  if (typeof (sass as { render?: Function }).render === 'function') {
+    return renderLegacySass(
+      sass as { render: typeof import('sass').render },
+      filePath,
+      indented,
+      loadPaths,
+    )
+  }
+
+  throw new Error(
+    '@knighted/css: Installed "sass" package does not expose compileAsync or render APIs. Please update "sass" to a supported version.',
+  )
+}
+
+function renderLegacySass(
+  sass: { render: typeof import('sass').render },
+  filePath: string,
+  indented: boolean,
+  loadPaths: string[],
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    sass.render(
+      {
+        file: filePath,
+        indentedSyntax: indented,
+        outputStyle: 'expanded',
+        includePaths: loadPaths,
+      },
+      (error, result) => {
+        if (error) {
+          reject(error)
+          return
+        }
+        if (!result || typeof result.css === 'undefined') {
+          resolve('')
+          return
+        }
+        resolve(result.css.toString())
+      },
+    )
   })
-  return result.css
 }
 
 // Ensure Sass can resolve bare module specifiers by walking node_modules folders.
