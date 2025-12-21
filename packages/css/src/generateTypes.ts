@@ -7,6 +7,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { init, parse } from 'es-module-lexer'
 import { moduleType } from 'node-module-type'
 
+import { getTsconfig, type TsConfigResult } from 'get-tsconfig'
+import { createMatchPath, type MatchPath } from 'tsconfig-paths'
+
 import { cssWithMeta } from './css.js'
 import {
   determineSelectorVariant,
@@ -34,12 +37,18 @@ interface DeclarationRecord {
   filePath: string
 }
 
+interface TsconfigResolutionContext {
+  absoluteBaseUrl?: string
+  matchPath?: MatchPath
+}
+
 interface GenerateTypesInternalOptions {
   rootDir: string
   include: string[]
   outDir: string
   typesRoot: string
   stableNamespace?: string
+  tsconfig?: TsconfigResolutionContext
 }
 
 export interface GenerateTypesResult {
@@ -115,6 +124,7 @@ export async function generateTypes(
   const include = normalizeIncludeOptions(options.include, rootDir)
   const outDir = path.resolve(options.outDir ?? DEFAULT_OUT_DIR)
   const typesRoot = path.resolve(options.typesRoot ?? DEFAULT_TYPES_ROOT)
+  const tsconfig = loadTsconfigResolutionContext(rootDir)
   await init
   await fs.mkdir(outDir, { recursive: true })
   await fs.mkdir(typesRoot, { recursive: true })
@@ -125,6 +135,7 @@ export async function generateTypes(
     outDir,
     typesRoot,
     stableNamespace: options.stableNamespace,
+    tsconfig,
   }
 
   return generateDeclarations(internalOptions)
@@ -162,6 +173,7 @@ async function generateDeclarations(
         resource,
         match.importer,
         options.rootDir,
+        options.tsconfig,
       )
       if (!resolvedPath) {
         warnings.push(
@@ -342,6 +354,7 @@ async function resolveImportPath(
   resourceSpecifier: string,
   importerPath: string,
   rootDir: string,
+  tsconfig?: TsconfigResolutionContext,
 ): Promise<string | undefined> {
   if (!resourceSpecifier) return undefined
   if (resourceSpecifier.startsWith('.')) {
@@ -349,6 +362,10 @@ async function resolveImportPath(
   }
   if (resourceSpecifier.startsWith('/')) {
     return path.resolve(rootDir, resourceSpecifier.slice(1))
+  }
+  const tsconfigResolved = await resolveWithTsconfigPaths(resourceSpecifier, tsconfig)
+  if (tsconfigResolved) {
+    return tsconfigResolved
   }
   const requireFromRoot = getProjectRequire(rootDir)
   try {
@@ -489,6 +506,92 @@ async function fileExists(target: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+async function resolveWithTsconfigPaths(
+  specifier: string,
+  tsconfig?: TsconfigResolutionContext,
+): Promise<string | undefined> {
+  if (!tsconfig) {
+    return undefined
+  }
+  if (tsconfig.matchPath) {
+    const matched = tsconfig.matchPath(specifier)
+    if (matched && (await fileExists(matched))) {
+      return matched
+    }
+  }
+  if (tsconfig.absoluteBaseUrl && isNonRelativeSpecifier(specifier)) {
+    const candidate = path.join(
+      tsconfig.absoluteBaseUrl,
+      specifier.split('/').join(path.sep),
+    )
+    if (await fileExists(candidate)) {
+      return candidate
+    }
+  }
+  return undefined
+}
+
+function loadTsconfigResolutionContext(
+  rootDir: string,
+): TsconfigResolutionContext | undefined {
+  let result: TsConfigResult | null
+  try {
+    result = getTsconfig(rootDir) as TsConfigResult | null
+  } catch {
+    return undefined
+  }
+  if (!result) {
+    return undefined
+  }
+  const compilerOptions = result.config.compilerOptions ?? {}
+  const configDir = path.dirname(result.path)
+  const absoluteBaseUrl = compilerOptions.baseUrl
+    ? path.resolve(configDir, compilerOptions.baseUrl)
+    : undefined
+  const normalizedPaths = normalizeTsconfigPaths(compilerOptions.paths)
+  const matchPath =
+    absoluteBaseUrl && normalizedPaths
+      ? createMatchPath(absoluteBaseUrl, normalizedPaths)
+      : undefined
+  if (!absoluteBaseUrl && !matchPath) {
+    return undefined
+  }
+  return { absoluteBaseUrl, matchPath }
+}
+
+function normalizeTsconfigPaths(
+  paths: Record<string, string[] | string> | undefined,
+): Record<string, string[]> | undefined {
+  if (!paths) {
+    return undefined
+  }
+  const normalized: Record<string, string[]> = {}
+  for (const [pattern, replacements] of Object.entries(paths)) {
+    if (!replacements) {
+      continue
+    }
+    const values = Array.isArray(replacements) ? replacements : [replacements]
+    if (values.length === 0) {
+      continue
+    }
+    normalized[pattern] = values
+  }
+  return Object.keys(normalized).length > 0 ? normalized : undefined
+}
+
+function isNonRelativeSpecifier(specifier: string): boolean {
+  if (!specifier) {
+    return false
+  }
+  if (specifier.startsWith('.') || specifier.startsWith('/')) {
+    return false
+  }
+  if (/^[a-z][\w+.-]*:/i.test(specifier)) {
+    return false
+  }
+  return true
 }
 
 function createProjectPeerResolver(rootDir: string) {
@@ -650,6 +753,8 @@ export const __generateTypesInternals = {
   formatModuleDeclaration,
   formatSelectorType,
   normalizeIncludeOptions,
+  normalizeTsconfigPaths,
+  isNonRelativeSpecifier,
   parseCliArgs,
   printHelp,
   reportCliResult,

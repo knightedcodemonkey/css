@@ -33,6 +33,41 @@ console.log(stableSelectors.demo)
   }
 }
 
+async function setupBaseUrlFixture(): Promise<{
+  root: string
+  cleanup: () => Promise<void>
+}> {
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-tsconfig-'))
+  const srcDir = path.join(tmpRoot, 'src')
+  const stylesDir = path.join(srcDir, 'styles')
+  await fs.mkdir(stylesDir, { recursive: true })
+  const cssPath = path.join(stylesDir, 'demo.css')
+  await fs.writeFile(
+    cssPath,
+    `.demo { color: rebeccapurple; }
+.knighted-demo { color: teal; }
+`,
+  )
+  const specifier = 'styles/demo.css?knighted-css&types'
+  const entrySource = `import { stableSelectors } from '${specifier}'
+console.log(stableSelectors.demo)
+`
+  await fs.writeFile(path.join(srcDir, 'entry.ts'), entrySource)
+  const tsconfig = {
+    compilerOptions: {
+      baseUrl: './src',
+    },
+  }
+  await fs.writeFile(
+    path.join(tmpRoot, 'tsconfig.json'),
+    JSON.stringify(tsconfig, null, 2),
+  )
+  return {
+    root: tmpRoot,
+    cleanup: () => fs.rm(tmpRoot, { recursive: true, force: true }),
+  }
+}
+
 test('generateTypes emits declarations and reuses cache', async () => {
   const project = await setupFixtureProject()
   try {
@@ -67,6 +102,30 @@ test('generateTypes emits declarations and reuses cache', async () => {
   }
 })
 
+test('generateTypes resolves tsconfig baseUrl specifiers', async () => {
+  const project = await setupBaseUrlFixture()
+  try {
+    const outDir = path.join(project.root, '.knighted-css-test')
+    const typesRoot = path.join(project.root, '.knighted-css-types')
+    const result = await generateTypes({
+      rootDir: project.root,
+      include: ['src'],
+      outDir,
+      typesRoot,
+    })
+    assert.ok(result.written >= 1)
+    assert.equal(result.warnings.length, 0)
+    const manifestPath = path.join(outDir, 'manifest.json')
+    const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as Record<
+      string,
+      unknown
+    >
+    assert.ok(manifest['styles/demo.css?knighted-css&types'])
+  } finally {
+    await project.cleanup()
+  }
+})
+
 test('generateTypes internals format selector-aware declarations', () => {
   const {
     stripInlineLoader,
@@ -75,6 +134,8 @@ test('generateTypes internals format selector-aware declarations', () => {
     formatSelectorType,
     formatModuleDeclaration,
     normalizeIncludeOptions,
+    normalizeTsconfigPaths,
+    isNonRelativeSpecifier,
     parseCliArgs,
     printHelp,
     reportCliResult,
@@ -138,8 +199,28 @@ test('generateTypes internals format selector-aware declarations', () => {
   assert.equal(parsed.stableNamespace, 'storybook')
 
   assert.throws(() => parseCliArgs(['--root']), /Missing value/)
+  assert.throws(() => parseCliArgs(['--include']), /Missing value/)
+  assert.throws(() => parseCliArgs(['--out-dir']), /Missing value/)
+  assert.throws(() => parseCliArgs(['--types-root']), /Missing value/)
   assert.throws(() => parseCliArgs(['--stable-namespace']), /Missing value/)
   assert.throws(() => parseCliArgs(['--wat']), /Unknown flag/)
+  const helpParsed = parseCliArgs(['--help'])
+  assert.equal(helpParsed.help, true)
+
+  const normalizedPaths = normalizeTsconfigPaths({
+    '@demo/*': ['src/demo/*', 'fallback/*'],
+    '@empty/*': [],
+  })
+  assert.deepEqual(normalizedPaths, {
+    '@demo/*': ['src/demo/*', 'fallback/*'],
+  })
+  assert.equal(normalizeTsconfigPaths(undefined), undefined)
+  assert.equal(normalizeTsconfigPaths({ foo: [] }), undefined)
+
+  assert.equal(isNonRelativeSpecifier('pkg/component'), true)
+  assert.equal(isNonRelativeSpecifier('./local'), false)
+  assert.equal(isNonRelativeSpecifier('/absolute/path'), false)
+  assert.equal(isNonRelativeSpecifier('http://example.com/style.css'), false)
 
   const printed: string[] = []
   const logged = console.log
