@@ -8,13 +8,15 @@ import { cssWithMeta, compileVanillaModule, type CssOptions } from './css.js'
 import { detectModuleDefaultExport, type ModuleDefaultSignal } from './moduleInfo.js'
 import {
   buildSanitizedQuery,
-  COMBINED_QUERY_FLAG,
-  isQueryFlag,
-  NAMED_ONLY_QUERY_FLAGS,
+  hasCombinedQuery,
+  hasNamedOnlyQueryFlag,
+  hasQueryFlag,
   shouldEmitCombinedDefault,
   shouldForwardDefaultExport,
-  splitQuery,
+  TYPES_QUERY_FLAG,
 } from './loaderInternals.js'
+import { buildStableSelectorsLiteral } from './stableSelectorsLiteral.js'
+import { resolveStableNamespace } from './stableNamespace.js'
 
 export type KnightedCssCombinedModule<TModule> = TModule & {
   knightedCss: string
@@ -26,6 +28,7 @@ export interface KnightedCssVanillaOptions {
 
 export interface KnightedCssLoaderOptions extends CssOptions {
   vanilla?: KnightedCssVanillaOptions
+  stableNamespace?: string
 }
 
 const DEFAULT_EXPORT_NAME = 'knightedCss'
@@ -33,9 +36,25 @@ const DEFAULT_EXPORT_NAME = 'knightedCss'
 const loader: LoaderDefinitionFunction<KnightedCssLoaderOptions> = async function loader(
   source: string | Buffer,
 ) {
-  const { cssOptions, vanillaOptions } = resolveLoaderOptions(this)
+  const {
+    cssOptions,
+    vanillaOptions,
+    stableNamespace: optionNamespace,
+  } = resolveLoaderOptions(this)
+  const resolvedNamespace = resolveStableNamespace(optionNamespace)
+  const typesRequested = hasQueryFlag(this.resourceQuery, TYPES_QUERY_FLAG)
   const css = await extractCss(this, cssOptions)
-  const injection = buildInjection(css)
+  const stableSelectorsLiteral = typesRequested
+    ? buildStableSelectorsLiteral({
+        css,
+        namespace: resolvedNamespace,
+        resourcePath: this.resourcePath,
+        emitWarning: message => emitKnightedWarning(this, message),
+      })
+    : undefined
+  const injection = buildInjection(css, {
+    stableSelectorsLiteral: stableSelectorsLiteral?.literal,
+  })
   const isStyleModule = this.resourcePath.endsWith('.css.ts')
   if (isStyleModule) {
     const { source: compiledSource } = await compileVanillaModule(
@@ -91,7 +110,9 @@ export const pitch: PitchLoaderDefinitionFunction<KnightedCssLoaderOptions> =
     }
 
     const request = buildProxyRequest(this)
-    const { cssOptions } = resolveLoaderOptions(this)
+    const { cssOptions, stableNamespace: optionNamespace } = resolveLoaderOptions(this)
+    const typesRequested = hasQueryFlag(this.resourceQuery, TYPES_QUERY_FLAG)
+    const resolvedNamespace = resolveStableNamespace(optionNamespace)
     const skipSyntheticDefault = hasNamedOnlyQueryFlag(this.resourceQuery)
     const defaultSignalPromise = skipSyntheticDefault
       ? Promise.resolve<ModuleDefaultSignal>('unknown')
@@ -104,7 +125,18 @@ export const pitch: PitchLoaderDefinitionFunction<KnightedCssLoaderOptions> =
           skipSyntheticDefault,
           detection: defaultSignal,
         })
-        return createCombinedModule(request, css, { emitDefault })
+        const stableSelectorsLiteral = typesRequested
+          ? buildStableSelectorsLiteral({
+              css,
+              namespace: resolvedNamespace,
+              resourcePath: this.resourcePath,
+              emitWarning: message => emitKnightedWarning(this, message),
+            })
+          : undefined
+        return createCombinedModule(request, css, {
+          emitDefault,
+          stableSelectorsLiteral: stableSelectorsLiteral?.literal,
+        })
       },
     )
   }
@@ -115,11 +147,12 @@ export default loader
 function resolveLoaderOptions(ctx: LoaderContext<KnightedCssLoaderOptions>): {
   cssOptions: CssOptions
   vanillaOptions?: KnightedCssVanillaOptions
+  stableNamespace?: string
 } {
   const rawOptions = (
     typeof ctx.getOptions === 'function' ? ctx.getOptions() : {}
   ) as KnightedCssLoaderOptions
-  const { vanilla, ...rest } = rawOptions
+  const { vanilla, stableNamespace, ...rest } = rawOptions
   const cssOptions: CssOptions = {
     ...rest,
     cwd: rest.cwd ?? ctx.rootContext ?? process.cwd(),
@@ -127,6 +160,7 @@ function resolveLoaderOptions(ctx: LoaderContext<KnightedCssLoaderOptions>): {
   return {
     cssOptions,
     vanillaOptions: vanilla,
+    stableNamespace,
   }
 }
 
@@ -146,26 +180,15 @@ function toSourceString(source: string | Buffer): string {
   return typeof source === 'string' ? source : source.toString('utf8')
 }
 
-function buildInjection(css: string): string {
-  return `\n\nexport const ${DEFAULT_EXPORT_NAME} = ${JSON.stringify(css)};\n`
-}
-
-function hasCombinedQuery(query?: string | null): boolean {
-  if (!query) return false
-  const trimmed = query.startsWith('?') ? query.slice(1) : query
-  if (!trimmed) return false
-  return trimmed
-    .split('&')
-    .filter(Boolean)
-    .some(part => isQueryFlag(part, COMBINED_QUERY_FLAG))
-}
-
-function hasNamedOnlyQueryFlag(query?: string | null): boolean {
-  if (!query) return false
-  const entries = splitQuery(query)
-  return entries.some(part =>
-    NAMED_ONLY_QUERY_FLAGS.some(flag => isQueryFlag(part, flag)),
-  )
+function buildInjection(
+  css: string,
+  extras?: { stableSelectorsLiteral?: string },
+): string {
+  const lines = [`\n\nexport const ${DEFAULT_EXPORT_NAME} = ${JSON.stringify(css)};\n`]
+  if (extras?.stableSelectorsLiteral) {
+    lines.push(extras.stableSelectorsLiteral)
+  }
+  return lines.join('')
 }
 
 function buildProxyRequest(ctx: LoaderContext<KnightedCssLoaderOptions>): string {
@@ -203,6 +226,7 @@ function stripResourceQuery(request: string): string {
 
 interface CombinedModuleOptions {
   emitDefault?: boolean
+  stableSelectorsLiteral?: string
 }
 
 function createCombinedModule(
@@ -227,6 +251,21 @@ typeof __knightedModule.default !== 'undefined'
     )
   }
 
-  lines.push(buildInjection(css))
+  lines.push(
+    buildInjection(css, { stableSelectorsLiteral: options?.stableSelectorsLiteral }),
+  )
   return lines.join('\n')
+}
+
+function emitKnightedWarning(
+  ctx: LoaderContext<KnightedCssLoaderOptions>,
+  message: string,
+): void {
+  const formatted = `\x1b[33m@knighted/css warning\x1b[0m ${message}`
+  if (typeof ctx.emitWarning === 'function') {
+    ctx.emitWarning(new Error(formatted))
+    return
+  }
+  // eslint-disable-next-line no-console
+  console.warn(formatted)
 }

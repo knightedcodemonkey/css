@@ -1,7 +1,9 @@
 import type { ModuleDefaultSignal } from './moduleInfo.js'
 
 export const COMBINED_QUERY_FLAG = 'combined'
+export const TYPES_QUERY_FLAG = 'types'
 export const NAMED_ONLY_QUERY_FLAGS = ['named-only', 'no-default'] as const
+export type SelectorTypeVariant = 'types' | 'combined' | 'combinedWithoutDefault'
 
 export function splitQuery(query: string): string[] {
   const trimmed = query.startsWith('?') ? query.slice(1) : query
@@ -27,12 +29,30 @@ export function buildSanitizedQuery(query?: string | null): string {
     if (isQueryFlag(part, 'knighted-css')) {
       return false
     }
+    if (isQueryFlag(part, TYPES_QUERY_FLAG)) {
+      return false
+    }
     if (NAMED_ONLY_QUERY_FLAGS.some(flag => isQueryFlag(part, flag))) {
       return false
     }
     return true
   })
   return entries.length > 0 ? `?${entries.join('&')}` : ''
+}
+
+export function hasQueryFlag(query: string | null | undefined, flag: string): boolean {
+  if (!query) return false
+  const entries = splitQuery(query)
+  if (entries.length === 0) return false
+  return entries.some(part => isQueryFlag(part, flag))
+}
+
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
 }
 
 export function shouldForwardDefaultExport(request: string): boolean {
@@ -43,6 +63,21 @@ export function shouldForwardDefaultExport(request: string): boolean {
     return false
   }
   return true
+}
+
+export function hasCombinedQuery(query?: string | null): boolean {
+  return hasQueryFlag(query, COMBINED_QUERY_FLAG)
+}
+
+export function hasNamedOnlyQueryFlag(query?: string | null): boolean {
+  return NAMED_ONLY_QUERY_FLAGS.some(flag => hasQueryFlag(query, flag))
+}
+
+export function determineSelectorVariant(query?: string | null): SelectorTypeVariant {
+  if (hasCombinedQuery(query)) {
+    return hasNamedOnlyQueryFlag(query) ? 'combinedWithoutDefault' : 'combined'
+  }
+  return 'types'
 }
 
 export function shouldEmitCombinedDefault(options: {
@@ -68,4 +103,5 @@ export function shouldEmitCombinedDefault(options: {
 export const __loaderInternals = {
   buildSanitizedQuery,
   shouldEmitCombinedDefault,
+  determineSelectorVariant,
 }

@@ -1,6 +1,6 @@
 {
   "name": "@knighted/css",
-  "version": "1.0.0-rc.7",
+  "version": "1.0.0-rc.8",
   "description": "A build-time utility that traverses JavaScript/TypeScript module dependency graphs to extract, compile, and optimize all imported CSS into a single, in-memory string.",
   "type": "module",
   "main": "./dist/css.js",
@@ -12,6 +12,9 @@
       ],
       "loader-queries": [
         "./loader-queries.d.ts"
+      ],
+      "generate-types": [
+        "./dist/generateTypes.d.ts"
       ],
       "*": [
         "./types.d.ts"
@@ -32,6 +35,11 @@
     "./loader-queries": {
       "types": "./loader-queries.d.ts",
       "default": "./loader-queries.d.ts"
+    },
+    "./generate-types": {
+      "types": "./dist/generateTypes.d.ts",
+      "import": "./dist/generateTypes.js",
+      "default": "./dist/generateTypes.js"
     },
     "./stableSelectors": {
       "types": "./dist/stableSelectors.d.ts",
@@ -58,16 +66,20 @@
     "vanilla-extract",
     "lightningcss"
   ],
+  "bin": {
+    "knighted-css-generate-types": "./bin/generate-types.js"
+  },
   "scripts": {
-    "build": "duel",
-    "check-types": "tsc --noEmit",
+    "build": "duel && node ./scripts/copy-types-stub.js",
+    "check-types": "tsc --noEmit --project tsconfig.json && tsc --noEmit --project tsconfig.tests.json",
     "test": "c8 --reporter=text --reporter=text-summary --reporter=lcov --include \"src/**/*.ts\" tsx --test test/**/*.test.ts",
     "prepack": "npm run build"
   },
   "dependencies": {
     "dependency-tree": "^11.2.0",
     "es-module-lexer": "^2.0.0",
-    "lightningcss": "^1.30.2"
+    "lightningcss": "^1.30.2",
+    "node-module-type": "^1.0.1"
   },
   "overrides": {
     "module-lookup-amd": {
@@ -94,7 +106,9 @@
     "dist",
     "loader-queries.d.ts",
     "types.d.ts",
-    "stable"
+    "stable",
+    "bin",
+    "types-stub"
   ],
   "author": "KCM <knightedcodemonkey@gmail.com>",
   "license": "MIT",

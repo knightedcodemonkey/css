@@ -7,7 +7,7 @@
     "packages/playwright"
   ],
   "engines": {
-    "node": ">= 22.15.0",
+    "node": ">= 22.17.0",
     "npm": ">= 10.9.0"
   },
   "engineStrict": true,
@@ -26,7 +26,7 @@
     "clean:deps": "find . -name node_modules -type d -prune -exec rm -rf {} +",
     "clean:dist": "find . -name dist -type d -prune -exec rm -rf {} +",
     "clean": "npm run clean:deps && npm run clean:dist",
-    "setup:jsx-wasm": "node scripts/setup-jsx-wasm.mjs"
+    "setup:jsx-wasm": "npx @knighted/jsx init"
   },
   "devDependencies": {
     "@emnapi/core": "^1.2.0",
@@ -69,5 +69,8 @@
     "*": "npm run check:cycles",
     "*.{js,jsx,ts,tsx,mjs,cjs,cts,mts}": "oxlint",
     "*.{js,jsx,ts,tsx,mjs,cjs,cts,mts,json,md,css,scss,html}": "prettier --check"
+  },
+  "optionalDependencies": {
+    "@oxc-parser/binding-wasm32-wasi": "^0.99.0"
   }
 }

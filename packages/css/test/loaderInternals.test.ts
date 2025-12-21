@@ -9,6 +9,12 @@ test('buildSanitizedQuery strips loader-specific flags', () => {
   assert.equal(buildSanitizedQuery(query), '?foo=bar&baz=qux')
 })
 
+test('buildSanitizedQuery leaves arbitrary params intact', () => {
+  const { buildSanitizedQuery } = __loaderInternals
+  const query = '?knighted-css&types&stableNamespace=acme&foo=1'
+  assert.equal(buildSanitizedQuery(query), '?stableNamespace=acme&foo=1')
+})
+
 test('shouldEmitCombinedDefault honors skip flag, detection signals, and css modules', () => {
   const { shouldEmitCombinedDefault } = __loaderInternals
 
@@ -55,5 +61,15 @@ test('shouldEmitCombinedDefault honors skip flag, detection signals, and css mod
       skipSyntheticDefault: false,
     }),
     false,
+  )
+})
+
+test('determineSelectorVariant differentiates combined permutations', () => {
+  const { determineSelectorVariant } = __loaderInternals
+  assert.equal(determineSelectorVariant('?knighted-css&types'), 'types')
+  assert.equal(determineSelectorVariant('?knighted-css&combined'), 'combined')
+  assert.equal(
+    determineSelectorVariant('?knighted-css&combined&named-only'),
+    'combinedWithoutDefault',
   )
 })

@@ -1,6 +1,6 @@
 import path from 'node:path'
 
-import type { CssResolver } from '../../src/css'
+import type { CssResolver } from '../../src/css.js'
 
 const fixturesRoot = path.resolve(
   path.dirname(new URL(import.meta.url).pathname),
@@ -44,7 +44,7 @@ export function createResolverFixture(name: FixtureName): ResolverFixture {
   const projectDir = path.join(fixturesRoot, name)
   const entryFile = path.join(projectDir, config.entry)
 
-  const resolver: CssResolver = async specifier => {
+  const resolver: CssResolver = async (specifier: string) => {
     if (specifier === config.specifier) {
       return entryFile
     }
