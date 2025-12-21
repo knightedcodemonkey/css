@@ -70,7 +70,7 @@
     "knighted-css-generate-types": "./bin/generate-types.js"
   },
   "scripts": {
-    "build": "duel",
+    "build": "duel && node ./scripts/copy-types-stub.mjs",
     "check-types": "tsc --noEmit",
     "test": "c8 --reporter=text --reporter=text-summary --reporter=lcov --include \"src/**/*.ts\" tsx --test test/**/*.test.ts",
     "prepack": "npm run build"
@@ -78,7 +78,8 @@
   "dependencies": {
     "dependency-tree": "^11.2.0",
     "es-module-lexer": "^2.0.0",
-    "lightningcss": "^1.30.2"
+    "lightningcss": "^1.30.2",
+    "node-module-type": "^1.0.1"
   },
   "overrides": {
     "module-lookup-amd": {
@@ -106,7 +107,8 @@
     "loader-queries.d.ts",
     "types.d.ts",
     "stable",
-    "bin"
+    "bin",
+    "types-stub"
   ],
   "author": "KCM <knightedcodemonkey@gmail.com>",
   "license": "MIT",

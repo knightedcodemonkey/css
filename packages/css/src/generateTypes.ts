@@ -2,9 +2,10 @@ import crypto from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createRequire } from 'node:module'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { init, parse } from 'es-module-lexer'
+import { moduleType } from 'node-module-type'
 
 import { cssWithMeta } from './css.js'
 import {
@@ -83,17 +84,37 @@ const SUPPORTED_EXTENSIONS = new Set([
   '.cjs',
 ])
 
+function resolvePackageRoot(): string {
+  const detectedType = moduleType()
+  if (detectedType === 'commonjs' && typeof __dirname === 'string') {
+    return path.resolve(__dirname, '..')
+  }
+  const moduleUrl = getImportMetaUrl()
+  if (moduleUrl) {
+    return path.resolve(path.dirname(fileURLToPath(moduleUrl)), '..')
+  }
+  return path.resolve(process.cwd(), 'node_modules', '@knighted', 'css')
+}
+
+function getImportMetaUrl(): string | undefined {
+  try {
+    return (0, eval)('import.meta.url') as string
+  } catch {
+    return undefined
+  }
+}
+
+const PACKAGE_ROOT = resolvePackageRoot()
+const DEFAULT_TYPES_ROOT = path.join(PACKAGE_ROOT, 'types-stub')
+const DEFAULT_OUT_DIR = path.join(PACKAGE_ROOT, 'node_modules', '.knighted-css')
+
 export async function generateTypes(
   options: GenerateTypesOptions = {},
 ): Promise<GenerateTypesResult> {
   const rootDir = path.resolve(options.rootDir ?? process.cwd())
   const include = normalizeIncludeOptions(options.include, rootDir)
-  const outDir = path.resolve(
-    options.outDir ?? path.join(rootDir, 'node_modules', '.knighted-css'),
-  )
-  const typesRoot = path.resolve(
-    options.typesRoot ?? path.join(rootDir, 'node_modules', '@types', 'knighted__css'),
-  )
+  const outDir = path.resolve(options.outDir ?? DEFAULT_OUT_DIR)
+  const typesRoot = path.resolve(options.typesRoot ?? DEFAULT_TYPES_ROOT)
   await init
   await fs.mkdir(outDir, { recursive: true })
   await fs.mkdir(typesRoot, { recursive: true })

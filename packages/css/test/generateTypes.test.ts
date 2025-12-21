@@ -36,27 +36,21 @@ console.log(stableSelectors.demo)
 test('generateTypes emits declarations and reuses cache', async () => {
   const project = await setupFixtureProject()
   try {
-    const firstRun = await generateTypes({ rootDir: project.root, include: ['src'] })
+    const outDir = path.join(project.root, '.knighted-css-test')
+    const typesRoot = path.join(project.root, '.knighted-css-types')
+    const sharedOptions = { rootDir: project.root, include: ['src'], outDir, typesRoot }
+
+    const firstRun = await generateTypes(sharedOptions)
     assert.ok(firstRun.written >= 1)
     assert.equal(firstRun.removed, 0)
     assert.equal(firstRun.warnings.length, 0)
 
-    const manifestPath = path.join(
-      project.root,
-      'node_modules',
-      '.knighted-css',
-      'manifest.json',
-    )
+    const manifestPath = path.join(firstRun.outDir, 'manifest.json')
     const manifestRaw = await fs.readFile(manifestPath, 'utf8')
     const manifest = JSON.parse(manifestRaw) as Record<string, { file: string }>
     const entries = Object.values(manifest)
     assert.equal(entries.length, 1)
-    const declarationPath = path.join(
-      project.root,
-      'node_modules',
-      '.knighted-css',
-      entries[0]?.file ?? '',
-    )
+    const declarationPath = path.join(firstRun.outDir, entries[0]?.file ?? '')
     const declaration = await fs.readFile(declarationPath, 'utf8')
     assert.ok(declaration.includes('stableSelectors'))
     assert.ok(declaration.includes('knighted-demo'))
@@ -64,7 +58,7 @@ test('generateTypes emits declarations and reuses cache', async () => {
     const indexContent = await fs.readFile(firstRun.typesIndexPath, 'utf8')
     assert.ok(indexContent.includes(entries[0]?.file ?? ''))
 
-    const secondRun = await generateTypes({ rootDir: project.root, include: ['src'] })
+    const secondRun = await generateTypes(sharedOptions)
     assert.equal(secondRun.written, 0)
     assert.equal(secondRun.removed, 0)
     assert.equal(secondRun.warnings.length, 0)
