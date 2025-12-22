@@ -9,7 +9,26 @@ export interface StableClassNameOptions extends StableSelectorOptions {
   join?: (values: string[]) => string
 }
 
+export interface MergeStableClassSingleInput extends StableSelectorOptions {
+  hashed: string | string[]
+  selector?: string
+  token: string
+  join?: (values: string[]) => string
+}
+
+export interface MergeStableClassBatchInput<
+  Hashed extends Record<string, string | string[]>,
+  Selectors extends Record<string, string> | undefined = Record<string, string>,
+> extends StableSelectorOptions {
+  hashed: Hashed
+  selectors?: Selectors
+  join?: (values: string[]) => string
+}
+
 const defaultJoin = (values: string[]) => values.filter(Boolean).join(' ')
+
+const toArray = (value: string | string[]): string[] =>
+  Array.isArray(value) ? value : [value]
 
 const normalizeToken = (token: string): string => {
   const sanitized = token
@@ -55,3 +74,43 @@ export function stableClassName<T extends Record<string, string>>(
 }
 
 export const stableClassFromModule = stableClassName
+
+export function mergeStableClass(input: MergeStableClassSingleInput): string
+export function mergeStableClass<Hashed extends Record<string, string | string[]>>(
+  input: MergeStableClassBatchInput<Hashed>,
+): { [Key in keyof Hashed]: string }
+export function mergeStableClass(
+  input:
+    | MergeStableClassSingleInput
+    | MergeStableClassBatchInput<Record<string, string | string[]>>,
+): string | Record<string, string> {
+  if ('token' in input) {
+    return mergeSingle(input)
+  }
+  return mergeBatch(input)
+}
+
+function mergeSingle(input: MergeStableClassSingleInput): string {
+  const join = input.join ?? defaultJoin
+  const hashed = toArray(input.hashed)
+  const stable = input.selector?.trim().length
+    ? input.selector
+    : stableClass(input.token, { namespace: input.namespace })
+  return join([...hashed, stable])
+}
+
+function mergeBatch<Hashed extends Record<string, string | string[]>>(
+  input: MergeStableClassBatchInput<Hashed>,
+): Record<keyof Hashed, string> {
+  const join = input.join ?? defaultJoin
+  const output: Partial<Record<keyof Hashed, string>> = {}
+  for (const key of Object.keys(input.hashed) as Array<keyof Hashed>) {
+    const hashedValue = input.hashed[key]
+    const selector = input.selectors?.[String(key)]
+    const stable = selector?.trim().length
+      ? selector
+      : stableClass(String(key), { namespace: input.namespace })
+    output[key] = join([...toArray(hashedValue), stable])
+  }
+  return output as Record<keyof Hashed, string>
+}

@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import {
   createStableClassFactory,
+  mergeStableClass,
   stableClass,
   stableClassFromModule,
   stableClassName,
@@ -54,4 +55,28 @@ test('stableClassFromModule is an alias', () => {
 
 test('stableSelector returns a CSS selector string', () => {
   assert.equal(stableSelector('badge'), '.knighted-badge')
+})
+
+test('mergeStableClass combines hashed and selector strings', () => {
+  const combined = mergeStableClass({
+    hashed: 'badge__hash',
+    selector: 'storybook-badge',
+    token: 'badge',
+  })
+  assert.equal(combined, 'badge__hash storybook-badge')
+})
+
+test('mergeStableClass batch mode merges entire objects', () => {
+  const hashed = {
+    badge: 'badge__hash',
+    cta: ['cta__hash', 'cta__variant'],
+  }
+  const selectors = {
+    badge: 'storybook-badge',
+  }
+  const combined = mergeStableClass({ hashed, selectors, namespace: 'storybook' })
+  assert.deepEqual(combined, {
+    badge: 'badge__hash storybook-badge',
+    cta: 'cta__hash cta__variant storybook-cta',
+  })
 })
