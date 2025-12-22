@@ -1,0 +1,39 @@
+.named-only-card {
+  background: linear-gradient(
+    120deg,
+    rgba(99, 102, 241, 0.18),
+    rgba(167, 139, 250, 0.22)
+  );
+  border-radius: 16px;
+  border: 1px solid rgba(129, 140, 248, 0.35);
+  color: #1f2937;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1.2rem 1.4rem;
+}
+
+.named-only-card__badge {
+  align-self: flex-start;
+  background: #312e81;
+  border-radius: 999px;
+  color: #ede9fe;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  padding: 0.25rem 0.85rem;
+  text-transform: uppercase;
+}
+
+.named-only-card__copy {
+  color: rgba(30, 41, 59, 0.85);
+  font-size: 0.92rem;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.named-only-card__flag {
+  color: rgba(51, 65, 85, 0.9);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+}

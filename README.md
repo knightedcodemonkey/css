@@ -113,15 +113,25 @@ Need the module exports, `knightedCss`, and a runtime `stableSelectors` map from
 
 ```ts
 import type { KnightedCssCombinedModule } from '@knighted/css/loader'
-import combined, { stableSelectors } from './button.js?knighted-css&combined&types'
+import { asKnightedCssCombinedModule } from '@knighted/css/loader-helpers'
+import type { ButtonStableSelectors } from './button.css.knighted-css.js'
+import * as buttonModule from './button.js?knighted-css&combined&types'
 
-const { default: Button, knightedCss } = combined as KnightedCssCombinedModule<
-  typeof import('./button.js')
->
+const {
+  default: Button,
+  knightedCss,
+  stableSelectors,
+} = asKnightedCssCombinedModule<
+  typeof import('./button.js'),
+  { stableSelectors: Readonly<Record<keyof ButtonStableSelectors, string>> }
+>(buttonModule)
+
+stableSelectors.shell
 ```
 
 > [!NOTE]
 > `stableSelectors` here is for runtime use; TypeScript still reads literal tokens from the generated `.knighted-css.*` modules. For a full decision matrix, see [docs/combined-queries.md](./docs/combined-queries.md).
+> Prefer importing `asKnightedCssCombinedModule` from `@knighted/css/loader-helpers` instead of grabbing it from `@knighted/css/loader`—the helper lives in a Node-free chunk so both browser and server bundles stay happy.
 
 ## Examples
 

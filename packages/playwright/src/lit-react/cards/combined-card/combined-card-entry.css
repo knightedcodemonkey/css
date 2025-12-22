@@ -1,0 +1,42 @@
+.combined-card {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 40%, #fcd34d 100%);
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+  color: #111827;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 1.35rem 1.5rem;
+}
+
+.combined-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.combined-entry__subtitle {
+  color: rgba(15, 23, 42, 0.68);
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+}
+
+.combined-entry__badge {
+  align-self: flex-start;
+  background: #0f172a;
+  border-radius: 999px;
+  color: #fefce8;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  padding: 0.2rem 0.75rem;
+  text-transform: uppercase;
+}
+
+.combined-details {
+  border-top: 1px solid rgba(15, 23, 42, 0.24);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  margin: 0;
+  padding-top: 0.9rem;
+}

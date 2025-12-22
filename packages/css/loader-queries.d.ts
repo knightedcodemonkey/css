@@ -19,7 +19,12 @@ declare module '*?knighted-css&types' {
  * TypeScript cannot infer the underlying module automatically, so consumers can
  * import the default export and narrow it with `KnightedCssCombinedModule<typeof import('./file')>`.
  */
-type KnightedCssCombinedModule<TModule> = TModule & { knightedCss: string }
+type KnightedCssCombinedExtras = Readonly<Record<string, unknown>>
+
+type KnightedCssCombinedModule<
+  TModule,
+  TExtras extends KnightedCssCombinedExtras = Record<never, never>,
+> = TModule & TExtras & { knightedCss: string }
 
 declare module '*?knighted-css&combined' {
   const combined: KnightedCssCombinedModule<Record<string, unknown>>
