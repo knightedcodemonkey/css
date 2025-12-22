@@ -14,6 +14,13 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+const SNAPSHOT_DIR = path.join(__dirname, '__snapshots__')
+const CLI_SNAPSHOT_FILE = path.join(SNAPSHOT_DIR, 'generateTypes.snap.json')
+const UPDATE_SNAPSHOTS =
+  process.env.UPDATE_SNAPSHOTS === '1' || process.env.UPDATE_SNAPSHOTS === 'true'
+
+let cachedCliSnapshots: Record<string, string> | null = null
+
 async function setupFixtureProject(): Promise<{
   root: string
   cleanup: () => Promise<void>
@@ -79,6 +86,99 @@ async function pathExists(target: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+async function loadCliSnapshots(): Promise<Record<string, string>> {
+  if (cachedCliSnapshots) {
+    return cachedCliSnapshots
+  }
+  try {
+    const raw = await fs.readFile(CLI_SNAPSHOT_FILE, 'utf8')
+    cachedCliSnapshots = JSON.parse(raw) as Record<string, string>
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException
+    if (nodeError.code === 'ENOENT') {
+      cachedCliSnapshots = {}
+    } else {
+      throw error
+    }
+  }
+  return cachedCliSnapshots
+}
+
+async function writeCliSnapshots(map: Record<string, string>): Promise<void> {
+  cachedCliSnapshots = map
+  await fs.mkdir(SNAPSHOT_DIR, { recursive: true })
+  await fs.writeFile(CLI_SNAPSHOT_FILE, `${JSON.stringify(map, null, 2)}\n`)
+}
+
+function normalizeSnapshotText(value: string): string {
+  let next = value.replace(/\r\n/g, '\n')
+  if (path.sep === '\\') {
+    next = next.replace(/\\/g, '/')
+  }
+  return next.trimEnd()
+}
+
+function replaceAllVariants(value: string, raw: string, token: string): string {
+  const posix = raw.split(path.sep).join('/')
+  const win = raw.split(path.sep).join('\\')
+  const variants = new Set([raw, path.normalize(raw), posix, win])
+  let result = value
+  for (const variant of variants) {
+    if (!variant || variant === token) {
+      continue
+    }
+    result = result.split(variant).join(token)
+  }
+  return result
+}
+
+function applyPathPlaceholders(
+  value: string,
+  placeholders: Record<string, string>,
+): string {
+  let result = value
+  const entries = Object.entries(placeholders).sort(([a], [b]) => b.length - a.length)
+  for (const [raw, token] of entries) {
+    if (!raw) {
+      continue
+    }
+    result = replaceAllVariants(result, raw, token)
+  }
+  return result
+}
+
+function buildCliTranscript(
+  logs: string[],
+  warns: string[],
+  placeholders: Record<string, string> = {},
+): string {
+  const sections = ['[log]', ...logs, '[warn]', ...warns]
+  const combined = sections.join('\n')
+  return normalizeSnapshotText(applyPathPlaceholders(combined, placeholders))
+}
+
+async function expectCliSnapshot(name: string, value: string): Promise<void> {
+  const normalized = normalizeSnapshotText(value)
+  const snapshots = await loadCliSnapshots()
+  const existing = snapshots[name]
+  if (UPDATE_SNAPSHOTS) {
+    if (existing !== normalized) {
+      snapshots[name] = normalized
+      await writeCliSnapshots(snapshots)
+    }
+    return
+  }
+  assert.ok(
+    existing,
+    `Snapshot "${name}" is missing. Re-run with UPDATE_SNAPSHOTS=1 to record it.`,
+  )
+  assert.equal(
+    normalized,
+    existing,
+    `Snapshot mismatch for "${name}". Re-run with UPDATE_SNAPSHOTS=1 to update.`,
+  )
 }
 
 test('generateTypes emits declarations and reuses cache', async () => {
@@ -356,9 +456,11 @@ test('runGenerateTypesCli executes generation and reports summaries', async () =
       console.log = originalLog
       console.warn = originalWarn
     }
-    assert.ok(logs.some(log => log.includes('Selector modules updated')))
-    assert.ok(logs.some(log => log.includes('Selector modules are up to date.')))
-    assert.equal(warns.length, 0)
+    const transcript = buildCliTranscript(logs, warns, {
+      [project.root]: '<projectRoot>',
+      [outDir]: '<outDir>',
+    })
+    await expectCliSnapshot('cli-generation-summary', transcript)
     const manifestPath = path.join(outDir, 'selector-modules.json')
     const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as Record<
       string,
@@ -379,7 +481,7 @@ test('runGenerateTypesCli prints help output when requested', async () => {
   } finally {
     console.log = originalLog
   }
-  assert.ok(printed.some(line => line.includes('Usage: knighted-css-generate-types')))
+  await expectCliSnapshot('cli-help-output', printed.join('\n'))
 })
 test('generateTypes internals support selector module helpers', async () => {
   const {

@@ -2,10 +2,9 @@ import assert from 'node:assert/strict'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
-
-import type { LoaderContext } from 'webpack'
-
 import loader, { type KnightedCssLoaderOptions, pitch } from '../src/loader.js'
+import { determineSelectorVariant } from '../src/loaderInternals.js'
+import type { LoaderContext, Module } from 'webpack'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -13,6 +12,13 @@ const __dirname = path.dirname(__filename)
 type MockLoaderContext = Partial<LoaderContext<KnightedCssLoaderOptions>> & {
   added: Set<string>
 }
+
+type LoaderCallback = (
+  error: Error | null,
+  result?: string | Buffer,
+  sourceMap?: object | null,
+  module?: Module,
+) => void
 
 function createMockContext(
   overrides: Partial<LoaderContext<KnightedCssLoaderOptions>> & {
@@ -232,7 +238,7 @@ test('pitch returns combined module when query includes combined flag', async ()
   const ctx = createMockContext({
     resourcePath,
     resourceQuery: '?knighted-css&combined',
-    loadModule: (_request, callback) => {
+    loadModule: (_request: string, callback: LoaderCallback) => {
       callback(null, "export const Button = () => 'ok';")
     },
   })
@@ -258,7 +264,7 @@ test('pitch injects stableSelectors export when combined types query is used', a
   const ctx = createMockContext({
     resourcePath,
     resourceQuery: '?knighted-css&combined&types',
-    loadModule: (_request, callback) => {
+    loadModule: (_request: string, callback: LoaderCallback) => {
       callback(null, 'export const Button = () => "ok";')
     },
   })
@@ -359,7 +365,7 @@ test('pitch reuses rawRequest when building proxy module', async () => {
     _module: {
       rawRequest: './aliased/entry.js?loaderFlag=1',
     } as LoaderContext<KnightedCssLoaderOptions>['_module'],
-    loadModule: (_request, callback) => {
+    loadModule: (_request: string, callback: LoaderCallback) => {
       callback(null, 'export const stub = 1;')
     },
   })
@@ -384,7 +390,7 @@ test('combined modules skip default export for vanilla style entries', async () 
   const ctx = createMockContext({
     resourcePath,
     resourceQuery: '?knighted-css&combined',
-    loadModule: (_request, callback) => {
+    loadModule: (_request: string, callback: LoaderCallback) => {
       callback(null, 'export const badge = 1;')
     },
   })
@@ -399,4 +405,96 @@ test('combined modules skip default export for vanilla style entries', async () 
   const combinedOutput = String(result ?? '')
   assert.ok(!/export default __knightedDefault/.test(combinedOutput))
   assert.match(combinedOutput, /export \* from/)
+})
+
+test('combined proxy forwards default export when source module has one', async () => {
+  const resourcePath = path.resolve(__dirname, 'fixtures/combined/default-export.ts')
+  const ctx = createMockContext({
+    resourcePath,
+    resourceQuery: '?knighted-css&combined',
+    loadModule: (_request: string, callback: LoaderCallback) => {
+      callback(
+        null,
+        "export default function Demo() { return 'ok' }; export const helper = () => 'helper';",
+      )
+    },
+  })
+
+  const result = await pitch.call(
+    ctx as LoaderContext<KnightedCssLoaderOptions>,
+    `${resourcePath}?knighted-css&combined`,
+    '',
+    {},
+  )
+
+  const combinedOutput = String(result ?? '')
+  assert.match(
+    combinedOutput,
+    /export default __knightedDefault/,
+    'should emit synthetic default',
+  )
+  assert.match(combinedOutput, /export const knightedCss = /)
+})
+
+test('combined proxy omits synthetic default when named-only flag is provided', async () => {
+  const resourcePath = path.resolve(__dirname, 'fixtures/combined/named-only.ts')
+  const ctx = createMockContext({
+    resourcePath,
+    resourceQuery: '?knighted-css&combined&named-only',
+    loadModule: (_request: string, callback: LoaderCallback) => {
+      callback(null, 'export const alpha = 1; export const beta = 2;')
+    },
+  })
+
+  const result = await pitch.call(
+    ctx as LoaderContext<KnightedCssLoaderOptions>,
+    `${resourcePath}?knighted-css&combined&named-only`,
+    '',
+    {},
+  )
+
+  const combinedOutput = String(result ?? '')
+  assert.ok(
+    !/export default __knightedDefault/.test(combinedOutput),
+    'named-only variant should not synthesize a default export',
+  )
+  assert.match(combinedOutput, /export const knightedCss = /)
+})
+
+test('combined&types proxy surfaces runtime stableSelectors export', async () => {
+  const resourcePath = path.resolve(__dirname, 'fixtures/dialects/basic/entry.js')
+  const ctx = createMockContext({
+    resourcePath,
+    resourceQuery: '?knighted-css&combined&types',
+    loadModule: (_request: string, callback: LoaderCallback) => {
+      callback(null, 'export const Button = () => null;')
+    },
+  })
+
+  const result = await pitch.call(
+    ctx as LoaderContext<KnightedCssLoaderOptions>,
+    `${resourcePath}?knighted-css&combined&types`,
+    '',
+    {},
+  )
+
+  const combinedOutput = String(result ?? '')
+  assert.match(
+    combinedOutput,
+    /export const stableSelectors = Object\.freeze\(\{[^}]+\}\);/,
+  )
+  assert.match(combinedOutput, /export const knightedCss = /)
+})
+
+test('determineSelectorVariant maps query combinations to expected variants', () => {
+  assert.equal(determineSelectorVariant('?knighted-css&types'), 'types')
+  assert.equal(determineSelectorVariant('?knighted-css&combined'), 'combined')
+  assert.equal(
+    determineSelectorVariant('?knighted-css&combined&named-only'),
+    'combinedWithoutDefault',
+  )
+  assert.equal(
+    determineSelectorVariant('?knighted-css&combined&no-default'),
+    'combinedWithoutDefault',
+  )
 })

@@ -4,9 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npm run build:rspack && npm run build:webpack",
+    "build": "npm run build:rspack && npm run build:webpack && npm run build:ssr",
     "build:rspack": "npx rspack --config rspack.config.js",
     "build:webpack": "npx webpack --config webpack.config.js",
+    "build:ssr": "npx tsx scripts/render-ssr-preview.ts",
     "check-types": "tsc --noEmit",
     "preview": "npm run build && npx http-server . -p 4174",
     "serve": "npx http-server dist -p 4174",
