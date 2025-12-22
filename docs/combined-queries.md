@@ -2,6 +2,9 @@
 
 This document summarizes how `?knighted-css&combined` behaves for different module export shapes and how to structure your imports accordingly. Use it as guidance when filing documentation feedback for `@knighted/css`.
 
+> [!NOTE]
+> TypeScript now reads literal selector tokens from the generated `.knighted-css.ts` modules (emitted by `knighted-css-generate-types`). Append `&types` to combined imports only when you also need `stableSelectors` at runtime—the loader still exports the map, while the double-extension modules keep your editors in sync.
+
 ## Decision Matrix
 
 | Source module exports                          | Recommended query                                                                  | TypeScript import pattern                                   | Notes                                                                                                                      |

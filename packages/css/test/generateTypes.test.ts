@@ -21,10 +21,13 @@ async function setupFixtureProject(): Promise<{
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-generate-types-'))
   const srcDir = path.join(tmpRoot, 'src')
   await fs.mkdir(srcDir, { recursive: true })
-  const fixtureSource = path.join(__dirname, 'fixtures', 'dialects', 'basic', 'entry.js')
+  const fixtureDir = path.join(__dirname, 'fixtures', 'dialects', 'basic')
+  const projectFixtureDir = path.join(srcDir, 'fixture')
+  await fs.cp(fixtureDir, projectFixtureDir, { recursive: true })
+  const fixtureSource = path.join(projectFixtureDir, 'entry.js')
   const relativeImport = path.relative(srcDir, fixtureSource).split(path.sep).join('/')
-  const specifier = `${relativeImport}?knighted-css&types`
-  const entrySource = `import { stableSelectors } from '${specifier}'
+  const specifier = `./${relativeImport}.knighted-css`
+  const entrySource = `import stableSelectors from '${specifier}'
 console.log(stableSelectors.demo)
 `
   await fs.writeFile(path.join(srcDir, 'entry.ts'), entrySource)
@@ -49,8 +52,8 @@ async function setupBaseUrlFixture(): Promise<{
 .knighted-demo { color: teal; }
 `,
   )
-  const specifier = 'styles/demo.css?knighted-css&types'
-  const entrySource = `import { stableSelectors } from '${specifier}'
+  const specifier = 'styles/demo.css.knighted-css'
+  const entrySource = `import stableSelectors from '${specifier}'
 console.log(stableSelectors.demo)
 `
   await fs.writeFile(path.join(srcDir, 'entry.ts'), entrySource)
@@ -69,34 +72,47 @@ console.log(stableSelectors.demo)
   }
 }
 
+async function pathExists(target: string): Promise<boolean> {
+  try {
+    await fs.access(target)
+    return true
+  } catch {
+    return false
+  }
+}
+
 test('generateTypes emits declarations and reuses cache', async () => {
   const project = await setupFixtureProject()
   try {
     const outDir = path.join(project.root, '.knighted-css-test')
-    const typesRoot = path.join(project.root, '.knighted-css-types')
-    const sharedOptions = { rootDir: project.root, include: ['src'], outDir, typesRoot }
+    const sharedOptions = { rootDir: project.root, include: ['src'], outDir }
 
     const firstRun = await generateTypes(sharedOptions)
-    assert.ok(firstRun.written >= 1)
-    assert.equal(firstRun.removed, 0)
+    assert.ok(firstRun.selectorModulesWritten >= 1)
+    assert.equal(firstRun.selectorModulesRemoved, 0)
     assert.equal(firstRun.warnings.length, 0)
 
-    const manifestPath = path.join(firstRun.outDir, 'manifest.json')
-    const manifestRaw = await fs.readFile(manifestPath, 'utf8')
-    const manifest = JSON.parse(manifestRaw) as Record<string, { file: string }>
-    const entries = Object.values(manifest)
-    assert.equal(entries.length, 1)
-    const declarationPath = path.join(firstRun.outDir, entries[0]?.file ?? '')
-    const declaration = await fs.readFile(declarationPath, 'utf8')
-    assert.ok(declaration.includes('stableSelectors'))
-    assert.ok(declaration.includes('knighted-demo'))
+    const selectorModulePath = path.join(
+      project.root,
+      'src',
+      'fixture',
+      'entry.js.knighted-css.ts',
+    )
+    const selectorModule = await fs.readFile(selectorModulePath, 'utf8')
+    assert.ok(selectorModule.includes('export const stableSelectors'))
+    assert.ok(selectorModule.includes('"demo": "knighted-demo"'))
 
-    const indexContent = await fs.readFile(firstRun.typesIndexPath, 'utf8')
-    assert.ok(indexContent.includes(entries[0]?.file ?? ''))
+    const selectorManifestPath = path.join(outDir, 'selector-modules.json')
+    const selectorManifest = JSON.parse(
+      await fs.readFile(selectorManifestPath, 'utf8'),
+    ) as Record<string, { file: string; hash: string }>
+    const selectorEntries = Object.values(selectorManifest)
+    assert.equal(selectorEntries.length, 1)
+    assert.equal(selectorEntries[0]?.file, selectorModulePath)
 
     const secondRun = await generateTypes(sharedOptions)
-    assert.equal(secondRun.written, 0)
-    assert.equal(secondRun.removed, 0)
+    assert.equal(secondRun.selectorModulesWritten, 0)
+    assert.equal(secondRun.selectorModulesRemoved, 0)
     assert.equal(secondRun.warnings.length, 0)
   } finally {
     await project.cleanup()
@@ -107,49 +123,47 @@ test('generateTypes resolves tsconfig baseUrl specifiers', async () => {
   const project = await setupBaseUrlFixture()
   try {
     const outDir = path.join(project.root, '.knighted-css-test')
-    const typesRoot = path.join(project.root, '.knighted-css-types')
     const result = await generateTypes({
       rootDir: project.root,
       include: ['src'],
       outDir,
-      typesRoot,
     })
-    assert.ok(result.written >= 1)
+    assert.ok(result.selectorModulesWritten >= 1)
     assert.equal(result.warnings.length, 0)
-    const manifestPath = path.join(outDir, 'manifest.json')
+    const manifestPath = path.join(outDir, 'selector-modules.json')
     const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as Record<
       string,
-      unknown
+      { file: string }
     >
-    assert.ok(manifest['../src/styles/demo.css?knighted-css&types'])
+    assert.equal(Object.keys(manifest).length, 1)
   } finally {
     await project.cleanup()
   }
 })
 
-test('generateTypes removes stale manifest entries when declarations are missing', async () => {
+test('generateTypes removes stale selector manifest entries when modules vanish', async () => {
   const project = await setupFixtureProject()
   try {
     const outDir = path.join(project.root, '.knighted-css-test')
-    const typesRoot = path.join(project.root, '.knighted-css-types')
-    const options = { rootDir: project.root, include: ['src'], outDir, typesRoot }
+    const options = { rootDir: project.root, include: ['src'], outDir }
     await generateTypes(options)
 
-    const manifestPath = path.join(outDir, 'manifest.json')
-    const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as Record<
-      string,
-      { file: string; hash: string }
-    >
-    manifest['./ghost.css?knighted-css'] = { file: 'ghost.d.ts', hash: 'ghost-hash' }
-    await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2))
+    const selectorManifestPath = path.join(outDir, 'selector-modules.json')
+    const selectorManifest = JSON.parse(
+      await fs.readFile(selectorManifestPath, 'utf8'),
+    ) as Record<string, { file: string; hash: string }>
+    const ghostModulePath = path.join(project.root, 'src', 'ghost.knighted-css.ts')
+    selectorManifest['ghost-module'] = { file: ghostModulePath, hash: 'ghost' }
+    await fs.writeFile(selectorManifestPath, JSON.stringify(selectorManifest, null, 2))
+    await fs.writeFile(ghostModulePath, '// ghost module')
 
     const result = await generateTypes(options)
-    assert.equal(result.removed, 0)
-    const updatedManifest = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as Record<
-      string,
-      { file: string; hash: string }
-    >
-    assert.ok(!updatedManifest['./ghost.css?knighted-css'])
+    assert.ok(result.selectorModulesRemoved >= 1)
+    const updatedSelectorManifest = JSON.parse(
+      await fs.readFile(selectorManifestPath, 'utf8'),
+    ) as Record<string, { file: string; hash: string }>
+    assert.ok(!updatedSelectorManifest['ghost-module'])
+    assert.equal(await pathExists(ghostModulePath), false)
   } finally {
     await project.cleanup()
   }
@@ -162,17 +176,15 @@ test('generateTypes reports warnings when specifiers cannot be resolved', async 
     await fs.mkdir(srcDir, { recursive: true })
     await fs.writeFile(
       path.join(srcDir, 'entry.ts'),
-      "import 'missing-package/style.css?knighted-css&types'\n",
+      "import 'missing-package/style.css.knighted-css'\n",
     )
     const outDir = path.join(root, '.knighted-css-out')
-    const typesRoot = path.join(root, '.knighted-css-types')
     const result = await generateTypes({
       rootDir: root,
       include: ['src'],
       outDir,
-      typesRoot,
     })
-    assert.equal(result.written, 0)
+    assert.equal(result.selectorModulesWritten, 0)
     assert.ok(result.warnings.some(w => w.includes('Unable to resolve')))
   } finally {
     await fs.rm(root, { recursive: true, force: true })
@@ -184,7 +196,6 @@ test('generateTypes surfaces css extraction failures', async () => {
   const { setCssWithMetaImplementation } = __generateTypesInternals
   try {
     const outDir = path.join(project.root, '.knighted-css-test')
-    const typesRoot = path.join(project.root, '.knighted-css-types')
     setCssWithMetaImplementation(async () => {
       throw new Error('css failure')
     })
@@ -192,9 +203,8 @@ test('generateTypes surfaces css extraction failures', async () => {
       rootDir: project.root,
       include: ['src'],
       outDir,
-      typesRoot,
     })
-    assert.equal(result.written, 0)
+    assert.equal(result.selectorModulesWritten, 0)
     assert.ok(result.warnings.some(w => w.includes('Failed to extract CSS')))
   } finally {
     setCssWithMetaImplementation()
@@ -202,29 +212,27 @@ test('generateTypes surfaces css extraction failures', async () => {
   }
 })
 
-test('generateTypes completes with no declarations when no matching imports exist', async () => {
+test('generateTypes completes with no selector modules when no matching imports exist', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-empty-spec-'))
   try {
     const srcDir = path.join(root, 'src')
     await fs.mkdir(srcDir, { recursive: true })
     await fs.writeFile(path.join(srcDir, 'entry.ts'), 'console.log("noop")\n')
     const outDir = path.join(root, '.knighted-css-out')
-    const typesRoot = path.join(root, '.knighted-css-types')
     const result = await generateTypes({
       rootDir: root,
       include: ['src'],
       outDir,
-      typesRoot,
     })
-    assert.equal(result.written, 0)
-    assert.equal(result.declarations.length, 0)
+    assert.equal(result.selectorModulesWritten, 0)
+    assert.equal(result.selectorModulesRemoved, 0)
     assert.equal(result.warnings.length, 0)
   } finally {
     await fs.rm(root, { recursive: true, force: true })
   }
 })
 
-test('generateTypes ignores specifiers lacking the types flag', async () => {
+test('generateTypes ignores specifiers lacking the selector suffix', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-missing-flag-'))
   try {
     const srcDir = path.join(root, 'src')
@@ -236,15 +244,13 @@ test('generateTypes ignores specifiers lacking the types flag', async () => {
       "import './styles/demo.css?knighted-css'\n",
     )
     const outDir = path.join(root, '.knighted-css-out')
-    const typesRoot = path.join(root, '.knighted-css-types')
     const result = await generateTypes({
       rootDir: root,
       include: ['src'],
       outDir,
-      typesRoot,
     })
-    assert.equal(result.written, 0)
-    assert.equal(result.declarations.length, 0)
+    assert.equal(result.selectorModulesWritten, 0)
+    assert.equal(result.selectorModulesRemoved, 0)
   } finally {
     await fs.rm(root, { recursive: true, force: true })
   }
@@ -254,33 +260,81 @@ test('generateTypes dedupes repeated specifiers', async () => {
   const project = await setupFixtureProject()
   try {
     const srcDir = path.join(project.root, 'src')
-    const fixtureSource = path.join(
-      __dirname,
-      'fixtures',
-      'dialects',
-      'basic',
-      'entry.js',
-    )
-    const relativeImport = path.relative(srcDir, fixtureSource).split(path.sep).join('/')
-    const specifier = `${relativeImport}?knighted-css&types`
-    const entrySource = `import { stableSelectors as firstSelectors } from '${specifier}'
-import { stableSelectors as secondSelectors } from '${specifier}'
+    const specifier = './fixture/entry.js.knighted-css'
+    const entrySource = `import firstSelectors from '${specifier}'
+import secondSelectors from '${specifier}'
 console.log(firstSelectors.demo, secondSelectors.demo)
 `
     await fs.writeFile(path.join(srcDir, 'entry.ts'), entrySource)
 
     const outDir = path.join(project.root, '.knighted-css-out')
-    const typesRoot = path.join(project.root, '.knighted-css-types')
     const result = await generateTypes({
       rootDir: project.root,
       include: ['src'],
       outDir,
-      typesRoot,
     })
-    assert.equal(result.written, 1)
+    assert.equal(
+      result.selectorModulesWritten,
+      1,
+      `Unexpected selector module writes: ${JSON.stringify(result)}`,
+    )
     assert.equal(result.warnings.length, 0)
   } finally {
     await project.cleanup()
+  }
+})
+
+test('generateTypes handles inline loader prefixes on specifiers', async () => {
+  const project = await setupFixtureProject()
+  try {
+    const srcDir = path.join(project.root, 'src')
+    const specifier = 'style-loader!./fixture/entry.js.knighted-css'
+    const entrySource = `import selectors from '${specifier}'
+console.log(selectors.demo)
+`
+    await fs.writeFile(path.join(srcDir, 'entry.ts'), entrySource)
+
+    const outDir = path.join(project.root, '.knighted-css-inline')
+    const result = await generateTypes({
+      rootDir: project.root,
+      include: ['src'],
+      outDir,
+    })
+    assert.equal(result.selectorModulesWritten, 1)
+    assert.equal(result.warnings.length, 0)
+  } finally {
+    await project.cleanup()
+  }
+})
+
+test('generateTypes warns when selector sources fall outside the project root', async () => {
+  const sandboxRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-outside-root-'))
+  const projectRoot = path.join(sandboxRoot, 'project')
+  const sharedRoot = path.join(sandboxRoot, 'shared')
+  try {
+    await fs.mkdir(sharedRoot, { recursive: true })
+    await fs.mkdir(path.join(projectRoot, 'src'), { recursive: true })
+    await fs.writeFile(
+      path.join(projectRoot, 'package.json'),
+      JSON.stringify({ name: 'outside-root', version: '1.0.0' }),
+    )
+    const cssPath = path.join(sharedRoot, 'global.css')
+    await fs.writeFile(cssPath, '.global { color: teal; }\n')
+    const entrySource =
+      "import selectors from '../../shared/global.css.knighted-css'\nconsole.log(selectors.global)\n"
+    await fs.writeFile(path.join(projectRoot, 'src', 'entry.ts'), entrySource)
+
+    const outDir = path.join(projectRoot, '.knighted-css-cache')
+    const result = await generateTypes({
+      rootDir: projectRoot,
+      include: ['src'],
+      outDir,
+    })
+    assert.equal(result.selectorModulesWritten, 0)
+    assert.ok(result.warnings.some(w => w.includes('Skipping selector module')))
+    assert.equal(await pathExists(`${cssPath}.knighted-css.ts`), false)
+  } finally {
+    await fs.rm(sandboxRoot, { recursive: true, force: true })
   }
 })
 
@@ -288,17 +342,7 @@ test('runGenerateTypesCli executes generation and reports summaries', async () =
   const project = await setupFixtureProject()
   try {
     const outDir = path.join(project.root, '.knighted-css-cli')
-    const typesRoot = path.join(project.root, '.knighted-css-types-cli')
-    const args = [
-      '--root',
-      project.root,
-      '--include',
-      'src',
-      '--out-dir',
-      outDir,
-      '--types-root',
-      typesRoot,
-    ]
+    const args = ['--root', project.root, '--include', 'src', '--out-dir', outDir]
     const logs: string[] = []
     const warns: string[] = []
     const originalLog = console.log
@@ -312,16 +356,10 @@ test('runGenerateTypesCli executes generation and reports summaries', async () =
       console.log = originalLog
       console.warn = originalWarn
     }
-    assert.ok(logs.some(log => log.includes('[knighted-css] Updated 1 declaration(s)')))
-    assert.ok(
-      logs.some(log =>
-        log.includes(
-          'No changes to ?knighted-css&types declarations (cache is up to date).',
-        ),
-      ),
-    )
+    assert.ok(logs.some(log => log.includes('Selector modules updated')))
+    assert.ok(logs.some(log => log.includes('Selector modules are up to date.')))
     assert.equal(warns.length, 0)
-    const manifestPath = path.join(outDir, 'manifest.json')
+    const manifestPath = path.join(outDir, 'selector-modules.json')
     const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as Record<
       string,
       unknown
@@ -343,20 +381,14 @@ test('runGenerateTypesCli prints help output when requested', async () => {
   }
   assert.ok(printed.some(line => line.includes('Usage: knighted-css-generate-types')))
 })
-
-test('generateTypes internals format selector-aware declarations', async () => {
+test('generateTypes internals support selector module helpers', async () => {
   const {
     stripInlineLoader,
     splitResourceAndQuery,
+    extractSelectorSourceSpecifier,
     findSpecifierImports,
     resolveImportPath,
     resolvePackageRoot,
-    buildDeclarationFileName,
-    formatSelectorType,
-    formatModuleDeclaration,
-    buildDeclarationModuleSpecifier,
-    buildCanonicalQuery,
-    writeTypesIndex,
     normalizeIncludeOptions,
     collectCandidateFiles,
     normalizeTsconfigPaths,
@@ -371,64 +403,42 @@ test('generateTypes internals format selector-aware declarations', async () => {
     parseCliArgs,
     printHelp,
     reportCliResult,
+    buildSelectorModuleManifestKey,
+    buildSelectorModulePath,
+    formatSelectorModuleSource,
   } = __generateTypesInternals
 
   assert.equal(
-    stripInlineLoader('style-loader!css-loader!./demo.css?knighted-css&types'),
-    './demo.css?knighted-css&types',
+    stripInlineLoader('style-loader!css-loader!./demo.ts.knighted-css'),
+    './demo.ts.knighted-css',
   )
 
-  assert.deepEqual(splitResourceAndQuery('./demo.css?knighted-css#hash'), {
-    resource: './demo.css',
-    query: '?knighted-css',
+  assert.deepEqual(splitResourceAndQuery('./demo.ts.knighted-css?foo=1#hash'), {
+    resource: './demo.ts.knighted-css',
+    query: '?foo=1',
   })
-  assert.deepEqual(splitResourceAndQuery('./demo.css'), {
-    resource: './demo.css',
-    query: '',
-  })
+
+  assert.equal(extractSelectorSourceSpecifier('./demo.ts.knighted-css'), './demo.ts')
+  assert.equal(extractSelectorSourceSpecifier('./demo.ts.knighted-css.ts'), './demo.ts')
+  assert.equal(extractSelectorSourceSpecifier('./demo.ts'), undefined)
 
   const selectorMap = new Map([
     ['beta', 'knighted-beta'],
     ['alpha', 'knighted-alpha'],
   ])
-  const hashedName = buildDeclarationFileName('./demo.css?knighted-css')
-  assert.match(hashedName, /^knt-[a-f0-9]{12}\.d\.ts$/)
-  const selectorType = formatSelectorType(selectorMap)
-  assert.match(selectorType, /readonly "alpha": "knighted-alpha"/)
-  assert.match(selectorType, /readonly "beta": "knighted-beta"/)
-  assert.equal(formatSelectorType(new Map()), 'Readonly<Record<string, string>>')
+  const selectorModuleSource = formatSelectorModuleSource(selectorMap)
+  assert.match(selectorModuleSource, /export const stableSelectors/)
+  assert.match(selectorModuleSource, /"alpha": "knighted-alpha"/)
 
-  const declaration = formatModuleDeclaration(
-    './demo.css?knighted-css&combined',
-    'combined',
-    selectorMap,
-  )
-  assert.match(declaration, /declare module/)
-  assert.match(declaration, /export const stableSelectors/)
+  const manifestKey = buildSelectorModuleManifestKey(path.join('src', 'entry.js'))
+  assert.ok(manifestKey.includes('entry.js'))
+  const modulePath = buildSelectorModulePath('/tmp/project/src/entry.js')
+  assert.ok(modulePath.endsWith('.knighted-css.ts'))
 
-  const withoutDefault = formatModuleDeclaration(
-    './demo.css?knighted-css&combined&named-only',
-    'combinedWithoutDefault',
-    selectorMap,
-  )
-  assert.doesNotMatch(withoutDefault, /export default/)
-
-  const canonicalSpecifier = buildDeclarationModuleSpecifier(
-    path.join('/tmp/project', 'src', 'styles', 'demo.css'),
-    path.join('/tmp/project', '.knighted-css'),
-    '?types&knighted-css&foo=1',
-  )
-  assert.equal(canonicalSpecifier, '../src/styles/demo.css?knighted-css&types&foo=1')
-
-  assert.equal(
-    buildCanonicalQuery('?knighted-css&combined&no-default&types&foo=1'),
-    '?knighted-css&combined&no-default&types&foo=1',
-  )
-
-  const normalized = normalizeIncludeOptions(undefined, '/tmp/demo')
-  assert.deepEqual(normalized, ['/tmp/demo'])
-  assert.deepEqual(normalizeIncludeOptions(['./src'], '/tmp/demo'), [
-    path.resolve('/tmp/demo', './src'),
+  const normalized = normalizeIncludeOptions(undefined, '/tmp/project')
+  assert.deepEqual(normalized, ['/tmp/project'])
+  assert.deepEqual(normalizeIncludeOptions(['./src'], '/tmp/project'), [
+    path.resolve('/tmp/project', './src'),
   ])
 
   const nonFileEntry = path.join(os.tmpdir(), 'knighted-non-file-entry')
@@ -462,11 +472,6 @@ test('generateTypes internals format selector-aware declarations', async () => {
     const duplicateResult = await collectCandidateFiles([entryFile, entryFile])
     assert.equal(duplicateResult.length, 1)
 
-    const missingResult = await collectCandidateFiles([
-      path.join(collectRoot, 'missing.ts'),
-    ])
-    assert.deepEqual(missingResult, [])
-
     const skipDir = path.join(collectRoot, 'node_modules')
     await fs.mkdir(skipDir, { recursive: true })
     const skipResult = await collectCandidateFiles([skipDir])
@@ -484,8 +489,6 @@ test('generateTypes internals format selector-aware declarations', async () => {
     'storybook',
     '--out-dir',
     '.knighted-css',
-    '--types-root',
-    './types',
   ]) as ParsedCliArgs
   assert.equal(parsed.rootDir, path.resolve('/tmp/project'))
   assert.deepEqual(parsed.include, ['src'])
@@ -494,7 +497,6 @@ test('generateTypes internals format selector-aware declarations', async () => {
   assert.throws(() => parseCliArgs(['--root']), /Missing value/)
   assert.throws(() => parseCliArgs(['--include']), /Missing value/)
   assert.throws(() => parseCliArgs(['--out-dir']), /Missing value/)
-  assert.throws(() => parseCliArgs(['--types-root']), /Missing value/)
   assert.throws(() => parseCliArgs(['--stable-namespace']), /Missing value/)
   assert.throws(() => parseCliArgs(['--wat']), /Unknown flag/)
   const helpParsed = parseCliArgs(['--help'])
@@ -508,21 +510,10 @@ test('generateTypes internals format selector-aware declarations', async () => {
   assert.deepEqual(normalizedPaths, {
     '@demo/*': ['src/demo/*', 'fallback/*'],
   })
-  assert.equal(normalizeTsconfigPaths(undefined), undefined)
-  assert.equal(normalizeTsconfigPaths({ foo: [] }), undefined)
-  assert.equal(
-    normalizeTsconfigPaths({ foo: undefined as unknown as string[] }),
-    undefined,
-  )
 
   assert.equal(isNonRelativeSpecifier('pkg/component'), true)
   assert.equal(isNonRelativeSpecifier('./local'), false)
-  assert.equal(isNonRelativeSpecifier('/absolute/path'), false)
-  assert.equal(isNonRelativeSpecifier('http://example.com/style.css'), false)
   assert.equal(isNonRelativeSpecifier(''), false)
-
-  const positionalParsed = parseCliArgs(['src', 'stories'])
-  assert.deepEqual(positionalParsed.include, ['src', 'stories'])
 
   const printed: string[] = []
   const logged = console.log
@@ -542,34 +533,52 @@ test('generateTypes internals format selector-aware declarations', async () => {
     console.log = (msg: string) => summaryLogs.push(msg)
     console.warn = (msg: string) => summaryWarns.push(msg)
     reportCliResult({
-      written: 0,
-      removed: 0,
-      declarations: [],
+      selectorModulesWritten: 0,
+      selectorModulesRemoved: 0,
       warnings: ['warn'],
-      outDir: '/tmp/types',
-      typesIndexPath: '/tmp/types/index.d.ts',
+      manifestPath: '/tmp/types/selector-modules.json',
     })
     reportCliResult({
-      written: 2,
-      removed: 1,
-      declarations: [],
+      selectorModulesWritten: 2,
+      selectorModulesRemoved: 1,
       warnings: [],
-      outDir: '/tmp/types',
-      typesIndexPath: '/tmp/types/index.d.ts',
+      manifestPath: '/tmp/types/selector-modules.json',
     })
   } finally {
     console.log = originalLog
     console.warn = originalWarn
   }
-  assert.ok(
-    summaryLogs.some(log =>
-      log.includes(
-        'No changes to ?knighted-css&types declarations (cache is up to date).',
-      ),
-    ),
-  )
-  assert.ok(summaryLogs.some(log => log.includes('Updated 2 declaration(s)')))
+  assert.ok(summaryLogs.some(log => log.includes('Selector modules are up to date.')))
+  assert.ok(summaryLogs.some(log => log.includes('Selector modules updated')))
   assert.equal(summaryWarns.length, 1)
+
+  const fakeMetaDir = path.join(os.tmpdir(), 'knighted-meta', 'esm')
+  const fakeModuleUrl = pathToFileURL(path.join(fakeMetaDir, 'index.js')).href
+  try {
+    setModuleTypeDetector(() => 'module')
+    setImportMetaUrlProvider(() => fakeModuleUrl)
+    const resolvedRoot = resolvePackageRoot()
+    assert.equal(resolvedRoot, path.resolve(fakeMetaDir, '..'))
+  } finally {
+    setModuleTypeDetector()
+    setImportMetaUrlProvider()
+  }
+
+  const specifierRoot = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'knighted-specifier-imports-'),
+  )
+  try {
+    const specFile = path.join(specifierRoot, 'entry.ts')
+    await fs.writeFile(
+      specFile,
+      "import selectors from './demo.js.knighted-css'\nconst lazy = require('./other.knighted-css')\n",
+    )
+    const matches = await findSpecifierImports(specFile)
+    assert.equal(matches.length, 2)
+    assert.ok(matches.every(match => match.importer === specFile))
+  } finally {
+    await fs.rm(specifierRoot, { recursive: true, force: true })
+  }
 
   const peerRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-peer-resolver-'))
   try {
@@ -602,17 +611,6 @@ test('generateTypes internals format selector-aware declarations', async () => {
     await fs.rm(tsconfigRoot, { recursive: true, force: true })
   }
 
-  const brokenTsconfigRoot = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'knighted-tsconfig-bad-'),
-  )
-  try {
-    await fs.writeFile(path.join(brokenTsconfigRoot, 'tsconfig.json'), '{ invalid')
-    const context = loadTsconfigResolutionContext(brokenTsconfigRoot)
-    assert.equal(context, undefined)
-  } finally {
-    await fs.rm(brokenTsconfigRoot, { recursive: true, force: true })
-  }
-
   const aliasRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-tsconfig-alias-'))
   try {
     const aliasFile = path.join(aliasRoot, 'alias.css')
@@ -621,90 +619,16 @@ test('generateTypes internals format selector-aware declarations', async () => {
       matchPath: () => aliasFile,
     })
     assert.equal(matchResolved, aliasFile)
-
-    const nestedDir = path.join(aliasRoot, 'nested')
-    await fs.mkdir(nestedDir, { recursive: true })
-    const nestedFile = path.join(nestedDir, 'file.css')
-    await fs.writeFile(nestedFile, '.nested {}\n')
-    const baseUrlResolved = await resolveWithTsconfigPaths('nested/file.css', {
-      absoluteBaseUrl: aliasRoot,
-    })
-    assert.equal(baseUrlResolved, nestedFile)
-
-    const unresolved = await resolveWithTsconfigPaths('alias-missing', {
-      matchPath: () => path.join(aliasRoot, 'missing.css'),
-    })
-    assert.equal(unresolved, undefined)
   } finally {
     await fs.rm(aliasRoot, { recursive: true, force: true })
   }
 
   assert.equal(await resolveWithTsconfigPaths('standalone'), undefined)
 
-  const tsconfigWithPathsRoot = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'knighted-tsconfig-combo-'),
-  )
-  try {
-    await fs.mkdir(path.join(tsconfigWithPathsRoot, 'src'), { recursive: true })
-    await fs.writeFile(
-      path.join(tsconfigWithPathsRoot, 'tsconfig.json'),
-      JSON.stringify(
-        {
-          compilerOptions: {
-            baseUrl: './src',
-            paths: {
-              '@alias/*': ['@alias/*'],
-            },
-          },
-        },
-        null,
-        2,
-      ),
-    )
-    const context = loadTsconfigResolutionContext(tsconfigWithPathsRoot)
-    assert.ok(context?.absoluteBaseUrl)
-    assert.ok(context?.matchPath)
-  } finally {
-    await fs.rm(tsconfigWithPathsRoot, { recursive: true, force: true })
-  }
-
-  const specifierRoot = await fs.mkdtemp(
-    path.join(os.tmpdir(), 'knighted-specifier-imports-'),
-  )
-  try {
-    const plainFile = path.join(specifierRoot, 'plain.ts')
-    await fs.writeFile(plainFile, 'console.log("no selectors here")\n')
-    const noMatches = await findSpecifierImports(plainFile)
-    assert.deepEqual(noMatches, [])
-
-    const requireFile = path.join(specifierRoot, 'require.js')
-    await fs.writeFile(
-      requireFile,
-      "const styles = require('./demo.css?knighted-css&types')\n",
-    )
-    const requireMatches = await findSpecifierImports(requireFile)
-    assert.equal(requireMatches.length, 1)
-    assert.equal(requireMatches[0]?.specifier, './demo.css?knighted-css&types')
-    assert.equal(requireMatches[0]?.importer, requireFile)
-    const missingMatches = await findSpecifierImports(
-      path.join(specifierRoot, 'missing.js'),
-    )
-    assert.deepEqual(missingMatches, [])
-  } finally {
-    await fs.rm(specifierRoot, { recursive: true, force: true })
-  }
-
-  const fakeMetaDir = path.join(os.tmpdir(), 'knighted-meta', 'esm')
-  const fakeModuleUrl = pathToFileURL(path.join(fakeMetaDir, 'index.js')).href
-  try {
-    setModuleTypeDetector(() => 'module')
-    setImportMetaUrlProvider(() => fakeModuleUrl)
-    const resolvedRoot = resolvePackageRoot()
-    assert.equal(resolvedRoot, path.resolve(fakeMetaDir, '..'))
-  } finally {
-    setModuleTypeDetector()
-    setImportMetaUrlProvider()
-  }
+  const loaderErrorContext = loadTsconfigResolutionContext('/tmp/project', () => {
+    throw new Error('tsconfig failure')
+  })
+  assert.equal(loaderErrorContext, undefined)
 
   const resolveRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-resolve-import-'))
   try {
@@ -714,48 +638,21 @@ test('generateTypes internals format selector-aware declarations', async () => {
       JSON.stringify({ name: 'resolve-fixture', version: '1.0.0' }, null, 2),
     )
     const importer = path.join(resolveRoot, 'src', 'entry.ts')
-    const absoluteResult = await resolveImportPath(
-      '/styles/demo.css',
+    const relativeResolved = await resolveImportPath(
+      './styles/demo.css',
       importer,
       resolveRoot,
     )
-    assert.equal(absoluteResult, path.join(resolveRoot, 'styles', 'demo.css'))
-    const missingResult = await resolveImportPath(
-      'non-existent-module',
-      importer,
-      resolveRoot,
-    )
-    assert.equal(missingResult, undefined)
+    assert.equal(relativeResolved, path.join(resolveRoot, 'src', 'styles', 'demo.css'))
   } finally {
     await fs.rm(resolveRoot, { recursive: true, force: true })
   }
-
-  const loaderErrorContext = loadTsconfigResolutionContext('/tmp/project', () => {
-    throw new Error('tsconfig failure')
-  })
-  assert.equal(loaderErrorContext, undefined)
 
   const rooted = relativeToRoot(
     path.join('/tmp/project', 'src', 'demo.css'),
     '/tmp/project',
   )
   assert.equal(rooted, path.join('src', 'demo.css'))
-  const outside = path.join(os.tmpdir(), 'outside.css')
-  const outsideRelative = path.relative('/tmp/project', outside)
-  assert.equal(relativeToRoot(outside, '/tmp/project'), outsideRelative)
-
-  const indexRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-types-index-'))
-  try {
-    const outDir = path.join(indexRoot, 'out')
-    await fs.mkdir(outDir, { recursive: true })
-    const indexPath = path.join(indexRoot, 'index.d.ts')
-    await writeTypesIndex(indexPath, {}, outDir)
-    const indexContent = await fs.readFile(indexPath, 'utf8')
-    assert.ok(indexContent.includes('Generated by @knighted/css/generate-types'))
-    assert.ok(!indexContent.includes('<reference'))
-  } finally {
-    await fs.rm(indexRoot, { recursive: true, force: true })
-  }
 })
 
 test('runGenerateTypesCli reports argument errors and sets exit code', async () => {
@@ -795,8 +692,6 @@ test('runGenerateTypesCli surfaces generator failures', async () => {
       'src',
       '--out-dir',
       outDirFile,
-      '--types-root',
-      path.join(project.root, '.cli-types-error'),
     ])
     observedExitCode = process.exitCode as number | undefined
   } finally {

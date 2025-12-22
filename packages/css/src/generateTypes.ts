@@ -11,34 +11,20 @@ import { getTsconfig, type TsConfigResult } from 'get-tsconfig'
 import { createMatchPath, type MatchPath } from 'tsconfig-paths'
 
 import { cssWithMeta } from './css.js'
-import {
-  determineSelectorVariant,
-  hasQueryFlag,
-  TYPES_QUERY_FLAG,
-  buildSanitizedQuery,
-  COMBINED_QUERY_FLAG,
-  NAMED_ONLY_QUERY_FLAGS,
-  type SelectorTypeVariant,
-} from './loaderInternals.js'
 import { buildStableSelectorsLiteral } from './stableSelectorsLiteral.js'
 import { resolveStableNamespace } from './stableNamespace.js'
-
-interface ManifestEntry {
-  file: string
-  hash: string
-}
-
-type Manifest = Record<string, ManifestEntry>
 
 interface ImportMatch {
   specifier: string
   importer: string
 }
 
-interface DeclarationRecord {
-  specifier: string
-  filePath: string
+interface ManifestEntry {
+  file: string
+  hash: string
 }
+
+type SelectorModuleManifest = Record<string, ManifestEntry>
 
 interface TsconfigResolutionContext {
   absoluteBaseUrl?: string
@@ -52,26 +38,22 @@ let activeCssWithMeta: CssWithMetaFn = cssWithMeta
 interface GenerateTypesInternalOptions {
   rootDir: string
   include: string[]
-  outDir: string
-  typesRoot: string
+  cacheDir: string
   stableNamespace?: string
   tsconfig?: TsconfigResolutionContext
 }
 
 export interface GenerateTypesResult {
-  written: number
-  removed: number
-  declarations: DeclarationRecord[]
+  selectorModulesWritten: number
+  selectorModulesRemoved: number
   warnings: string[]
-  outDir: string
-  typesIndexPath: string
+  manifestPath: string
 }
 
 export interface GenerateTypesOptions {
   rootDir?: string
   include?: string[]
   outDir?: string
-  typesRoot?: string
   stableNamespace?: string
 }
 
@@ -126,26 +108,23 @@ function getImportMetaUrl(): string | undefined {
 }
 
 const PACKAGE_ROOT = resolvePackageRoot()
-const DEFAULT_TYPES_ROOT = path.join(PACKAGE_ROOT, 'types-stub')
-const DEFAULT_OUT_DIR = path.join(PACKAGE_ROOT, 'node_modules', '.knighted-css')
+const SELECTOR_REFERENCE = '.knighted-css'
+const SELECTOR_MODULE_SUFFIX = '.knighted-css.ts'
 
 export async function generateTypes(
   options: GenerateTypesOptions = {},
 ): Promise<GenerateTypesResult> {
   const rootDir = path.resolve(options.rootDir ?? process.cwd())
   const include = normalizeIncludeOptions(options.include, rootDir)
-  const outDir = path.resolve(options.outDir ?? DEFAULT_OUT_DIR)
-  const typesRoot = path.resolve(options.typesRoot ?? DEFAULT_TYPES_ROOT)
+  const cacheDir = path.resolve(options.outDir ?? path.join(rootDir, '.knighted-css'))
   const tsconfig = loadTsconfigResolutionContext(rootDir)
   await init
-  await fs.mkdir(outDir, { recursive: true })
-  await fs.mkdir(typesRoot, { recursive: true })
+  await fs.mkdir(cacheDir, { recursive: true })
 
   const internalOptions: GenerateTypesInternalOptions = {
     rootDir,
     include,
-    outDir,
-    typesRoot,
+    cacheDir,
     stableNamespace: options.stableNamespace,
     tsconfig,
   }
@@ -158,35 +137,34 @@ async function generateDeclarations(
 ): Promise<GenerateTypesResult> {
   const peerResolver = createProjectPeerResolver(options.rootDir)
   const files = await collectCandidateFiles(options.include)
-  const manifestPath = path.join(options.outDir, 'manifest.json')
-  const previousManifest = await readManifest(manifestPath)
-  const nextManifest: Manifest = {}
+  const selectorModulesManifestPath = path.join(options.cacheDir, 'selector-modules.json')
+  const previousSelectorManifest = await readManifest(selectorModulesManifestPath)
+  const nextSelectorManifest: SelectorModuleManifest = {}
   const selectorCache = new Map<string, Map<string, string>>()
-  const processedSpecifiers = new Set<string>()
-  const declarations: DeclarationRecord[] = []
+  const processedSelectors = new Set<string>()
   const warnings: string[] = []
-  let writes = 0
+  let selectorModuleWrites = 0
 
   for (const filePath of files) {
     const matches = await findSpecifierImports(filePath)
     for (const match of matches) {
       const cleaned = match.specifier.trim()
       const inlineFree = stripInlineLoader(cleaned)
-      if (!inlineFree.includes('?knighted-css')) continue
-      const { resource, query } = splitResourceAndQuery(inlineFree)
-      if (!query || !hasQueryFlag(query, TYPES_QUERY_FLAG)) {
+      const { resource } = splitResourceAndQuery(inlineFree)
+      const selectorSource = extractSelectorSourceSpecifier(resource)
+      if (!selectorSource) {
         continue
       }
       const resolvedNamespace = resolveStableNamespace(options.stableNamespace)
       const resolvedPath = await resolveImportPath(
-        resource,
+        selectorSource,
         match.importer,
         options.rootDir,
         options.tsconfig,
       )
       if (!resolvedPath) {
         warnings.push(
-          `Unable to resolve ${resource} referenced by ${relativeToRoot(match.importer, options.rootDir)}.`,
+          `Unable to resolve ${selectorSource} referenced by ${relativeToRoot(match.importer, options.rootDir)}.`,
         )
         continue
       }
@@ -214,58 +192,41 @@ async function generateDeclarations(
         selectorCache.set(cacheKey, selectorMap)
       }
 
-      const canonicalSpecifier = buildDeclarationModuleSpecifier(
-        resolvedPath,
-        options.outDir,
-        query,
-      )
-      if (processedSpecifiers.has(canonicalSpecifier)) {
+      if (!isWithinRoot(resolvedPath, options.rootDir)) {
+        warnings.push(
+          `Skipping selector module for ${relativeToRoot(resolvedPath, options.rootDir)} because it is outside the project root.`,
+        )
         continue
       }
-      const variant = determineSelectorVariant(query)
-      const declaration = formatModuleDeclaration(
-        canonicalSpecifier,
-        variant,
+
+      const manifestKey = buildSelectorModuleManifestKey(resolvedPath)
+      if (processedSelectors.has(manifestKey)) {
+        continue
+      }
+      const moduleWrite = await ensureSelectorModule(
+        resolvedPath,
         selectorMap,
+        previousSelectorManifest,
+        nextSelectorManifest,
       )
-      const declarationHash = hashContent(declaration)
-      const fileName = buildDeclarationFileName(canonicalSpecifier)
-      const targetPath = path.join(options.outDir, fileName)
-      const previousEntry = previousManifest[canonicalSpecifier]
-      const needsWrite =
-        previousEntry?.hash !== declarationHash || !(await fileExists(targetPath))
-      if (needsWrite) {
-        await fs.writeFile(targetPath, declaration, 'utf8')
-        writes += 1
+      if (moduleWrite) {
+        selectorModuleWrites += 1
       }
-      nextManifest[canonicalSpecifier] = { file: fileName, hash: declarationHash }
-      if (needsWrite) {
-        declarations.push({ specifier: canonicalSpecifier, filePath: targetPath })
-      }
-      processedSpecifiers.add(canonicalSpecifier)
+      processedSelectors.add(manifestKey)
     }
   }
 
-  const removed = await removeStaleDeclarations(
-    previousManifest,
-    nextManifest,
-    options.outDir,
+  const selectorModulesRemoved = await removeStaleSelectorModules(
+    previousSelectorManifest,
+    nextSelectorManifest,
   )
-  await writeManifest(manifestPath, nextManifest)
-  const typesIndexPath = path.join(options.typesRoot, 'index.d.ts')
-  await writeTypesIndex(typesIndexPath, nextManifest, options.outDir)
-
-  if (Object.keys(nextManifest).length === 0) {
-    declarations.length = 0
-  }
+  await writeManifest(selectorModulesManifestPath, nextSelectorManifest)
 
   return {
-    written: writes,
-    removed,
-    declarations,
+    selectorModulesWritten: selectorModuleWrites,
+    selectorModulesRemoved,
     warnings,
-    outDir: options.outDir,
-    typesIndexPath,
+    manifestPath: selectorModulesManifestPath,
   }
 }
 
@@ -332,18 +293,18 @@ async function findSpecifierImports(filePath: string): Promise<ImportMatch[]> {
   } catch {
     return []
   }
-  if (!source.includes('?knighted-css')) {
+  if (!source.includes(SELECTOR_REFERENCE)) {
     return []
   }
   const matches: ImportMatch[] = []
   const [imports] = parse(source, filePath)
   for (const record of imports) {
     const specifier = record.n ?? source.slice(record.s, record.e)
-    if (specifier && specifier.includes('?knighted-css')) {
+    if (specifier && specifier.includes(SELECTOR_REFERENCE)) {
       matches.push({ specifier, importer: filePath })
     }
   }
-  const requireRegex = /require\((['"])([^'"`]+?\?knighted-css[^'"`]*)\1\)/g
+  const requireRegex = /require\((['"])([^'"`]+?\.knighted-css[^'"`]*)\1\)/g
   let reqMatch: RegExpExecArray | null
   while ((reqMatch = requireRegex.exec(source)) !== null) {
     const spec = reqMatch[2]
@@ -367,6 +328,22 @@ function splitResourceAndQuery(specifier: string): { resource: string; query: st
     return { resource: trimmed, query: '' }
   }
   return { resource: trimmed.slice(0, queryIndex), query: trimmed.slice(queryIndex) }
+}
+
+function extractSelectorSourceSpecifier(specifier: string): string | undefined {
+  const markerIndex = specifier.indexOf(SELECTOR_REFERENCE)
+  if (markerIndex < 0) {
+    return undefined
+  }
+  const suffix = specifier.slice(markerIndex + SELECTOR_REFERENCE.length)
+  if (suffix.length > 0 && !/\.(?:[cm]?[tj]s|[tj]sx)$/.test(suffix)) {
+    return undefined
+  }
+  const base = specifier.slice(0, markerIndex)
+  if (!base) {
+    return undefined
+  }
+  return base
 }
 
 const projectRequireCache = new Map<string, ReturnType<typeof createRequire>>()
@@ -396,168 +373,71 @@ async function resolveImportPath(
   }
 }
 
-function buildDeclarationFileName(specifier: string): string {
-  const digest = crypto.createHash('sha1').update(specifier).digest('hex').slice(0, 12)
-  return `knt-${digest}.d.ts`
+function buildSelectorModuleManifestKey(resolvedPath: string): string {
+  return resolvedPath.split(path.sep).join('/')
 }
 
-function formatModuleDeclaration(
-  specifier: string,
-  variant: SelectorTypeVariant,
-  selectors: Map<string, string>,
-): string {
-  const literalSpecifier = JSON.stringify(specifier)
-  const selectorType = formatSelectorType(selectors)
-  const header = `declare module ${literalSpecifier} {`
-  const footer = '}'
-  if (variant === 'types') {
-    return `${header}
-  export const knightedCss: string
-  export const stableSelectors: ${selectorType}
-${footer}
-`
-  }
-  const stableLine = `  export const stableSelectors: ${selectorType}`
-  const shared = `  const combined: KnightedCssCombinedModule<Record<string, unknown>>
-  export const knightedCss: string
-${stableLine}`
-  if (variant === 'combined') {
-    return `${header}
-${shared}
-  export default combined
-${footer}
-`
-  }
-  return `${header}
-${shared}
-${footer}
-`
+function buildSelectorModulePath(resolvedPath: string): string {
+  return `${resolvedPath}${SELECTOR_MODULE_SUFFIX}`
 }
 
-function formatSelectorType(selectors: Map<string, string>): string {
-  if (selectors.size === 0) {
-    return 'Readonly<Record<string, string>>'
-  }
+function formatSelectorModuleSource(selectors: Map<string, string>): string {
+  const header = '// Generated by @knighted/css/generate-types\n// Do not edit.\n'
   const entries = Array.from(selectors.entries()).sort(([a], [b]) => a.localeCompare(b))
   const lines = entries.map(
-    ([token, selector]) =>
-      `    readonly ${JSON.stringify(token)}: ${JSON.stringify(selector)}`,
+    ([token, selector]) => `  ${JSON.stringify(token)}: ${JSON.stringify(selector)},`,
   )
-  return `Readonly<{
+  const literal =
+    lines.length > 0
+      ? `{
 ${lines.join('\n')}
-  }>`
-}
+} as const`
+      : '{} as const'
+  return `${header}
+export const stableSelectors = ${literal}
 
-function buildDeclarationModuleSpecifier(
-  resolvedPath: string,
-  declarationDir: string,
-  query: string,
-): string {
-  const relativePath = path.relative(declarationDir, resolvedPath)
-  const normalizedPath = normalizeRelativePath(relativePath)
-  const canonicalQuery = buildCanonicalQuery(query)
-  return `${normalizedPath}${canonicalQuery}`
-}
+export type KnightedCssStableSelectors = typeof stableSelectors
+export type KnightedCssStableSelectorToken = keyof typeof stableSelectors
 
-function normalizeRelativePath(relativePath: string): string {
-  let normalized = relativePath.split(path.sep).join('/')
-  if (!normalized || normalized === '') {
-    normalized = '.'
-  }
-  if (normalized === '.') {
-    return './'
-  }
-  if (normalized.startsWith('./') || normalized.startsWith('../')) {
-    return normalized
-  }
-  if (normalized.startsWith('.')) {
-    return normalized
-  }
-  return `./${normalized}`
-}
-
-function buildCanonicalQuery(query: string): string {
-  if (!query) {
-    return ''
-  }
-  const sanitized = buildSanitizedQuery(query)
-  const extraParts = sanitized ? sanitized.slice(1).split('&').filter(Boolean) : []
-  const parts: string[] = []
-  parts.push('knighted-css')
-  if (hasQueryFlag(query, COMBINED_QUERY_FLAG)) {
-    parts.push(COMBINED_QUERY_FLAG)
-  }
-  for (const flag of NAMED_ONLY_QUERY_FLAGS) {
-    if (hasQueryFlag(query, flag)) {
-      parts.push(flag)
-    }
-  }
-  if (hasQueryFlag(query, TYPES_QUERY_FLAG)) {
-    parts.push(TYPES_QUERY_FLAG)
-  }
-  const merged = [...parts, ...extraParts]
-  return merged.length > 0 ? `?${merged.join('&')}` : ''
+export default stableSelectors
+`
 }
 
 function hashContent(content: string): string {
   return crypto.createHash('sha1').update(content).digest('hex')
 }
 
-async function readManifest(manifestPath: string): Promise<Manifest> {
+async function readManifest(manifestPath: string): Promise<SelectorModuleManifest> {
   try {
     const raw = await fs.readFile(manifestPath, 'utf8')
-    return JSON.parse(raw) as Manifest
+    return JSON.parse(raw) as SelectorModuleManifest
   } catch {
     return {}
   }
 }
 
-async function writeManifest(manifestPath: string, manifest: Manifest): Promise<void> {
+async function writeManifest(
+  manifestPath: string,
+  manifest: SelectorModuleManifest,
+): Promise<void> {
   await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), 'utf8')
 }
 
-async function removeStaleDeclarations(
-  previous: Manifest,
-  next: Manifest,
-  outDir: string,
+async function removeStaleSelectorModules(
+  previous: SelectorModuleManifest,
+  next: SelectorModuleManifest,
 ): Promise<number> {
-  const stale = Object.entries(previous).filter(([specifier]) => !next[specifier])
+  const stale = Object.entries(previous).filter(([key]) => !next[key])
   let removed = 0
   for (const [, entry] of stale) {
-    const targetPath = path.join(outDir, entry.file)
     try {
-      await fs.unlink(targetPath)
+      await fs.unlink(entry.file)
       removed += 1
     } catch {
       // ignore
     }
   }
   return removed
-}
-
-async function writeTypesIndex(
-  indexPath: string,
-  manifest: Manifest,
-  outDir: string,
-): Promise<void> {
-  const header = '// Generated by @knighted/css/generate-types\n// Do not edit.\n'
-  const references = Object.values(manifest)
-    .sort((a, b) => a.file.localeCompare(b.file))
-    .map(entry => {
-      const rel = path
-        .relative(path.dirname(indexPath), path.join(outDir, entry.file))
-        .split(path.sep)
-        .join('/')
-      return `/// <reference path="${rel}" />`
-    })
-  const content =
-    references.length > 0
-      ? `${header}
-${references.join('\n')}
-`
-      : `${header}
-`
-  await fs.writeFile(indexPath, content, 'utf8')
 }
 
 function formatErrorMessage(error: unknown): string {
@@ -569,6 +449,30 @@ function formatErrorMessage(error: unknown): string {
 
 function relativeToRoot(filePath: string, rootDir: string): string {
   return path.relative(rootDir, filePath) || filePath
+}
+
+function isWithinRoot(filePath: string, rootDir: string): boolean {
+  const relative = path.relative(rootDir, filePath)
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
+}
+
+async function ensureSelectorModule(
+  resolvedPath: string,
+  selectors: Map<string, string>,
+  previousManifest: SelectorModuleManifest,
+  nextManifest: SelectorModuleManifest,
+): Promise<boolean> {
+  const manifestKey = buildSelectorModuleManifestKey(resolvedPath)
+  const targetPath = buildSelectorModulePath(resolvedPath)
+  const source = formatSelectorModuleSource(selectors)
+  const hash = hashContent(source)
+  const previousEntry = previousManifest[manifestKey]
+  const needsWrite = previousEntry?.hash !== hash || !(await fileExists(targetPath))
+  if (needsWrite) {
+    await fs.writeFile(targetPath, source, 'utf8')
+  }
+  nextManifest[manifestKey] = { file: targetPath, hash }
+  return needsWrite
 }
 
 async function fileExists(target: string): Promise<boolean> {
@@ -709,7 +613,6 @@ export async function runGenerateTypesCli(argv = process.argv.slice(2)): Promise
       rootDir: parsed.rootDir,
       include: parsed.include,
       outDir: parsed.outDir,
-      typesRoot: parsed.typesRoot,
       stableNamespace: parsed.stableNamespace,
     })
     reportCliResult(result)
@@ -724,7 +627,6 @@ export interface ParsedCliArgs {
   rootDir: string
   include?: string[]
   outDir?: string
-  typesRoot?: string
   stableNamespace?: string
   help?: boolean
 }
@@ -733,13 +635,12 @@ function parseCliArgs(argv: string[]): ParsedCliArgs {
   let rootDir = process.cwd()
   const include: string[] = []
   let outDir: string | undefined
-  let typesRoot: string | undefined
   let stableNamespace: string | undefined
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
     if (arg === '--help' || arg === '-h') {
-      return { rootDir, include, outDir, typesRoot, stableNamespace, help: true }
+      return { rootDir, include, outDir, stableNamespace, help: true }
     }
     if (arg === '--root' || arg === '-r') {
       const value = argv[++i]
@@ -765,14 +666,6 @@ function parseCliArgs(argv: string[]): ParsedCliArgs {
       outDir = value
       continue
     }
-    if (arg === '--types-root') {
-      const value = argv[++i]
-      if (!value) {
-        throw new Error('Missing value for --types-root')
-      }
-      typesRoot = value
-      continue
-    }
     if (arg === '--stable-namespace') {
       const value = argv[++i]
       if (!value) {
@@ -787,7 +680,7 @@ function parseCliArgs(argv: string[]): ParsedCliArgs {
     include.push(arg)
   }
 
-  return { rootDir, include, outDir, typesRoot, stableNamespace }
+  return { rootDir, include, outDir, stableNamespace }
 }
 
 function printHelp(): void {
@@ -796,24 +689,21 @@ function printHelp(): void {
 Options:
   -r, --root <path>              Project root directory (default: cwd)
   -i, --include <path>           Additional directories/files to scan (repeatable)
-      --out-dir <path>           Output directory for generated declarations
-      --types-root <path>        Directory for generated @types entrypoint
+      --out-dir <path>           Directory to store selector module manifest cache
       --stable-namespace <name>  Stable namespace prefix for generated selector maps
   -h, --help                     Show this help message
 `)
 }
 
 function reportCliResult(result: GenerateTypesResult): void {
-  if (result.written === 0 && result.removed === 0) {
-    console.log(
-      '[knighted-css] No changes to ?knighted-css&types declarations (cache is up to date).',
-    )
+  if (result.selectorModulesWritten === 0 && result.selectorModulesRemoved === 0) {
+    console.log('[knighted-css] Selector modules are up to date.')
   } else {
     console.log(
-      `[knighted-css] Updated ${result.written} declaration(s), removed ${result.removed}, output in ${result.outDir}.`,
+      `[knighted-css] Selector modules updated: wrote ${result.selectorModulesWritten}, removed ${result.selectorModulesRemoved}.`,
     )
   }
-  console.log(`[knighted-css] Type references: ${result.typesIndexPath}`)
+  console.log(`[knighted-css] Manifest: ${result.manifestPath}`)
   for (const warning of result.warnings) {
     console.warn(`[knighted-css] ${warning}`)
   }
@@ -832,17 +722,12 @@ function setImportMetaUrlProvider(provider?: () => string | undefined): void {
 }
 
 export const __generateTypesInternals = {
-  writeTypesIndex,
   stripInlineLoader,
   splitResourceAndQuery,
+  extractSelectorSourceSpecifier,
   findSpecifierImports,
   resolveImportPath,
   resolvePackageRoot,
-  buildDeclarationFileName,
-  formatModuleDeclaration,
-  formatSelectorType,
-  buildDeclarationModuleSpecifier,
-  buildCanonicalQuery,
   relativeToRoot,
   collectCandidateFiles,
   normalizeIncludeOptions,
@@ -858,4 +743,11 @@ export const __generateTypesInternals = {
   parseCliArgs,
   printHelp,
   reportCliResult,
+  buildSelectorModuleManifestKey,
+  buildSelectorModulePath,
+  formatSelectorModuleSource,
+  ensureSelectorModule,
+  removeStaleSelectorModules,
+  readManifest,
+  writeManifest,
 }
