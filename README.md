@@ -204,7 +204,7 @@ CSS Modules hash class names after the loader extracts selectors, so the stylesh
 
 Run `npx knighted-css-generate-types --root .` to scan your project for `?knighted-css&types` imports. The CLI:
 
-- extracts selectors via the loader, then writes literal module declarations into `node_modules/@knighted/css/node_modules/.knighted-css`
+- extracts selectors via the loader, then writes literal module declarations whose specifiers resolve to the real stylesheet paths (TypeScript picks up `import './foo.scss?knighted-css&types'` directly—no registries or casting helpers required). The default output still lands in `node_modules/@knighted/css/node_modules/.knighted-css`, but every module declaration points back to your source tree.
 - updates the packaged stub at `node_modules/@knighted/css/types-stub/index.d.ts`
 - exposes the declarations automatically because `types.d.ts` references the stub, so no `tsconfig` wiring is required
 
@@ -316,7 +316,7 @@ or wire it into `package.json` for local workflows:
 }
 ```
 
-The CLI scans every file you include (by default the project root, skipping `node_modules`, `dist`, etc.), finds imports containing `?knighted-css&types`, reuses the loader to extract CSS, and writes deterministic `.d.ts` files into `node_modules/.knighted-css/knt-*.d.ts`. It also maintains `node_modules/@knighted/css/types-stub/index.d.ts`, so TypeScript picks up the generated declarations automatically—no extra `typeRoots` configuration is required.
+The CLI scans every file you include (by default the project root, skipping `node_modules`, `dist`, etc.), finds imports containing `?knighted-css&types`, reuses the loader to extract CSS, and writes deterministic `.d.ts` files into `node_modules/.knighted-css/knt-*.d.ts`. Each declaration uses a specifier that resolves back to the original stylesheet path, so TypeScript sees the literal `import './foo.scss?knighted-css&types'` as soon as the CLI runs. It also maintains `node_modules/@knighted/css/types-stub/index.d.ts`, so TypeScript picks up the generated declarations automatically—no extra `typeRoots` or registry scripts are required.
 
 Key flags:
 

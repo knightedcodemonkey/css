@@ -121,7 +121,7 @@ test('generateTypes resolves tsconfig baseUrl specifiers', async () => {
       string,
       unknown
     >
-    assert.ok(manifest['styles/demo.css?knighted-css&types'])
+    assert.ok(manifest['../src/styles/demo.css?knighted-css&types'])
   } finally {
     await project.cleanup()
   }
@@ -354,6 +354,8 @@ test('generateTypes internals format selector-aware declarations', async () => {
     buildDeclarationFileName,
     formatSelectorType,
     formatModuleDeclaration,
+    buildDeclarationModuleSpecifier,
+    buildCanonicalQuery,
     writeTypesIndex,
     normalizeIncludeOptions,
     collectCandidateFiles,
@@ -410,6 +412,18 @@ test('generateTypes internals format selector-aware declarations', async () => {
     selectorMap,
   )
   assert.doesNotMatch(withoutDefault, /export default/)
+
+  const canonicalSpecifier = buildDeclarationModuleSpecifier(
+    path.join('/tmp/project', 'src', 'styles', 'demo.css'),
+    path.join('/tmp/project', '.knighted-css'),
+    '?types&knighted-css&foo=1',
+  )
+  assert.equal(canonicalSpecifier, '../src/styles/demo.css?knighted-css&types&foo=1')
+
+  assert.equal(
+    buildCanonicalQuery('?knighted-css&combined&no-default&types&foo=1'),
+    '?knighted-css&combined&no-default&types&foo=1',
+  )
 
   const normalized = normalizeIncludeOptions(undefined, '/tmp/demo')
   assert.deepEqual(normalized, ['/tmp/demo'])
