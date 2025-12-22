@@ -75,3 +75,27 @@ test('vanilla-extract sprinkles compose utility classes', async ({ page }) => {
   expect(metrics.gap).not.toBe('0px')
   expect(metrics.letterSpacing).not.toBe('')
 })
+
+test.describe('ssr inline preview', () => {
+  test.use({ javaScriptEnabled: false })
+
+  test('renders inlined knighted-css output without hydration', async ({ page }) => {
+    await page.goto('/dist/ssr-inline.html', { waitUntil: 'domcontentloaded' })
+
+    const ssrRoot = page.getByTestId('ssr-inline-root')
+    await expect(ssrRoot).toBeVisible()
+
+    const inlineStyle = page.locator('style[data-ssr-inline]')
+    await expect(inlineStyle).toHaveCount(1)
+    const inlineCss = await inlineStyle
+      .first()
+      .evaluate(node => (node.textContent ?? '').trim())
+    expect(inlineCss).toContain('.ssr-inline-card__title')
+
+    const headingColor = await page
+      .locator('.ssr-inline-card__title')
+      .evaluate(node => getComputedStyle(node as HTMLElement).color)
+
+    expect(headingColor).toBe('rgb(76, 29, 149)')
+  })
+})

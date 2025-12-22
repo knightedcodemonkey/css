@@ -1,11 +1,10 @@
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import type { CssResolver } from '../../src/css.js'
 
-const fixturesRoot = path.resolve(
-  path.dirname(new URL(import.meta.url).pathname),
-  '../fixtures/resolvers',
-)
+const helperDir = fileURLToPath(new URL('.', import.meta.url))
+const fixturesRoot = path.resolve(helperDir, '../fixtures/resolvers')
 
 type FixtureName = 'rspack' | 'vite' | 'webpack'
 
