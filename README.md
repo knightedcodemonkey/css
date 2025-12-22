@@ -200,15 +200,25 @@ CSS Modules hash class names after the loader extracts selectors, so the stylesh
 <div className={`${styles['css-modules-badge']} css-modules-badge`}>
 ```
 
-### Stable selector type generation
+### Stable selector modules (`*.knighted-css.ts`)
 
-Run `npx knighted-css-generate-types --root .` to scan your project for `?knighted-css&types` imports. The CLI:
+Import the generated selector module anywhere you want literal tokens:
 
-- extracts selectors via the loader, then writes literal module declarations whose specifiers resolve to the real stylesheet paths (TypeScript picks up `import './foo.scss?knighted-css&types'` directly—no registries or casting helpers required). The default output still lands in `node_modules/@knighted/css/node_modules/.knighted-css`, but every module declaration points back to your source tree.
-- updates the packaged stub at `node_modules/@knighted/css/types-stub/index.d.ts`
-- exposes the declarations automatically because `types.d.ts` references the stub, so no `tsconfig` wiring is required
+```ts
+import { stableSelectors } from './styles.css.knighted-css.js'
 
-Re-run the command whenever imports change (add it to a `types:css` npm script or your build). If you need a different destination, pass `--out-dir` and/or `--types-root` to override the defaults.
+stableSelectors.demo // "knighted-demo"
+type StableSelectors = typeof stableSelectors
+```
+
+Run `npx knighted-css-generate-types --root .` to scan for `.knighted-css` specifiers and keep those modules current. The CLI:
+
+- extracts selectors via the loader, applies your `stableNamespace`, and sorts the tokens deterministically
+- writes sibling `*.knighted-css.ts` files next to each stylesheet so editors resolve them immediately
+- records everything inside `<root>/.knighted-css/selector-modules.json` (or your custom `--out-dir`) and removes stale modules when imports disappear
+- warns whenever a specifier cannot be resolved or escapes the configured project root
+
+Because these are regular modules—not `.d.ts` shims—you can import the default export or the named `stableSelectors`, and helper types (`KnightedCssStableSelectors`, `KnightedCssStableSelectorToken`) ship alongside the literal map. Pass `--stable-namespace` so the CLI and loader agree on prefixes, and use `--include` / `--out-dir` to expand the scan or relocate the manifest cache (the selector modules themselves always live beside the source stylesheet). Re-run the command whenever you touch `.knighted-css` imports (wire it into a `knighted:types` script or a watch task).
 
 Sass/Less projects can import the shared mixins directly:
 
@@ -252,7 +262,7 @@ Override the namespace via `:root { --knighted-stable-namespace: 'acme'; }` if y
 
 #### Type-safe selector maps (`?knighted-css&types`)
 
-Append `&types` to any loader import to receive a literal map of the discovered stable selectors alongside the raw CSS:
+Use `?knighted-css&types` when you need the `stableSelectors` map at runtime (Lit styles, SSR, tests, etc.). TypeScript already sees the literal tokens via the generated `.knighted-css` modules, but the loader surfaces the same data for application code:
 
 ```ts
 import { knightedCss, stableSelectors } from './styles.css?knighted-css&types'
@@ -274,7 +284,7 @@ const { knightedCss } = combined as KnightedCssCombinedModule<
 stableSelectors.demo // "knighted-demo"
 ```
 
-Namespaces default to `knighted`, but you can configure a global fallback via the loader’s `stableNamespace` option:
+Namespaces default to `knighted`, but you can configure a global fallback via the loader’s `stableNamespace` option (match it with the CLI’s `--stable-namespace` flag so runtime + generated modules agree):
 
 ```js
 {
@@ -289,24 +299,20 @@ All imports share the namespace resolved by the loader (or the `knighted-css-gen
 
 #### TypeScript support for loader queries
 
-Loader query types ship directly with `@knighted/css`. Reference them once in your project—either by adding `"types": ["@knighted/css/loader-queries"]` to `tsconfig.json` or dropping `/// <reference types="@knighted/css/loader-queries" />` into a global `.d.ts`—and the following ambient modules become available everywhere:
+Loader query types still ship directly with `@knighted/css`. Reference them once in your project—either by adding `"types": ["@knighted/css/loader-queries"]` to `tsconfig.json` or dropping `/// <reference types="@knighted/css/loader-queries" />` into a global `.d.ts`—and the following ambient modules become available everywhere:
 
 - `*?knighted-css` imports expose a `knightedCss: string` export.
 - `*?knighted-css&types` exposes both `knightedCss` and `stableSelectors`, the readonly selector map.
 - `*?knighted-css&combined` (plus `&named-only` / `&no-default`) mirror the source module exports while adding `knightedCss`, which you can narrow with `KnightedCssCombinedModule` before destructuring named members.
 - `*?knighted-css&combined&types` variants add the same `stableSelectors` map on top of the combined behavior so a single import can surface everything.
 
-No vendor copies are necessary—the declarations live inside `@knighted/css`, you just need to point your TypeScript config at the shipped `loader-queries` subpath once.
+No vendor copies are necessary—the declarations live inside `@knighted/css`, you just need to point your TypeScript config at the shipped `loader-queries` subpath once. Use them for runtime loader imports and lean on the `.knighted-css` modules for editor-time selector literals.
 
-#### Generate literal selector types
+#### Keeping selector modules up to date
 
-The runtime `stableSelectors` export is always a literal `as const` map, but TypeScript can only see those exact tokens if your project emits matching `.d.ts` files. Run the bundled CLI whenever you change a module that imports `?knighted-css&types` (or any `&combined&types` variants):
+The CLI walks every file you include (defaults to the project root, skipping `node_modules`, `dist`, etc.), finds specifiers ending in `.knighted-css`, reuses the loader to extract CSS, and writes deterministic `*.knighted-css.ts` siblings next to the real stylesheets. Each module exports the literal selector map plus helper types, and the manifest stored in `<root>/.knighted-css/selector-modules.json` keeps the cache tidy by removing stale files. Because the generator writes actual TypeScript modules, editors pick them up immediately through normal resolution—no registries or `typeRoots` wiring required.
 
-```bash
-npx knighted-css-generate-types --root .
-```
-
-or wire it into `package.json` for local workflows:
+Wire the CLI into `package.json` so local workflows stay fresh:
 
 ```json
 {
@@ -316,17 +322,14 @@ or wire it into `package.json` for local workflows:
 }
 ```
 
-The CLI scans every file you include (by default the project root, skipping `node_modules`, `dist`, etc.), finds imports containing `?knighted-css&types`, reuses the loader to extract CSS, and writes deterministic `.d.ts` files into `node_modules/.knighted-css/knt-*.d.ts`. Each declaration uses a specifier that resolves back to the original stylesheet path, so TypeScript sees the literal `import './foo.scss?knighted-css&types'` as soon as the CLI runs. It also maintains `node_modules/@knighted/css/types-stub/index.d.ts`, so TypeScript picks up the generated declarations automatically—no extra `typeRoots` or registry scripts are required.
-
 Key flags:
 
 - `--root` / `-r` – project root (defaults to `process.cwd()`).
 - `--include` / `-i` – additional directories or files to scan (repeatable).
-- `--out-dir` – custom output folder for the generated `knt-*` declarations.
-- `--types-root` – override the `@types` directory used for the aggregator.
-- `--stable-namespace` – namespace prefix for the generated selector map.
+- `--out-dir` – directory for the selector module manifest cache (defaults to `<root>/.knighted-css`).
+- `--stable-namespace` – namespace prefix shared by the generated selector maps and loader runtime.
 
-Re-run the CLI (or add it to a pre-build hook) whenever selectors change so new tokens land in the literal declaration files.
+Re-run the CLI (or hook it into a watcher) whenever you touch `.knighted-css` imports so new tokens land in the literal selector modules.
 
 #### Combined module + CSS import
 
