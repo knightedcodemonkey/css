@@ -60,7 +60,7 @@ import { knightedCss, stableSelectors } from './card.js?knighted-css&types'
 > [!NOTE]
 > TypeScript does not infer the stable selector literal types from this import; use the generated `.knighted-css.*` modules described in [docs/type-generation.md](./type-generation.md) for compile-time safety. The runtime map is helpful for tests, telemetry, or non-TypeScript environments.
 
-#### vanilla-extract loader guidance
+### vanilla-extract loader guidance
 
 vanilla-extract files (`*.css.ts`) compile down to CommonJS by default. That works out of the box for the loader—both `?knighted-css` and `?knighted-css&combined` queries emit `module.exports` artifacts plus the injected `knightedCss` string. Most bundlers happily consume that shape. When you _also_ need the compiled module to behave like a native ESM module (e.g., your bundler expects `export` statements so it can treeshake or when you import via extension aliases), enable the loader’s opt-in transform:
 
