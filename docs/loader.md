@@ -40,14 +40,28 @@ Need the component exports **and** the compiled CSS from a single import? Use `?
 
 ```ts
 import type { KnightedCssCombinedModule } from '@knighted/css/loader'
-import buttonModule from './button.js?knighted-css&combined'
+import { asKnightedCssCombinedModule } from '@knighted/css/loader-helpers'
+import * as buttonModule from './button.js?knighted-css&combined'
 
-const { default: Button, knightedCss } = buttonModule as KnightedCssCombinedModule<
-  typeof import('./button.js')
->
+const { default: Button, knightedCss } =
+  asKnightedCssCombinedModule<typeof import('./button.js')>(buttonModule)
+
+// Need to describe additional loader-injected exports (for example, `stableSelectors` when
+// using `?knighted-css&combined&types`)? Pass a second generic:
+const {
+  default: ButtonWithSelectors,
+  knightedCss: buttonCss,
+  stableSelectors,
+} = asKnightedCssCombinedModule<
+  typeof import('./button.js'),
+  { stableSelectors: Record<string, string> }
+>(buttonModule)
 ```
 
 Append `&named-only` (alias: `&no-default`) if you never consume the default export. Refer to [docs/combined-queries.md](./combined-queries.md) for the full matrix of query flags and destructuring patterns.
+
+> [!TIP]
+> `@knighted/css/loader-helpers` ships the `asKnightedCssCombinedModule` helper in isolation so you can safely import it from browser bundles. This keeps the heavy loader implementation (and its Node dependencies) out of client builds.
 
 ### Runtime selectors (`&types`)
 

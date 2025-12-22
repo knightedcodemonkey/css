@@ -7,21 +7,22 @@ export interface StableSelectorsLiteralResult {
   selectorMap: Map<string, string>
 }
 
+type StableSelectorsLiteralTarget = 'ts' | 'js'
+
 export function buildStableSelectorsLiteral(options: {
   css: string
   namespace: string
   resourcePath: string
   emitWarning: (message: string) => void
+  target?: StableSelectorsLiteralTarget
 }): StableSelectorsLiteralResult {
+  const target: StableSelectorsLiteralTarget = options.target ?? 'ts'
   const trimmedNamespace = options.namespace.trim()
   if (!trimmedNamespace) {
     options.emitWarning(
       `stableSelectors requested for ${options.resourcePath} but "stableNamespace" resolved to an empty value.`,
     )
-    return {
-      literal: 'export const stableSelectors = {} as const;\n',
-      selectorMap: new Map<string, string>(),
-    }
+    return finalizeLiteral(new Map<string, string>(), target)
   }
 
   const selectorMap = collectStableSelectors(
@@ -34,9 +35,17 @@ export function buildStableSelectorsLiteral(options: {
       `stableSelectors requested for ${options.resourcePath} but no selectors matched namespace "${trimmedNamespace}".`,
     )
   }
+  return finalizeLiteral(selectorMap, target)
+}
 
+function finalizeLiteral(
+  selectorMap: Map<string, string>,
+  target: StableSelectorsLiteralTarget,
+): StableSelectorsLiteralResult {
+  const formatted = formatStableSelectorMap(selectorMap)
+  const suffix = target === 'ts' ? ' as const' : ''
   return {
-    literal: `export const stableSelectors = ${formatStableSelectorMap(selectorMap)} as const;\n`,
+    literal: `export const stableSelectors = ${formatted}${suffix};\n`,
     selectorMap,
   }
 }

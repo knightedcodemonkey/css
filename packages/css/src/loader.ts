@@ -18,9 +18,15 @@ import {
 import { buildStableSelectorsLiteral } from './stableSelectorsLiteral.js'
 import { resolveStableNamespace } from './stableNamespace.js'
 
-export type KnightedCssCombinedModule<TModule> = TModule & {
-  knightedCss: string
-}
+type KnightedCssCombinedExtras = Readonly<Record<string, unknown>>
+
+export type KnightedCssCombinedModule<
+  TModule,
+  TExtras extends KnightedCssCombinedExtras = Record<never, never>,
+> = TModule &
+  TExtras & {
+    knightedCss: string
+  }
 
 export interface KnightedCssVanillaOptions {
   transformToEsm?: boolean
@@ -50,6 +56,7 @@ const loader: LoaderDefinitionFunction<KnightedCssLoaderOptions> = async functio
         namespace: resolvedNamespace,
         resourcePath: this.resourcePath,
         emitWarning: message => emitKnightedWarning(this, message),
+        target: 'js',
       })
     : undefined
   const injection = buildInjection(css, {
@@ -131,6 +138,7 @@ export const pitch: PitchLoaderDefinitionFunction<KnightedCssLoaderOptions> =
               namespace: resolvedNamespace,
               resourcePath: this.resourcePath,
               emitWarning: message => emitKnightedWarning(this, message),
+              target: 'js',
             })
           : undefined
         return createCombinedModule(request, css, {

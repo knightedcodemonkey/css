@@ -10,6 +10,9 @@
       "loader": [
         "./dist/loader.d.ts"
       ],
+      "loader-helpers": [
+        "./dist/loader-helpers.d.ts"
+      ],
       "loader-queries": [
         "./loader-queries.d.ts"
       ],
@@ -31,6 +34,11 @@
       "types": "./dist/loader.d.ts",
       "import": "./dist/loader.js",
       "require": "./dist/cjs/loader.cjs"
+    },
+    "./loader-helpers": {
+      "types": "./dist/loader-helpers.d.ts",
+      "import": "./dist/loader-helpers.js",
+      "require": "./dist/cjs/loader-helpers.cjs"
     },
     "./loader-queries": {
       "types": "./loader-queries.d.ts",

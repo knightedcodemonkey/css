@@ -10,5 +10,5 @@
     "jsx": "react-jsx",
     "types": ["@knighted/css/loader-queries"]
   },
-  "include": ["src"]
+  "include": ["src", "test"]
 }

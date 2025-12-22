@@ -11,6 +11,9 @@ const dialectCases = [
   { id: 'dialect-vanilla-stable', property: 'color' },
   { id: 'dialect-css-modules', property: 'color' },
   { id: 'dialect-vanilla', property: 'color' },
+  { id: 'dialect-combined', property: 'background-image' },
+  { id: 'dialect-combined-types', property: 'border-color' },
+  { id: 'dialect-named-only', property: 'background-image' },
 ]
 
 test.describe('Lit + React wrapper demo', () => {
@@ -117,6 +120,69 @@ test.describe('Lit + React wrapper demo', () => {
 
     expect(metrics.background).toContain('linear-gradient')
     expect(metrics.chipCase).toBe('uppercase')
+  })
+
+  test('combined import surfaces default + named exports', async ({ page }) => {
+    const card = page.getByTestId('dialect-combined')
+    await expect(card).toBeVisible()
+    const metrics = await card.evaluate(node => {
+      const el = node as HTMLElement
+      const entry = el.querySelector(
+        '[data-testid="combined-card-entry"]',
+      ) as HTMLElement | null
+      const details = el.querySelector(
+        '[data-testid="combined-card-details"]',
+      ) as HTMLElement | null
+      const style = getComputedStyle(el)
+      return {
+        entryText: entry?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+        detailsText: details?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+        background: style.getPropertyValue('background-image').trim(),
+      }
+    })
+
+    expect(metrics.entryText).toContain('Shared demo entry')
+    expect(metrics.detailsText).toContain('?knighted-css&combined')
+    expect(metrics.background).toContain('linear-gradient')
+  })
+
+  test('combined & types import keeps runtime selectors synced', async ({ page }) => {
+    const card = page.getByTestId('dialect-combined-types')
+    await expect(card).toBeVisible()
+    const metrics = await card.evaluate(node => {
+      const el = node as HTMLElement
+      const runtimeShell = el.getAttribute('data-runtime-shell') ?? ''
+      const runtimeCopy = el.getAttribute('data-runtime-copy') ?? ''
+      const copy = el.querySelector('.combined-types-card__copy') as HTMLElement | null
+      const footer = el.querySelector('footer') as HTMLElement | null
+      const shellClasses = el.className.split(' ').filter(Boolean)
+      const copyClasses = copy?.className.split(' ').filter(Boolean) ?? []
+      const footerText = footer?.textContent?.replace(/\s+/g, ' ').trim() ?? ''
+      return {
+        runtimeShell,
+        runtimeCopy,
+        shellClasses,
+        copyClasses,
+        footerText,
+      }
+    })
+
+    expect(metrics.runtimeShell).not.toBe('')
+    expect(metrics.runtimeCopy).not.toBe('')
+    expect(metrics.shellClasses).toContain(metrics.runtimeShell)
+    expect(metrics.copyClasses).toContain(metrics.runtimeCopy)
+    expect(metrics.footerText).toContain(metrics.runtimeShell)
+  })
+
+  test('named-only combined import disables the synthetic default', async ({ page }) => {
+    const card = page.getByTestId('dialect-named-only')
+    await expect(card).toBeVisible()
+
+    const hasDefaultAttr = await card.getAttribute('data-has-default')
+    expect(hasDefaultAttr).toBe('false')
+
+    const flagText = await card.getByTestId('named-only-default-flag').textContent()
+    expect(flagText?.replace(/\s+/g, ' ').trim()).toContain('no')
   })
 
   test('vanilla-extract stable selectors expose deterministic hooks', async ({

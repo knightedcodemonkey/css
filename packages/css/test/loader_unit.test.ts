@@ -174,7 +174,7 @@ test('loader emits stableSelectors export when ?types flag is present', async ()
   assert.match(output, /export const stableSelectors = /)
   assert.match(
     output,
-    /export const stableSelectors = Object\.freeze\(\{\s*"demo": "knighted-demo",\s*"icon": "knighted-icon"\s*\}\) as const;/,
+    /export const stableSelectors = Object\.freeze\(\{\s*"demo": "knighted-demo",\s*"icon": "knighted-icon"\s*\}\);/,
     'should emit map of detected selectors using default namespace',
   )
 })
@@ -195,7 +195,7 @@ test('loader respects stableNamespace loader option', async () => {
 
   assert.match(
     output,
-    /export const stableSelectors = Object\.freeze\(\{\s*"card": "acme-card"\s*\}\) as const;/,
+    /export const stableSelectors = Object\.freeze\(\{\s*"card": "acme-card"\s*\}\);/,
     'should scope selector discovery to provided namespace',
   )
 })
@@ -218,7 +218,7 @@ test('loader warns when stableNamespace option resolves to empty value', async (
     ),
   )
 
-  assert.match(output, /export const stableSelectors = \{\} as const;/)
+  assert.match(output, /export const stableSelectors = Object\.freeze\(\{\}\);/)
   assert.equal(warnings.length, 1)
   assert.match(
     warnings[0] ?? '',
@@ -273,7 +273,7 @@ test('pitch injects stableSelectors export when combined types query is used', a
   const combinedOutput = String(result ?? '')
   assert.match(
     combinedOutput,
-    /export const stableSelectors = Object\.freeze\(\{\s*"demo": "knighted-demo",\s*"icon": "knighted-icon"\s*\}\) as const;/,
+    /export const stableSelectors = Object\.freeze\(\{\s*"demo": "knighted-demo",\s*"icon": "knighted-icon"\s*\}\);/,
     'combined proxy should forward stable selector map',
   )
 })

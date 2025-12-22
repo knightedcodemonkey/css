@@ -19,6 +19,21 @@ import {
   VANILLA_STABLE_TEST_ID,
 } from './cards/vanilla-stable-card/vanilla-stable-card.js'
 import { knightedCss as vanillaStableCss } from './cards/vanilla-stable-card/vanilla-stable-card.js?knighted-css'
+import {
+  CombinedCard,
+  COMBINED_CARD_TEST_ID,
+  combinedCardCss,
+} from './cards/combined-card/combined-card.js'
+import {
+  CombinedTypesCard,
+  COMBINED_TYPES_TEST_ID,
+  combinedTypesCardCss,
+} from './cards/combined-types-card/combined-types-card.js'
+import {
+  NamedOnlyCard,
+  NAMED_ONLY_TEST_ID,
+  namedOnlyCardCss,
+} from './cards/named-only-card/named-only-card.js'
 import { SassCard, SASS_TEST_ID } from './cards/sass-card/sass-card.js'
 import { knightedCss as sassCss } from './cards/sass-card/sass-card.js?knighted-css'
 import { ScssCard, SCSS_TEST_ID } from './cards/scss-card/scss-card.js'
@@ -49,6 +64,21 @@ const cards: DialectCard[] = [
     id: VANILLA_STABLE_TEST_ID,
     css: vanillaStableCss,
     Component: VanillaStableSelectorsCard,
+  },
+  {
+    id: COMBINED_CARD_TEST_ID,
+    css: combinedCardCss,
+    Component: CombinedCard,
+  },
+  {
+    id: COMBINED_TYPES_TEST_ID,
+    css: combinedTypesCardCss,
+    Component: CombinedTypesCard,
+  },
+  {
+    id: NAMED_ONLY_TEST_ID,
+    css: namedOnlyCardCss,
+    Component: NamedOnlyCard,
   },
   { id: SCSS_TEST_ID, css: scssCss, Component: ScssCard },
   { id: SASS_TEST_ID, css: sassCss, Component: SassCard },

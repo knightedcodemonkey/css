@@ -14,9 +14,24 @@ test('buildStableSelectorsLiteral warns when namespace is empty', () => {
     resourcePath: 'demo.css',
     emitWarning: message => warnings.push(message),
   })
-  assert.equal(result.literal.trim(), 'export const stableSelectors = {} as const;')
+  assert.equal(
+    result.literal.trim(),
+    'export const stableSelectors = Object.freeze({}) as const;',
+  )
   assert.equal(result.selectorMap.size, 0)
   assert.equal(warnings.length, 1)
+})
+
+test('buildStableSelectorsLiteral emits JS-friendly literal when requested', () => {
+  const result = buildStableSelectorsLiteral({
+    css: '.knighted-card {}',
+    namespace: 'knighted',
+    resourcePath: 'demo.css',
+    emitWarning: () => {},
+    target: 'js',
+  })
+  assert.match(result.literal, /export const stableSelectors = Object\.freeze/)
+  assert.ok(!result.literal.includes('as const'))
 })
 
 test('collectStableSelectors captures selectors and formats map output', () => {

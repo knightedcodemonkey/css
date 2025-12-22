@@ -5,6 +5,12 @@ This document summarizes how `?knighted-css&combined` behaves for different modu
 > [!NOTE]
 > TypeScript now reads literal selector tokens from the generated `.knighted-css.ts` modules (emitted by `knighted-css-generate-types`). Append `&types` to combined imports only when you also need `stableSelectors` at runtime—the loader still exports the map, while the double-extension modules keep your editors in sync.
 
+> [!TIP]
+> `KnightedCssCombinedModule` accepts an optional second generic parameter so you can describe loader-injected exports (for example, `{ stableSelectors: Record<string, string> }` when you append `&types`). That keeps the helper self-contained without intersecting additional types in your own code.
+
+> [!TIP]
+> Prefer importing `asKnightedCssCombinedModule` from `@knighted/css/loader-helpers` when you want a runtime helper—the file has zero Node dependencies, so both browser and Node builds stay green.
+
 ## Decision Matrix
 
 | Source module exports                          | Recommended query                                                                  | TypeScript import pattern                                   | Notes                                                                                                                      |
@@ -37,7 +43,8 @@ import type { KnightedCssCombinedModule } from '@knighted/css/loader'
 import combined from './module.js?knighted-css&combined'
 
 const { default: Component, knightedCss } = combined as KnightedCssCombinedModule<
-  typeof import('./module.js')
+  typeof import('./module.js'),
+  { stableSelectors: typeof stableSelectors }
 >
 ```
 
@@ -51,7 +58,10 @@ const {
   default: Component,
   helper,
   knightedCss,
-} = combined as KnightedCssCombinedModule<typeof import('./module.js')>
+} = combined as KnightedCssCombinedModule<
+  typeof import('./module.js'),
+  { stableSelectors: typeof stableSelectors }
+>
 ```
 
 Prefer `?knighted-css&combined&named-only` plus the [named exports only](#named-exports-only) snippet when you intentionally avoid default exports but still need the named members and `knightedCss`.
