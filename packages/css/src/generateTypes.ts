@@ -15,6 +15,9 @@ import {
   determineSelectorVariant,
   hasQueryFlag,
   TYPES_QUERY_FLAG,
+  buildSanitizedQuery,
+  COMBINED_QUERY_FLAG,
+  NAMED_ONLY_QUERY_FLAGS,
   type SelectorTypeVariant,
 } from './loaderInternals.js'
 import { buildStableSelectorsLiteral } from './stableSelectorsLiteral.js'
@@ -174,9 +177,6 @@ async function generateDeclarations(
       if (!query || !hasQueryFlag(query, TYPES_QUERY_FLAG)) {
         continue
       }
-      if (processedSpecifiers.has(cleaned)) {
-        continue
-      }
       const resolvedNamespace = resolveStableNamespace(options.stableNamespace)
       const resolvedPath = await resolveImportPath(
         resource,
@@ -214,23 +214,35 @@ async function generateDeclarations(
         selectorCache.set(cacheKey, selectorMap)
       }
 
+      const canonicalSpecifier = buildDeclarationModuleSpecifier(
+        resolvedPath,
+        options.outDir,
+        query,
+      )
+      if (processedSpecifiers.has(canonicalSpecifier)) {
+        continue
+      }
       const variant = determineSelectorVariant(query)
-      const declaration = formatModuleDeclaration(cleaned, variant, selectorMap)
+      const declaration = formatModuleDeclaration(
+        canonicalSpecifier,
+        variant,
+        selectorMap,
+      )
       const declarationHash = hashContent(declaration)
-      const fileName = buildDeclarationFileName(cleaned)
+      const fileName = buildDeclarationFileName(canonicalSpecifier)
       const targetPath = path.join(options.outDir, fileName)
-      const previousEntry = previousManifest[cleaned]
+      const previousEntry = previousManifest[canonicalSpecifier]
       const needsWrite =
         previousEntry?.hash !== declarationHash || !(await fileExists(targetPath))
       if (needsWrite) {
         await fs.writeFile(targetPath, declaration, 'utf8')
         writes += 1
       }
-      nextManifest[cleaned] = { file: fileName, hash: declarationHash }
+      nextManifest[canonicalSpecifier] = { file: fileName, hash: declarationHash }
       if (needsWrite) {
-        declarations.push({ specifier: cleaned, filePath: targetPath })
+        declarations.push({ specifier: canonicalSpecifier, filePath: targetPath })
       }
-      processedSpecifiers.add(cleaned)
+      processedSpecifiers.add(canonicalSpecifier)
     }
   }
 
@@ -434,6 +446,57 @@ function formatSelectorType(selectors: Map<string, string>): string {
   return `Readonly<{
 ${lines.join('\n')}
   }>`
+}
+
+function buildDeclarationModuleSpecifier(
+  resolvedPath: string,
+  declarationDir: string,
+  query: string,
+): string {
+  const relativePath = path.relative(declarationDir, resolvedPath)
+  const normalizedPath = normalizeRelativePath(relativePath)
+  const canonicalQuery = buildCanonicalQuery(query)
+  return `${normalizedPath}${canonicalQuery}`
+}
+
+function normalizeRelativePath(relativePath: string): string {
+  let normalized = relativePath.split(path.sep).join('/')
+  if (!normalized || normalized === '') {
+    normalized = '.'
+  }
+  if (normalized === '.') {
+    return './'
+  }
+  if (normalized.startsWith('./') || normalized.startsWith('../')) {
+    return normalized
+  }
+  if (normalized.startsWith('.')) {
+    return normalized
+  }
+  return `./${normalized}`
+}
+
+function buildCanonicalQuery(query: string): string {
+  if (!query) {
+    return ''
+  }
+  const sanitized = buildSanitizedQuery(query)
+  const extraParts = sanitized ? sanitized.slice(1).split('&').filter(Boolean) : []
+  const parts: string[] = []
+  parts.push('knighted-css')
+  if (hasQueryFlag(query, COMBINED_QUERY_FLAG)) {
+    parts.push(COMBINED_QUERY_FLAG)
+  }
+  for (const flag of NAMED_ONLY_QUERY_FLAGS) {
+    if (hasQueryFlag(query, flag)) {
+      parts.push(flag)
+    }
+  }
+  if (hasQueryFlag(query, TYPES_QUERY_FLAG)) {
+    parts.push(TYPES_QUERY_FLAG)
+  }
+  const merged = [...parts, ...extraParts]
+  return merged.length > 0 ? `?${merged.join('&')}` : ''
 }
 
 function hashContent(content: string): string {
@@ -778,6 +841,8 @@ export const __generateTypesInternals = {
   buildDeclarationFileName,
   formatModuleDeclaration,
   formatSelectorType,
+  buildDeclarationModuleSpecifier,
+  buildCanonicalQuery,
   relativeToRoot,
   collectCandidateFiles,
   normalizeIncludeOptions,
