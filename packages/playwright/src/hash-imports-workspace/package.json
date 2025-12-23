@@ -1,0 +1,9 @@
+{
+  "name": "@hash-imports/workspace-root",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

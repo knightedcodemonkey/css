@@ -205,3 +205,49 @@ import '@blocks/panel'
     await project.cleanup()
   }
 })
+
+test('collectStyleImports keeps hash-prefixed specifiers intact', async () => {
+  const project = await createProject('knighted-module-graph-imports-hash-')
+  try {
+    await project.writeFile(
+      'package.json',
+      JSON.stringify(
+        {
+          name: 'hash-imports',
+          type: 'module',
+          imports: {
+            '#ui/*': './src/ui/*',
+          },
+        },
+        null,
+        2,
+      ),
+    )
+    await project.writeFile('src/ui/button.scss', '.button { color: hotpink; }')
+    await project.writeFile(
+      'src/ui/button.js',
+      `import './button.scss'
+export const Button = () => null
+`,
+    )
+    await project.writeFile(
+      'src/entry.ts',
+      `import { Button } from '#ui/button.js'
+void Button
+`,
+    )
+
+    const styles = await collectStyleImports(project.file('src/entry.ts'), {
+      cwd: project.root,
+      styleExtensions: ['.scss'],
+      filter: () => true,
+    })
+
+    assert.deepEqual(
+      await realpathAll(styles),
+      await realpathAll([project.file('src/ui/button.scss')]),
+    )
+  } finally {
+    await project.cleanup()
+  }
+})

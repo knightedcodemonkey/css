@@ -1,0 +1,7 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./apps/hash-import-demo/tsconfig.json" },
+    { "path": "./packages/workspace-ui/tsconfig.json" }
+  ]
+}

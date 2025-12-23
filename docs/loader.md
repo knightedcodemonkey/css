@@ -34,6 +34,9 @@ export default {
 }
 ```
 
+> [!NOTE]
+> The loader shares the same auto-configured `oxc-resolver` as the standalone `css()` API, so hash-prefixed specifiers declared under `package.json#imports` (for example, `#ui/button`) resolve without additional options.
+
 ### Combined imports
 
 Need the component exports **and** the compiled CSS from a single import? Use `?knighted-css&combined` and narrow the result with `KnightedCssCombinedModule` to keep TypeScript happy:
