@@ -266,7 +266,10 @@ function normalizeSpecifier(raw: string): string {
   if (!trimmed || trimmed.startsWith('\0')) {
     return ''
   }
-  const queryIndex = trimmed.search(/[?#]/)
+  const querySearchOffset = trimmed.startsWith('#') ? 1 : 0
+  const remainder = trimmed.slice(querySearchOffset)
+  const queryMatchIndex = remainder.search(/[?#]/)
+  const queryIndex = queryMatchIndex === -1 ? -1 : querySearchOffset + queryMatchIndex
   const withoutQuery = queryIndex === -1 ? trimmed : trimmed.slice(0, queryIndex)
   if (!withoutQuery) {
     return ''
@@ -394,9 +397,7 @@ function createResolverFactory(
     options.extensionAlias = extensionAlias
   }
   const tsconfigOption = resolveResolverTsconfig(graphOptions?.tsConfig, cwd)
-  if (tsconfigOption) {
-    options.tsconfig = tsconfigOption
-  }
+  options.tsconfig = tsconfigOption ?? 'auto'
   return new ResolverFactory(options)
 }
 

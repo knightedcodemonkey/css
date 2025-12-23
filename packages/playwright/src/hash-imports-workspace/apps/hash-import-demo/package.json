@@ -1,0 +1,8 @@
+{
+  "name": "@hash-imports/demo",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#workspace/ui/*": "./src/workspace-bridge/*"
+  }
+}
