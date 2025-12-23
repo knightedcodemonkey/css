@@ -175,6 +175,9 @@ The built-in walker already leans on [`oxc-resolver`](https://github.com/oxc-pro
 > [!TIP]
 > Hash-prefixed specifiers defined in `package.json#imports` resolve automatically—no extra loader or `css()` options required. Reach for a custom resolver only when you need behavior beyond what `oxc-resolver` already mirrors.
 
+> [!NOTE]
+> Sass-specific prefixes such as `pkg:#button` live outside Node’s resolver and still need a shim. See [docs/sass-import-aliases.md](./docs/sass-import-aliases.md) for a drop-in helper that strips those markers before `@knighted/css` walks the graph.
+
 ```ts
 import { ResolverFactory } from 'enhanced-resolve'
 import { css } from '@knighted/css'
