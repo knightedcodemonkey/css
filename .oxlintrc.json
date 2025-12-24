@@ -86,19 +86,6 @@
       "rules": {
         "unicorn/filename-case": "off"
       }
-    },
-    {
-      "files": [
-        "packages/css/test/css-walker.test.ts",
-        "packages/css/test/loader-helpers-runtime.test.ts",
-        "packages/css/test/loader-queries.types.ts",
-        "packages/css/test/loader_rspack.test.ts",
-        "packages/css/test/loader_unit.test.ts",
-        "packages/css/test/stable-mixins.test.ts"
-      ],
-      "rules": {
-        "unicorn/filename-case": "off"
-      }
     }
   ]
 }
