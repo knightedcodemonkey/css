@@ -8,11 +8,96 @@
   "globals": {
     "process": "readonly"
   },
+  "rules": {
+    "unicorn/filename-case": [
+      "error",
+      {
+        "cases": {
+          "camelCase": true,
+          "kebabCase": true,
+          "pascalCase": true
+        }
+      }
+    ]
+  },
   "overrides": [
     {
       "files": ["**/packages/css/types.d.ts"],
       "rules": {
         "@typescript-eslint/triple-slash-reference": "off"
+      }
+    },
+    {
+      "files": ["packages/css/src/**/*.{ts,tsx,js,jsx}", "packages/css/src/**/*.d.ts"],
+      "rules": {
+        "unicorn/filename-case": [
+          "error",
+          {
+            "cases": { "camelCase": true }
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/css/scripts/**/*.js"],
+      "rules": {
+        "unicorn/filename-case": [
+          "error",
+          {
+            "cases": { "kebabCase": true }
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/css/test/**/*.ts"],
+      "rules": {
+        "unicorn/filename-case": [
+          "error",
+          {
+            "cases": { "camelCase": true }
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/css/dist/**",
+        "packages/css/types-stub/**",
+        "packages/css/stable/**",
+        "packages/css/coverage/**"
+      ],
+      "rules": {
+        "unicorn/filename-case": "off"
+      }
+    },
+    {
+      "files": ["packages/css/src/loader-helpers.ts", "packages/css/src/types-stub/**"],
+      "rules": {
+        "unicorn/filename-case": "off"
+      }
+    },
+    {
+      "files": [
+        "packages/css/test/__snapshots__/**",
+        "packages/css/test/fixtures/**",
+        "packages/css/test/helpers/**"
+      ],
+      "rules": {
+        "unicorn/filename-case": "off"
+      }
+    },
+    {
+      "files": [
+        "packages/css/test/css-walker.test.ts",
+        "packages/css/test/loader-helpers-runtime.test.ts",
+        "packages/css/test/loader-queries.types.ts",
+        "packages/css/test/loader_rspack.test.ts",
+        "packages/css/test/loader_unit.test.ts",
+        "packages/css/test/stable-mixins.test.ts"
+      ],
+      "rules": {
+        "unicorn/filename-case": "off"
       }
     }
   ]
