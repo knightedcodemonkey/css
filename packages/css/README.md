@@ -112,9 +112,8 @@ Refer to [docs/type-generation.md](../../docs/type-generation.md) for CLI option
 Need the module exports, `knightedCss`, and a runtime `stableSelectors` map from one import? Use `?knighted-css&combined&types` (plus optional `&named-only`). Example:
 
 ```ts
-import type { KnightedCssCombinedModule } from '@knighted/css/loader'
 import { asKnightedCssCombinedModule } from '@knighted/css/loader-helpers'
-import type { ButtonStableSelectors } from './button.css.knighted-css.js'
+import type { KnightedCssStableSelectors as ButtonStableSelectors } from './button.css.knighted-css.js'
 import * as buttonModule from './button.js?knighted-css&combined&types'
 
 const {

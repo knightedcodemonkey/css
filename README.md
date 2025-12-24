@@ -17,10 +17,10 @@ See the [docs/](./docs) directory for deep dives on loaders, type generation, sp
 
 ## Workspaces in this repo
 
-| Workspace             | NPM Name                                                       | What it contains                                                                                                                                                                          |
-| --------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/css`        | [`@knighted/css`](https://www.npmjs.com/package/@knighted/css) | The production library: graph walker, compilation pipeline, loader helpers, CLI, and docs. Published to npm and meant for real builds.                                                    |
-| `packages/playwright` | `@knighted/css-playwright-fixture`                             | The end-to-end demo + regression suite. Playwright drives Lit + React examples, hash-import workspace scenarios, and SSR checks to ensure the core package keeps working across bundlers. |
+| Workspace             | NPM Name                                                              | What it contains                                                                                                                                                                          |
+| --------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/css`        | [`@knighted/css`](./packages/css/README.md)                           | The production library: graph walker, compilation pipeline, loader helpers, CLI, and docs. Published to npm and meant for real builds.                                                    |
+| `packages/playwright` | [`@knighted/css-playwright-fixture`](./packages/playwright/README.md) | The end-to-end demo + regression suite. Playwright drives Lit + React examples, hash-import workspace scenarios, and SSR checks to ensure the core package keeps working across bundlers. |
 
 Each workspace is a standalone npm project. Run commands from the repo root with `npm run <script> -w <workspace>` or `npm run <script> --workspaces` to fan out when needed.
 
@@ -39,7 +39,7 @@ console.log(sheet) // use during SSR, static builds, or to inline Shadow DOM sty
 
 - Need runtime imports? See [docs/loader.md](./docs/loader.md).
 - Want strong selector types? Run `npx knighted-css-generate-types` and follow [docs/type-generation.md](./docs/type-generation.md).
-- Hash-prefixed or Sass-specific specifiers? Guidance lives in [docs/hash-import-fixture.md](./docs/hash-import-fixture.md) and [docs/sass-import-aliases.md](./docs/sass-import-aliases.md).
+- Need the rundown on Node `exports`/`imports`, Sass prefixes, or custom resolver hooks? Start with [docs/resolution.md](./docs/resolution.md).
 
 ## Contributing & Support
 
