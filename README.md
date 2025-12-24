@@ -13,7 +13,7 @@
 - **Loader + CLI**: Ship CSS at runtime via `?knighted-css` loader queries or ahead of time via the `css()` API and the `knighted-css-generate-types` command.
 - **Shadow DOM + SSR ready**: Inline styles in server renders, ship them alongside web components, or keep classic DOM apps in sync—all without wiring a full bundler.
 
-See the [docs/](./docs) directory for deep dives on loaders, type generation, specificity boosts, Sass aliases, and the combined import queries.
+See the [docs/](./docs) directory for deep dives on loaders, type generation, specificity boosts, Sass aliases, the combined import queries, and the current [2026 roadmap](./docs/roadmap.md).
 
 ## Workspaces in this repo
 
