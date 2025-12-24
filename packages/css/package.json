@@ -1,6 +1,6 @@
 {
   "name": "@knighted/css",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A build-time utility that traverses JavaScript/TypeScript module dependency graphs to extract, compile, and optimize all imported CSS into a single, in-memory string.",
   "type": "module",
   "main": "./dist/css.js",
@@ -114,7 +114,8 @@
     "types.d.ts",
     "stable",
     "bin",
-    "types-stub"
+    "types-stub",
+    "README.md"
   ],
   "author": "KCM <knightedcodemonkey@gmail.com>",
   "license": "MIT",
