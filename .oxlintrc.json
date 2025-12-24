@@ -1,11 +1,19 @@
 {
   "$schema": "https://json.schemastore.org/oxlintrc",
-  "plugins": ["typescript", "unicorn", "oxc"],
+  "plugins": ["typescript", "unicorn", "oxc", "react", "node", "import", "vitest"],
   "env": {
     "es2022": true,
     "node": true
   },
   "globals": {
     "process": "readonly"
-  }
+  },
+  "overrides": [
+    {
+      "files": ["**/packages/css/types.d.ts"],
+      "rules": {
+        "@typescript-eslint/triple-slash-reference": "off"
+      }
+    }
+  ]
 }

@@ -47,14 +47,6 @@ export function hasQueryFlag(query: string | null | undefined, flag: string): bo
   return entries.some(part => isQueryFlag(part, flag))
 }
 
-function safeDecode(value: string): string {
-  try {
-    return decodeURIComponent(value)
-  } catch {
-    return value
-  }
-}
-
 export function shouldForwardDefaultExport(request: string): boolean {
   const [pathPart] = request.split('?')
   if (!pathPart) return true
