@@ -107,7 +107,6 @@ function getImportMetaUrl(): string | undefined {
   }
 }
 
-const PACKAGE_ROOT = resolvePackageRoot()
 const SELECTOR_REFERENCE = '.knighted-css'
 const SELECTOR_MODULE_SUFFIX = '.knighted-css.ts'
 
