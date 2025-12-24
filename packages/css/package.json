@@ -1,6 +1,6 @@
 {
   "name": "@knighted/css",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A build-time utility that traverses JavaScript/TypeScript module dependency graphs to extract, compile, and optimize all imported CSS into a single, in-memory string.",
   "type": "module",
   "main": "./dist/css.js",
@@ -120,7 +120,8 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/knightedcodemonkey/css.git"
+    "url": "git+https://github.com/knightedcodemonkey/css.git",
+    "directory": "packages/css"
   },
   "bugs": {
     "url": "https://github.com/knightedcodemonkey/css/issues"
