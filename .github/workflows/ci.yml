@@ -34,6 +34,8 @@ jobs:
           path: npm-debug.log
       - name: Lint
         run: npm run lint
+      - name: Check Cycles
+        run: npm run check:cycles
       - name: Test
         run: npm test
       - name: Report Coverage
