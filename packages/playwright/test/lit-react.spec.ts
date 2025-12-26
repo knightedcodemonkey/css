@@ -12,6 +12,7 @@ const dialectCases = [
   { id: 'dialect-css-modules', property: 'color' },
   { id: 'dialect-vanilla', property: 'color' },
   { id: 'dialect-combined', property: 'background-image' },
+  { id: 'dialect-nested-combined', property: 'background-image' },
   { id: 'dialect-combined-types', property: 'border-color' },
   { id: 'dialect-named-only', property: 'background-image' },
 ]
@@ -144,6 +145,32 @@ test.describe('Lit + React wrapper demo', () => {
     expect(metrics.entryText).toContain('Shared demo entry')
     expect(metrics.detailsText).toContain('?knighted-css&combined')
     expect(metrics.background).toContain('linear-gradient')
+  })
+
+  test('nested combined import works when the host lives one directory up', async ({
+    page,
+  }) => {
+    const card = page.getByTestId('dialect-nested-combined')
+    await expect(card).toBeVisible()
+    const metrics = await card.evaluate(node => {
+      const el = node as HTMLElement
+      const entry = el.querySelector(
+        '[data-testid="nested-combined-entry"]',
+      ) as HTMLElement | null
+      const details = el.querySelector(
+        '[data-testid="nested-combined-details"]',
+      ) as HTMLElement | null
+      const style = getComputedStyle(el)
+      return {
+        entryText: entry?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+        detailsText: details?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+        background: style.getPropertyValue('background-image').trim(),
+      }
+    })
+
+    expect(metrics.entryText).toContain('Nested combined example')
+    expect(metrics.detailsText).toContain('css-jsx-app')
+    expect(metrics.background).toContain('radial-gradient')
   })
 
   test('combined & types import keeps runtime selectors synced', async ({ page }) => {

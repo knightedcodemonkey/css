@@ -357,7 +357,7 @@ test('pitch preserves undecodable query fragments when sanitizing requests', asy
   )
 })
 
-test('pitch reuses rawRequest when building proxy module', async () => {
+test('pitch rewrites rawRequest relative to the resource when building proxy module', async () => {
   const resourcePath = path.resolve(__dirname, 'fixtures/dialects/basic/entry.js')
   const ctx = createMockContext({
     resourcePath,
@@ -380,9 +380,69 @@ test('pitch reuses rawRequest when building proxy module', async () => {
   const combinedOutput = String(result ?? '')
   assert.match(
     combinedOutput,
-    /import \* as __knightedModule from "\.\/aliased\/entry\.js\?chunk=demo";/,
+    /import \* as __knightedModule from "\.\/entry\.js\?chunk=demo";/,
   )
-  assert.match(combinedOutput, /export \* from "\.\/aliased\/entry\.js\?chunk=demo";/)
+  assert.match(combinedOutput, /export \* from "\.\/entry\.js\?chunk=demo";/)
+})
+
+test('pitch rewrites relative rawRequest specifiers to resource-local paths', async () => {
+  const resourcePath = path.resolve(__dirname, 'fixtures/dialects/basic/entry.js')
+  const ctx = createMockContext({
+    resourcePath,
+    context: path.dirname(resourcePath),
+    resourceQuery: '?knighted-css&combined',
+    _module: {
+      rawRequest: './components/entry.js?knighted-css&combined',
+    } as LoaderContext<KnightedCssLoaderOptions>['_module'],
+    loadModule: (_request: string, callback: LoaderCallback) => {
+      callback(null, 'export const stub = 1;')
+    },
+  })
+
+  const result = await pitch.call(
+    ctx as LoaderContext<KnightedCssLoaderOptions>,
+    `${resourcePath}?knighted-css&combined`,
+    '',
+    {},
+  )
+
+  const combinedOutput = String(result ?? '')
+  assert.match(
+    combinedOutput,
+    /import \* as __knightedModule from "\.\/entry\.js";/,
+    'should rebase proxy specifier next to the resource',
+  )
+  assert.match(combinedOutput, /export \* from "\.\/entry\.js";/)
+})
+
+test('pitch preserves inline loader prefixes while rebasing relative specifiers', async () => {
+  const resourcePath = path.resolve(__dirname, 'fixtures/dialects/basic/entry.js')
+  const ctx = createMockContext({
+    resourcePath,
+    context: path.dirname(resourcePath),
+    resourceQuery: '?knighted-css&combined&chunk=demo',
+    _module: {
+      rawRequest: 'style-loader!./components/entry.js?knighted-css&combined&chunk=demo',
+    } as LoaderContext<KnightedCssLoaderOptions>['_module'],
+    loadModule: (_request: string, callback: LoaderCallback) => {
+      callback(null, 'export const stub = 1;')
+    },
+  })
+
+  const result = await pitch.call(
+    ctx as LoaderContext<KnightedCssLoaderOptions>,
+    `${resourcePath}?knighted-css&combined&chunk=demo`,
+    '',
+    {},
+  )
+
+  const combinedOutput = String(result ?? '')
+  assert.match(
+    combinedOutput,
+    /import \* as __knightedModule from "style-loader!\.\/entry\.js\?chunk=demo";/,
+    'should retain loader prefixes but drop the duplicated folder segment',
+  )
+  assert.match(combinedOutput, /export \* from "style-loader!\.\/entry\.js\?chunk=demo";/)
 })
 
 test('combined modules skip default export for vanilla style entries', async () => {

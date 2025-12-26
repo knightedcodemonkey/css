@@ -71,6 +71,6 @@
     "*.{js,jsx,ts,tsx,mjs,cjs,cts,mts,json,md,css,scss,html}": "prettier --check"
   },
   "optionalDependencies": {
-    "@oxc-parser/binding-wasm32-wasi": "^0.99.0"
+    "@oxc-parser/binding-wasm32-wasi": "^0.105.0"
   }
 }

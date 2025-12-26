@@ -25,6 +25,11 @@ import {
   combinedCardCss,
 } from './cards/combined-card/combined-card.js'
 import {
+  NestedCombinedCard,
+  NESTED_COMBINED_TEST_ID,
+  nestedCombinedCardCss,
+} from './cards/nested-combined-card/nested-combined-card.js'
+import {
   CombinedTypesCard,
   COMBINED_TYPES_TEST_ID,
   combinedTypesCardCss,
@@ -69,6 +74,11 @@ const cards: DialectCard[] = [
     id: COMBINED_CARD_TEST_ID,
     css: combinedCardCss,
     Component: CombinedCard,
+  },
+  {
+    id: NESTED_COMBINED_TEST_ID,
+    css: nestedCombinedCardCss,
+    Component: NestedCombinedCard,
   },
   {
     id: COMBINED_TYPES_TEST_ID,

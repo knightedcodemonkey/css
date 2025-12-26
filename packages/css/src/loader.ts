@@ -1,3 +1,5 @@
+import path from 'node:path'
+
 import type {
   LoaderContext,
   LoaderDefinitionFunction,
@@ -203,15 +205,25 @@ function buildProxyRequest(ctx: LoaderContext<KnightedCssLoaderOptions>): string
   const sanitizedQuery = buildSanitizedQuery(ctx.resourceQuery)
   const rawRequest = getRawRequest(ctx)
   if (rawRequest) {
-    const stripped = stripResourceQuery(rawRequest)
-    return `${stripped}${sanitizedQuery}`
+    return rebuildProxyRequestFromRaw(ctx, rawRequest, sanitizedQuery)
   }
   const request = `${ctx.resourcePath}${sanitizedQuery}`
-  const context = ctx.context ?? ctx.rootContext ?? process.cwd()
-  if (ctx.utils && typeof ctx.utils.contextify === 'function') {
-    return ctx.utils.contextify(context, request)
+  return contextifyRequest(ctx, request)
+}
+
+function rebuildProxyRequestFromRaw(
+  ctx: LoaderContext<KnightedCssLoaderOptions>,
+  rawRequest: string,
+  sanitizedQuery: string,
+): string {
+  const stripped = stripResourceQuery(rawRequest)
+  const loaderDelimiter = stripped.lastIndexOf('!')
+  const loaderPrefix = loaderDelimiter >= 0 ? stripped.slice(0, loaderDelimiter + 1) : ''
+  let resource = loaderDelimiter >= 0 ? stripped.slice(loaderDelimiter + 1) : stripped
+  if (isRelativeSpecifier(resource)) {
+    resource = makeResourceRelativeToContext(ctx, ctx.resourcePath)
   }
-  return request
+  return `${loaderPrefix}${resource}${sanitizedQuery}`
 }
 
 function getRawRequest(ctx: LoaderContext<KnightedCssLoaderOptions>): string | undefined {
@@ -230,6 +242,57 @@ function getRawRequest(ctx: LoaderContext<KnightedCssLoaderOptions>): string | u
 function stripResourceQuery(request: string): string {
   const idx = request.indexOf('?')
   return idx >= 0 ? request.slice(0, idx) : request
+}
+
+function contextifyRequest(
+  ctx: LoaderContext<KnightedCssLoaderOptions>,
+  request: string,
+): string {
+  const context = ctx.context ?? ctx.rootContext ?? process.cwd()
+  if (ctx.utils && typeof ctx.utils.contextify === 'function') {
+    return ctx.utils.contextify(context, request)
+  }
+  return rebuildRelativeRequest(context, request)
+}
+
+function rebuildRelativeRequest(context: string, request: string): string {
+  const queryIndex = request.indexOf('?')
+  const resourcePath = queryIndex >= 0 ? request.slice(0, queryIndex) : request
+  const query = queryIndex >= 0 ? request.slice(queryIndex) : ''
+  const relative = ensureDotPrefixedRelative(
+    path.relative(context, resourcePath),
+    resourcePath,
+  )
+  return `${relative}${query}`
+}
+
+function makeResourceRelativeToContext(
+  ctx: LoaderContext<KnightedCssLoaderOptions>,
+  resourcePath: string,
+): string {
+  const context = ctx.context ?? path.dirname(resourcePath)
+  if (ctx.utils && typeof ctx.utils.contextify === 'function') {
+    const result = ctx.utils.contextify(context, resourcePath)
+    return stripResourceQuery(result)
+  }
+  return ensureDotPrefixedRelative(path.relative(context, resourcePath), resourcePath)
+}
+
+function ensureDotPrefixedRelative(relativePath: string, resourcePath: string): string {
+  const fallback = relativePath.length > 0 ? relativePath : path.basename(resourcePath)
+  const normalized = normalizeToPosix(fallback)
+  if (normalized.startsWith('./') || normalized.startsWith('../')) {
+    return normalized
+  }
+  return `./${normalized}`
+}
+
+function normalizeToPosix(filePath: string): string {
+  return filePath.split(path.sep).join('/')
+}
+
+function isRelativeSpecifier(specifier: string): boolean {
+  return specifier.startsWith('./') || specifier.startsWith('../')
 }
 
 interface CombinedModuleOptions {

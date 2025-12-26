@@ -1,6 +1,10 @@
-@import '@knighted/css/stable/stable.css';
+@layer knighted.stable;
 
 @layer knighted.stable {
+  :root {
+    --knighted-stable-namespace: 'knighted';
+  }
+
   .knighted-layer-glow {
     box-shadow: 0 25px 55px rgba(14, 165, 233, 0.35);
   }
