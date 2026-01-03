@@ -4,6 +4,7 @@ dist/
 dist-webpack/
 coverage/
 .c8/
+.duel-cache/
 
 # playwright artifacts
 playwright-report/
