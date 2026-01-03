@@ -15,7 +15,7 @@
     "pretest": "npm run build"
   },
   "dependencies": {
-    "@knighted/css": "1.0.6",
+    "@knighted/css": "1.0.7",
     "@knighted/jsx": "^1.6.1",
     "lit": "^3.2.1",
     "react": "^19.0.0",
