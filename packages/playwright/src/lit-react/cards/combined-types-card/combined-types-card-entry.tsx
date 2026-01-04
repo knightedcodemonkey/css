@@ -1,6 +1,6 @@
 import './combined-types-card-entry.css'
 
-import type { CombinedTypesStableSelectors } from './combined-types-card-entry.css.knighted-css.js'
+import type { KnightedCssStableSelectors as CombinedTypesStableSelectors } from './combined-types-card-entry.css.knighted-css.js'
 import stableSelectors from './combined-types-card-entry.css.knighted-css.js'
 
 export const COMBINED_TYPES_TEST_ID = 'dialect-combined-types'
