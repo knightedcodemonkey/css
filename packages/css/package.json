@@ -79,6 +79,7 @@
   },
   "scripts": {
     "build": "duel && node ./scripts/copy-types-stub.js",
+    "pretest": "npm run build",
     "check-types": "tsc --noEmit --project tsconfig.json && tsc --noEmit --project tsconfig.tests.json",
     "test": "c8 --reporter=text --reporter=text-summary --reporter=lcov --include \"src/**/*.ts\" tsx --test test/**/*.test.ts",
     "prepack": "npm run build"

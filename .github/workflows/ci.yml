@@ -38,6 +38,8 @@ jobs:
         run: npm run check:cycles
       - name: Test
         run: npm test
+      - name: Check Types
+        run: npm run check-types
       - name: Report Coverage
         uses: codecov/codecov-action@v5.5.1
         with:
