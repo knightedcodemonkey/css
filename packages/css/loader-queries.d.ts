@@ -4,6 +4,7 @@
  */
 declare module '*?knighted-css' {
   export const knightedCss: string
+  export default knightedCss
 }
 
 type KnightedCssStableSelectorMap = Readonly<Record<string, string>>
@@ -11,6 +12,7 @@ type KnightedCssStableSelectorMap = Readonly<Record<string, string>>
 declare module '*?knighted-css&types' {
   export const knightedCss: string
   export const stableSelectors: KnightedCssStableSelectorMap
+  export default knightedCss
 }
 
 /**

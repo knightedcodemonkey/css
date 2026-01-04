@@ -438,6 +438,37 @@ test('generateTypes warns when selector sources fall outside the project root', 
   }
 })
 
+test('generateTypes discovers selector imports in tsx via oxc fallback', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-generate-types-tsx-'))
+  try {
+    const srcDir = path.join(root, 'src')
+    await fs.mkdir(srcDir, { recursive: true })
+
+    const cssPath = path.join(srcDir, 'button.css')
+    await fs.writeFile(cssPath, '.knighted-btn { color: rebeccapurple; }\n')
+
+    const entryPath = path.join(srcDir, 'entry.tsx')
+    await fs.writeFile(
+      entryPath,
+      "import selectors from './button.css.knighted-css'\n" +
+        'export default function Button() {\n' +
+        '  return <button className={selectors.btn}>Hi</button>\n' +
+        '}\n',
+    )
+
+    const result = await generateTypes({ rootDir: root, include: ['src'] })
+    assert.ok(result.selectorModulesWritten >= 1)
+    assert.equal(result.warnings.length, 0)
+
+    const selectorModulePath = path.join(srcDir, 'button.css.knighted-css.ts')
+    assert.equal(await pathExists(selectorModulePath), true)
+    const selectorModule = await fs.readFile(selectorModulePath, 'utf8')
+    assert.match(selectorModule, /"btn": "knighted-btn"/)
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
 test('runGenerateTypesCli executes generation and reports summaries', async () => {
   const project = await setupFixtureProject()
   try {

@@ -4,13 +4,13 @@ import path from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-import { init, parse } from 'es-module-lexer'
 import { moduleType } from 'node-module-type'
 
 import { getTsconfig, type TsConfigResult } from 'get-tsconfig'
 import { createMatchPath, type MatchPath } from 'tsconfig-paths'
 
 import { cssWithMeta } from './css.js'
+import { analyzeModule } from './lexer.js'
 import { buildStableSelectorsLiteral } from './stableSelectorsLiteral.js'
 import { resolveStableNamespace } from './stableNamespace.js'
 
@@ -117,7 +117,7 @@ export async function generateTypes(
   const include = normalizeIncludeOptions(options.include, rootDir)
   const cacheDir = path.resolve(options.outDir ?? path.join(rootDir, '.knighted-css'))
   const tsconfig = loadTsconfigResolutionContext(rootDir)
-  await init
+
   await fs.mkdir(cacheDir, { recursive: true })
 
   const internalOptions: GenerateTypesInternalOptions = {
@@ -296,12 +296,15 @@ async function findSpecifierImports(filePath: string): Promise<ImportMatch[]> {
     return []
   }
   const matches: ImportMatch[] = []
-  const [imports] = parse(source, filePath)
-  for (const record of imports) {
-    const specifier = record.n ?? source.slice(record.s, record.e)
-    if (specifier && specifier.includes(SELECTOR_REFERENCE)) {
-      matches.push({ specifier, importer: filePath })
+  try {
+    const { imports } = await analyzeModule(source, filePath)
+    for (const specifier of imports) {
+      if (specifier.includes(SELECTOR_REFERENCE)) {
+        matches.push({ specifier, importer: filePath })
+      }
     }
+  } catch {
+    // ignore and fall back to regex below
   }
   const requireRegex = /require\((['"])([^'"`]+?\.knighted-css[^'"`]*)\1\)/g
   let reqMatch: RegExpExecArray | null

@@ -251,3 +251,161 @@ void Button
     await project.cleanup()
   }
 })
+
+test('collectStyleImports tolerates missing tsconfig files and absolute baseUrls', async () => {
+  const project = await createProject('knighted-module-graph-tsconfig-gaps-')
+  try {
+    await project.writeFile('styles/abs.css', '.abs { color: silver; }')
+    await project.writeFile(
+      'entry.ts',
+      `import '@abs/abs.css'
+`,
+    )
+
+    const missingBaseUrl = await collectStyleImports(project.file('entry.ts'), {
+      cwd: project.root,
+      styleExtensions: ['.css'],
+      filter: () => true,
+      graphOptions: {
+        tsConfig: {
+          compilerOptions: {
+            paths: {
+              '@noop/*': ['styles/*'],
+            },
+          },
+        },
+      },
+    })
+
+    assert.deepEqual(missingBaseUrl, [])
+
+    const missing = await collectStyleImports(project.file('entry.ts'), {
+      cwd: project.root,
+      styleExtensions: ['.css'],
+      filter: () => true,
+      graphOptions: {
+        tsConfig: project.file('tsconfig.missing'),
+      },
+    })
+
+    assert.deepEqual(missing, [])
+
+    const missingCached = await collectStyleImports(project.file('entry.ts'), {
+      cwd: project.root,
+      styleExtensions: ['.css'],
+      filter: () => true,
+      graphOptions: {
+        tsConfig: project.file('tsconfig.missing'),
+      },
+    })
+
+    assert.deepEqual(missingCached, [])
+
+    const styles = await collectStyleImports(project.file('entry.ts'), {
+      cwd: project.root,
+      styleExtensions: ['.css'],
+      filter: () => true,
+      graphOptions: {
+        tsConfig: {
+          compilerOptions: {
+            baseUrl: project.root,
+            paths: {
+              '@empty/*': [],
+              '@abs/*': ['styles/*'],
+              '@string/*': 'styles/*',
+            },
+          },
+        },
+      },
+    })
+
+    assert.deepEqual(styles, [project.file('styles/abs.css')])
+  } finally {
+    await project.cleanup()
+  }
+})
+
+test('collectStyleImports normalizes resolver results, file URLs, and template literals', async () => {
+  const project = await createProject('knighted-module-graph-resolver-normalize-')
+  try {
+    const resolverStyle = await project.writeFile(
+      'styles/from-resolver.css',
+      '.resolver { color: lime; }',
+    )
+    const mappedStyle = await project.writeFile(
+      'styles/from-tsconfig.css',
+      '.mapped { color: olive; }',
+    )
+    const templateStyle = await project.writeFile(
+      'styles/from-template.css',
+      '.template { color: navy; }',
+    )
+    const optionalStyle = await project.writeFile(
+      'styles/from-optional.css',
+      '.optional { color: teal; }',
+    )
+    const fileUrlStyle = await project.writeFile(
+      'styles/from-file-url.css',
+      '.file { color: maroon; }',
+    )
+    const directoryIndexStyle = await project.writeFile(
+      'styles/from-file-url-dir/index.css',
+      '.dir { color: brown; }',
+    )
+
+    const resolver: CssResolver = async specifier => {
+      if (specifier === '@resolver/style') {
+        return './styles/from-resolver.css'
+      }
+      if (specifier === '@resolver/invalid') {
+        return 'file://:bad'
+      }
+      return undefined
+    }
+
+    const entrySource = `import '@resolver/style'
+  import '@resolver/invalid'
+  import '@tsconfig/mapped'
+  import('file://${pathToFileURL(fileUrlStyle).pathname}')
+  import(\`./styles/from-template.css\`)
+  import('file://:bad')
+  import('file://${pathToFileURL(path.dirname(directoryIndexStyle)).pathname}')
+  const optional = require?.('./styles/from-optional.css')
+  import 'node:fs'
+  void optional
+  `
+    await project.writeFile('entry.ts', entrySource)
+
+    const styles = await collectStyleImports(project.file('entry.ts'), {
+      cwd: project.root,
+      styleExtensions: ['.css'],
+      filter: () => true,
+      resolver,
+      graphOptions: {
+        tsConfig: {
+          compilerOptions: {
+            baseUrl: '.',
+            paths: {
+              '@tsconfig/mapped': ['styles/from-tsconfig.css'],
+              '@resolver/invalid': ['styles/from-tsconfig.css'],
+            },
+          },
+        },
+      },
+    })
+
+    assert.deepEqual(
+      await realpathAll(styles),
+      await realpathAll([
+        resolverStyle,
+        mappedStyle,
+        fileUrlStyle,
+        templateStyle,
+        directoryIndexStyle,
+        optionalStyle,
+      ]),
+    )
+  } finally {
+    await project.cleanup()
+  }
+})
