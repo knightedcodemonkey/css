@@ -1,0 +1,45 @@
+.fallback-card,
+.knighted-fallback-card {
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  color: #0f172a;
+  border: 1px solid #3b82f6;
+  border-radius: 14px;
+  padding: 1.25rem;
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.12);
+  display: grid;
+  gap: 0.5rem;
+}
+
+.fallback-card__badge,
+.knighted-fallback-card__badge {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #0f172a;
+  background: #facc15;
+  border-radius: 999px;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.18);
+}
+
+.fallback-card__copy,
+.knighted-fallback-card__copy {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.fallback-card__token,
+.knighted-fallback-card__token {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0.5rem;
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 8px;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
+}

@@ -14,6 +14,7 @@ const dialectCases = [
   { id: 'dialect-combined', property: 'background-image' },
   { id: 'dialect-nested-combined', property: 'background-image' },
   { id: 'dialect-combined-types', property: 'border-color' },
+  { id: 'dialect-fallback-oxc', property: 'background-image' },
   { id: 'dialect-named-only', property: 'background-image' },
 ]
 
@@ -199,6 +200,19 @@ test.describe('Lit + React wrapper demo', () => {
     expect(metrics.shellClasses).toContain(metrics.runtimeShell)
     expect(metrics.copyClasses).toContain(metrics.runtimeCopy)
     expect(metrics.footerText).toContain(metrics.runtimeShell)
+  })
+
+  test('fallback card surfaces stable selector from generated types', async ({
+    page,
+  }) => {
+    const card = page.getByTestId('dialect-fallback-oxc')
+    await expect(card).toBeVisible()
+
+    const tokenText = await card
+      .getByTestId('fallback-stable-shell')
+      .textContent({ timeout: 5000 })
+
+    expect(tokenText?.trim() ?? '').toContain('knighted-fallback-card')
   })
 
   test('named-only combined import disables the synthetic default', async ({ page }) => {

@@ -1,9 +1,11 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 
-import { init, parse } from 'es-module-lexer'
+import type { parse } from 'es-module-lexer'
 
-export type ModuleDefaultSignal = 'has-default' | 'no-default' | 'unknown'
+import { analyzeModule, type DefaultExportSignal } from './lexer.js'
+
+export type ModuleDefaultSignal = DefaultExportSignal
 
 type LexerOverrides = {
   parse?: typeof parse
@@ -20,15 +22,7 @@ const DETECTABLE_EXTENSIONS = new Set([
   '.cts',
 ])
 
-let lexerInit: Promise<void> | undefined
 let lexerOverrides: LexerOverrides | undefined
-
-function ensureLexerInitialized(): Promise<void> {
-  if (!lexerInit) {
-    lexerInit = init
-  }
-  return lexerInit
-}
 
 export async function detectModuleDefaultExport(
   filePath: string,
@@ -45,15 +39,10 @@ export async function detectModuleDefaultExport(
   }
 
   try {
-    await ensureLexerInitialized()
-    const [, exports] = (lexerOverrides?.parse ?? parse)(source, filePath)
-    if (exports.some(entry => entry.n === 'default')) {
-      return 'has-default'
-    }
-    if (exports.length === 0) {
-      return 'unknown'
-    }
-    return 'no-default'
+    const { defaultSignal } = await analyzeModule(source, filePath, {
+      esParse: lexerOverrides?.parse,
+    })
+    return defaultSignal
   } catch {
     return 'unknown'
   }
@@ -62,8 +51,5 @@ export async function detectModuleDefaultExport(
 export const __moduleInfoInternals = {
   setLexerOverrides(overrides?: LexerOverrides) {
     lexerOverrides = overrides
-    if (!overrides) {
-      lexerInit = undefined
-    }
   },
 }

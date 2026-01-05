@@ -2,10 +2,10 @@
 // Do not edit.
 
 export const stableSelectors = {
-  'combined-types-badge': 'knighted-combined-types-badge',
-  'combined-types-copy': 'knighted-combined-types-copy',
-  'combined-types-footer': 'knighted-combined-types-footer',
-  'combined-types-shell': 'knighted-combined-types-shell',
+  'fallback-card': 'knighted-fallback-card',
+  'fallback-card__badge': 'knighted-fallback-card__badge',
+  'fallback-card__copy': 'knighted-fallback-card__copy',
+  'fallback-card__token': 'knighted-fallback-card__token',
 } as const
 
 export type KnightedCssStableSelectors = typeof stableSelectors

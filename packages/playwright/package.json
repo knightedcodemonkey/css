@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "npm run build:rspack && npm run build:webpack && npm run build:ssr",
+    "types": "knighted-css-generate-types --root . --include src",
     "build:rspack": "npx rspack --config rspack.config.js",
     "build:webpack": "npx webpack --config webpack.config.js",
     "build:ssr": "npx tsx scripts/render-ssr-preview.ts",
@@ -12,10 +13,10 @@
     "preview": "npm run build && npx http-server . -p 4174",
     "serve": "npx http-server dist -p 4174",
     "test": "npx playwright test",
-    "pretest": "npm run build"
+    "pretest": "npm run types && npm run build"
   },
   "dependencies": {
-    "@knighted/css": "1.0.8",
+    "@knighted/css": "1.0.9",
     "@knighted/jsx": "^1.6.1",
     "lit": "^3.2.1",
     "react": "^19.0.0",

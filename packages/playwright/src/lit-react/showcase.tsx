@@ -35,6 +35,11 @@ import {
   combinedTypesCardCss,
 } from './cards/combined-types-card/combined-types-card.js'
 import {
+  FallbackCard,
+  FALLBACK_CARD_TEST_ID,
+  fallbackCardCss,
+} from './cards/fallback-card/fallback-card.js'
+import {
   NamedOnlyCard,
   NAMED_ONLY_TEST_ID,
   namedOnlyCardCss,
@@ -84,6 +89,11 @@ const cards: DialectCard[] = [
     id: COMBINED_TYPES_TEST_ID,
     css: combinedTypesCardCss,
     Component: CombinedTypesCard,
+  },
+  {
+    id: FALLBACK_CARD_TEST_ID,
+    css: fallbackCardCss,
+    Component: FallbackCard,
   },
   {
     id: NAMED_ONLY_TEST_ID,

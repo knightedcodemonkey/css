@@ -1,7 +1,7 @@
 import { asKnightedCssCombinedModule } from '@knighted/css/loader-helpers'
 
 import * as combinedModule from './combined-types-card-entry.js?knighted-css&combined&types'
-import type { CombinedTypesStableSelectors } from './combined-types-card-entry.css.knighted-css.js'
+import type { KnightedCssStableSelectors as CombinedTypesStableSelectors } from './combined-types-card-entry.css.knighted-css.js'
 
 const {
   default: CombinedTypesCardEntry,
