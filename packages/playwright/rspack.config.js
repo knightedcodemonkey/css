@@ -18,7 +18,7 @@ export default {
     },
   },
   resolve: {
-    extensions: ['.tsx', '.ts', '.js'],
+    extensions: ['.tsx', '.ts', '.js', '.css'],
     extensionAlias: {
       '.js': ['.js', '.ts', '.tsx'],
     },

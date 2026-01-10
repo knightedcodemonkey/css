@@ -30,6 +30,10 @@ import {
   nestedCombinedCardCss,
 } from './cards/nested-combined-card/nested-combined-card.js'
 import {
+  AttrImportCard,
+  ATTR_IMPORT_TEST_ID,
+} from './cards/attr-import-card/attr-import-card.js'
+import {
   CombinedTypesCard,
   COMBINED_TYPES_TEST_ID,
   combinedTypesCardCss,
@@ -116,6 +120,11 @@ const hostManagedDialects: HostManagedDialect[] = [
     id: LESS_TEST_ID,
     hint: 'Lit host injects the Less-gradient card',
     Component: LessCard,
+  },
+  {
+    id: ATTR_IMPORT_TEST_ID,
+    hint: 'Import attribute (`with { type: "css" }`) styles this card',
+    Component: AttrImportCard,
   },
 ]
 

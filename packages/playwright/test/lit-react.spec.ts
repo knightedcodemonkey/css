@@ -16,6 +16,7 @@ const dialectCases = [
   { id: 'dialect-combined-types', property: 'border-color' },
   { id: 'dialect-fallback-oxc', property: 'background-image' },
   { id: 'dialect-named-only', property: 'background-image' },
+  { id: 'dialect-attr-import', property: 'color' },
 ]
 
 test.describe('Lit + React wrapper demo', () => {

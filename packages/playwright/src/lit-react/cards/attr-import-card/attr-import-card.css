@@ -1,0 +1,21 @@
+.pw-attr-import {
+  color: #7c3aed;
+  background: linear-gradient(90deg, #ede9fe 0%, #c4b5fd 50%, #a78bfa 100%);
+  padding: 0.4rem 0.75rem;
+  border-radius: 0.65rem;
+  border: 1px solid #6d28d9;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.pw-attr-import::before {
+  content: 'attr';
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #312e81;
+  background: #ede9fe;
+  padding: 0.1rem 0.35rem;
+  border-radius: 999px;
+}
