@@ -10,6 +10,7 @@
 
 - **Graph walking**: Follows `import` trees the same way Node does (tsconfig `paths`, package `exports`/`imports`, hash specifiers, etc.) using [`oxc-resolver`](https://github.com/oxc-project/oxc-resolver).
 - **Multi-dialect compilation**: Runs Sass, Less, Lightning CSS, or vanilla-extract integrations on demand so every dependency ends up as plain CSS.
+- **Attribute-aware imports**: Honors static `with { type: "css" }` import attributes (including extensionless/aliased and static dynamic imports) so CSS gets pulled into the graph even when extensions aren’t present.
 - **Loader + CLI**: Ship CSS at runtime via `?knighted-css` loader queries or ahead of time via the `css()` API and the `knighted-css-generate-types` command.
 - **Shadow DOM + SSR ready**: Inline styles in server renders, ship them alongside web components, or keep classic DOM apps in sync—all without wiring a full bundler.
 

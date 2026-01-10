@@ -23,7 +23,7 @@ I needed a single source of truth for UI components that could drop into both li
 
 ## Features
 
-- Traverses module graphs with a built-in walker to find transitive style imports (bundler optional—works standalone or through bundler loaders).
+- Traverses module graphs with a built-in walker to find transitive style imports (bundler optional—works standalone or through bundler loaders), including static import attributes (`with { type: "css" }`) for extensionless or aliased specifiers.
 - Resolution parity via [`oxc-resolver`](https://github.com/oxc-project/oxc-resolver): tsconfig `paths`, package `exports` + `imports`, and extension aliasing (e.g., `.css.js` → `.css.ts`) are honored without wiring up a bundler.
 - Compiles `*.css`, `*.scss`, `*.sass`, `*.less`, and `*.css.ts` (vanilla-extract) files out of the box.
 - Optional post-processing via [`lightningcss`](https://github.com/parcel-bundler/lightningcss) for minification, prefixing, media query optimizations, or specificity boosts.
