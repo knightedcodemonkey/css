@@ -115,6 +115,32 @@ export async function load() {
   }
 })
 
+test('collectStyleImports picks up CSS imports that include import attributes', async () => {
+  const project = await createProject('knighted-module-graph-attr-')
+  try {
+    await project.writeFile('styles/button.css', '.button { color: coral; }')
+    await project.writeFile(
+      'entry.ts',
+      `import styles from './styles/button.css' with { type: "css" }
+void styles
+`,
+    )
+
+    const styles = await collectStyleImports(project.file('entry.ts'), {
+      cwd: project.root,
+      styleExtensions: ['.css'],
+      filter: () => true,
+    })
+
+    assert.deepEqual(
+      await realpathAll(styles),
+      await realpathAll([project.file('styles/button.css')]),
+    )
+  } finally {
+    await project.cleanup()
+  }
+})
+
 test('collectStyleImports honors tsconfig paths loaded from a file', async () => {
   const project = await createProject('knighted-module-graph-tsconfig-file-')
   try {
