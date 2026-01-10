@@ -4,7 +4,7 @@
 [![codecov](https://codecov.io/gh/knightedcodemonkey/css/graph/badge.svg?token=q93Qqwvq6l)](https://codecov.io/gh/knightedcodemonkey/css)
 [![NPM version](https://img.shields.io/npm/v/@knighted/css.svg)](https://www.npmjs.com/package/@knighted/css)
 
-`@knighted/css` is a zero-bundler CSS pipeline for JavaScript and TypeScript projects. Point it at an entry module and it walks the graph, compiles every CSS-like dependency (CSS, Sass/SCSS, Less, vanilla-extract), and hands back both a concatenated stylesheet string and optional `.knighted-css.*` selector manifests for type-safe loaders.
+`@knighted/css` is a bundler-optional CSS pipeline for JavaScript and TypeScript projects. Use it standalone or plug it into your bundler via the `?knighted-css` loader query—it walks the graph, compiles every CSS-like dependency (CSS, Sass/SCSS, Less, vanilla-extract), and hands back both a concatenated stylesheet string and optional `.knighted-css.*` selector manifests for type-safe loaders.
 
 ## What it does (at a glance)
 

@@ -4,7 +4,7 @@
 [![codecov](https://codecov.io/gh/knightedcodemonkey/css/graph/badge.svg?token=q93Qqwvq6l)](https://codecov.io/gh/knightedcodemonkey/css)
 [![NPM version](https://img.shields.io/npm/v/@knighted/css.svg)](https://www.npmjs.com/package/@knighted/css)
 
-`@knighted/css` walks your JavaScript/TypeScript module graph, compiles every CSS-like dependency (plain CSS, Sass/SCSS, Less, vanilla-extract), and ships both the concatenated stylesheet string and optional `.knighted-css.*` imports that keep selectors typed. Use it when you need fully materialized styles ahead of runtime—Shadow DOM surfaces, server-rendered routes, static site builds, or any entry point that should inline CSS without spinning up a full bundler.
+`@knighted/css` walks your module graph, compiles every CSS-like dependency (plain CSS, Sass/SCSS, Less, vanilla-extract), and ships both the concatenated stylesheet string and optional `.knighted-css.*` imports that keep selectors typed. Use it with or without a bundler: run the `css()` API in scripts/SSR pipelines, or lean on the `?knighted-css` loader query so bundlers import compiled CSS alongside modules. Either path yields fully materialized styles for Shadow DOM surfaces, server-rendered routes, static site builds, or any entry point that should inline CSS.
 
 ## Why
 
@@ -23,7 +23,7 @@ I needed a single source of truth for UI components that could drop into both li
 
 ## Features
 
-- Traverses module graphs with a built-in walker to find transitive style imports (no bundler required).
+- Traverses module graphs with a built-in walker to find transitive style imports (bundler optional—works standalone or through bundler loaders).
 - Resolution parity via [`oxc-resolver`](https://github.com/oxc-project/oxc-resolver): tsconfig `paths`, package `exports` + `imports`, and extension aliasing (e.g., `.css.js` → `.css.ts`) are honored without wiring up a bundler.
 - Compiles `*.css`, `*.scss`, `*.sass`, `*.less`, and `*.css.ts` (vanilla-extract) files out of the box.
 - Optional post-processing via [`lightningcss`](https://github.com/parcel-bundler/lightningcss) for minification, prefixing, media query optimizations, or specificity boosts.
