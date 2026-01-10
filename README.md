@@ -4,12 +4,13 @@
 [![codecov](https://codecov.io/gh/knightedcodemonkey/css/graph/badge.svg?token=q93Qqwvq6l)](https://codecov.io/gh/knightedcodemonkey/css)
 [![NPM version](https://img.shields.io/npm/v/@knighted/css.svg)](https://www.npmjs.com/package/@knighted/css)
 
-`@knighted/css` is a zero-bundler CSS pipeline for JavaScript and TypeScript projects. Point it at an entry module and it walks the graph, compiles every CSS-like dependency (CSS, Sass/SCSS, Less, vanilla-extract), and hands back both a concatenated stylesheet string and optional `.knighted-css.*` selector manifests for type-safe loaders.
+`@knighted/css` is a bundler-optional CSS pipeline for JavaScript and TypeScript projects. Use it standalone or plug it into your bundler via the `?knighted-css` loader query—it walks the graph, compiles every CSS-like dependency (CSS, Sass/SCSS, Less, vanilla-extract), and hands back both a concatenated stylesheet string and optional `.knighted-css.*` selector manifests for type-safe loaders.
 
 ## What it does (at a glance)
 
 - **Graph walking**: Follows `import` trees the same way Node does (tsconfig `paths`, package `exports`/`imports`, hash specifiers, etc.) using [`oxc-resolver`](https://github.com/oxc-project/oxc-resolver).
 - **Multi-dialect compilation**: Runs Sass, Less, Lightning CSS, or vanilla-extract integrations on demand so every dependency ends up as plain CSS.
+- **Attribute-aware imports**: Honors static `with { type: "css" }` import attributes (including extensionless/aliased and static dynamic imports) so CSS gets pulled into the graph even when extensions aren’t present.
 - **Loader + CLI**: Ship CSS at runtime via `?knighted-css` loader queries or ahead of time via the `css()` API and the `knighted-css-generate-types` command.
 - **Shadow DOM + SSR ready**: Inline styles in server renders, ship them alongside web components, or keep classic DOM apps in sync—all without wiring a full bundler.
 

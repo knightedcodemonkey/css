@@ -44,6 +44,11 @@ interface CollectOptions {
   graphOptions?: ModuleGraphOptions
 }
 
+type ExtractedSpecifier = {
+  specifier: string
+  assertedType?: 'css'
+}
+
 type TsconfigLike = string | Record<string, unknown>
 
 interface TsconfigPathsResult {
@@ -93,7 +98,7 @@ export async function collectStyleImports(
       return
     }
     const specifiers = extractModuleSpecifiers(source, absolutePath)
-    for (const specifier of specifiers) {
+    for (const { specifier, assertedType } of specifiers) {
       if (!specifier || isBuiltinSpecifier(specifier)) {
         continue
       }
@@ -103,6 +108,13 @@ export async function collectStyleImports(
       }
       const normalized = path.resolve(resolved)
       if (!filter(normalized)) {
+        continue
+      }
+      if (assertedType === 'css') {
+        if (!seenStyles.has(normalized)) {
+          seenStyles.add(normalized)
+          styleOrder.push(normalized)
+        }
         continue
       }
       if (isStyleExtension(normalized, normalizedStyles)) {
@@ -202,7 +214,10 @@ async function readSourceFile(filePath: string): Promise<string | undefined> {
   }
 }
 
-function extractModuleSpecifiers(sourceText: string, filePath: string): string[] {
+function extractModuleSpecifiers(
+  sourceText: string,
+  filePath: string,
+): ExtractedSpecifier[] {
   let program
   try {
     ;({ program } = parseSync(filePath, sourceText, { sourceType: 'unambiguous' }))
@@ -210,28 +225,28 @@ function extractModuleSpecifiers(sourceText: string, filePath: string): string[]
     return []
   }
 
-  const specifiers: string[] = []
-  const addSpecifier = (raw?: string | null) => {
+  const specifiers: ExtractedSpecifier[] = []
+  const addSpecifier = (raw?: string | null, assertedType?: 'css') => {
     if (!raw) {
       return
     }
     const normalized = normalizeSpecifier(raw)
     if (normalized) {
-      specifiers.push(normalized)
+      specifiers.push({ specifier: normalized, assertedType })
     }
   }
 
   const visitor = new Visitor({
     ImportDeclaration(node) {
-      addSpecifier(node.source?.value)
+      addSpecifier(node.source?.value, getImportAssertedType(node))
     },
     ExportNamedDeclaration(node) {
       if (node.source) {
-        addSpecifier(node.source.value)
+        addSpecifier(node.source.value, getImportAssertedType(node))
       }
     },
     ExportAllDeclaration(node) {
-      addSpecifier(node.source?.value)
+      addSpecifier(node.source?.value, getImportAssertedType(node))
     },
     TSImportEqualsDeclaration(node: TSImportEqualsDeclaration) {
       const specifier = extractImportEqualsSpecifier(node)
@@ -242,7 +257,7 @@ function extractModuleSpecifiers(sourceText: string, filePath: string): string[]
     ImportExpression(node: ImportExpression) {
       const specifier = getStringFromExpression(node.source)
       if (specifier) {
-        addSpecifier(specifier)
+        addSpecifier(specifier, getImportExpressionAssertedType(node))
       }
     },
     CallExpression(node) {
@@ -278,6 +293,146 @@ function normalizeSpecifier(raw: string): string {
     return ''
   }
   return withoutQuery
+}
+
+function getImportAssertedType(node: unknown): 'css' | undefined {
+  const attributes = getImportAttributes(node)
+  for (const attribute of attributes) {
+    const key = getAttributeKey(attribute)
+    const value = getAttributeValue(attribute)
+    if (key === 'type' && value === 'css') {
+      return 'css'
+    }
+  }
+  return undefined
+}
+
+function getImportAttributes(node: unknown): unknown[] {
+  const attributes: unknown[] = []
+  const candidate = node as { [key: string]: unknown }
+
+  const withClause = candidate?.withClause as { attributes?: unknown }
+  if (withClause && Array.isArray(withClause.attributes)) {
+    attributes.push(...withClause.attributes)
+  }
+
+  const directAttributes = candidate?.attributes
+  if (Array.isArray(directAttributes)) {
+    attributes.push(...directAttributes)
+  }
+
+  const assertions = candidate?.assertions
+  if (Array.isArray(assertions)) {
+    attributes.push(...assertions)
+  }
+
+  return attributes
+}
+
+function getAttributeKey(attribute: unknown): string | undefined {
+  const attr = attribute as { [key: string]: unknown }
+  const key = attr?.key as { [key: string]: unknown } | undefined
+  if (!key) {
+    return undefined
+  }
+  if (typeof (key as { name?: unknown }).name === 'string') {
+    return (key as { name: string }).name
+  }
+  const value = (key as { value?: unknown }).value
+  if (typeof value === 'string') {
+    return value
+  }
+  return undefined
+}
+
+function getAttributeValue(attribute: unknown): string | undefined {
+  const attr = attribute as { [key: string]: unknown }
+  const value = attr?.value as { [key: string]: unknown } | unknown
+  if (typeof value === 'string') {
+    return value
+  }
+  if (value && typeof (value as { value?: unknown }).value === 'string') {
+    return (value as { value: string }).value
+  }
+  return undefined
+}
+
+function getImportExpressionAssertedType(node: ImportExpression): 'css' | undefined {
+  // Stage-3 import attributes proposal shape: import(spec, { with: { type: "css" } })
+  const options = (node as { options?: Expression | null | undefined }).options
+  if (!options) {
+    return undefined
+  }
+
+  const withObject = getStaticObjectProperty(options, 'with')
+  if (withObject && isObjectExpression(withObject)) {
+    const typeValue = getStaticObjectString(withObject, 'type')
+    if (typeValue === 'css') {
+      return 'css'
+    }
+  }
+
+  const assertObject = getStaticObjectProperty(options, 'assert')
+  if (assertObject && isObjectExpression(assertObject)) {
+    const typeValue = getStaticObjectString(assertObject, 'type')
+    if (typeValue === 'css') {
+      return 'css'
+    }
+  }
+
+  return undefined
+}
+
+function isObjectExpression(
+  expression: Expression,
+): (Expression & { type: 'ObjectExpression'; properties: unknown[] }) | undefined {
+  return expression && expression.type === 'ObjectExpression'
+    ? (expression as Expression & { type: 'ObjectExpression'; properties: unknown[] })
+    : undefined
+}
+
+function getStaticObjectProperty(
+  expression: Expression,
+  name: string,
+): Expression | undefined {
+  const objectExpression = isObjectExpression(expression)
+  if (!objectExpression) {
+    return undefined
+  }
+  for (const prop of objectExpression.properties as unknown[]) {
+    const maybeProp = prop as { key?: unknown; value?: unknown; type?: string }
+    if (maybeProp.type && maybeProp.type !== 'Property') {
+      continue
+    }
+    const keyName = getPropertyKeyName(maybeProp.key)
+    if (keyName === name) {
+      const value = maybeProp.value as Expression | undefined
+      if (value) {
+        return value
+      }
+    }
+  }
+  return undefined
+}
+
+function getPropertyKeyName(key: unknown): string | undefined {
+  if (!key) return undefined
+  const asAny = key as { name?: unknown; value?: unknown; type?: string }
+  if (typeof asAny.name === 'string') {
+    return asAny.name
+  }
+  if (typeof asAny.value === 'string') {
+    return asAny.value
+  }
+  return undefined
+}
+
+function getStaticObjectString(expression: Expression, name: string): string | undefined {
+  const valueExpression = getStaticObjectProperty(expression, name)
+  if (!valueExpression) {
+    return undefined
+  }
+  return getStringFromExpression(valueExpression)
 }
 
 function extractImportEqualsSpecifier(

@@ -115,6 +115,258 @@ export async function load() {
   }
 })
 
+test('collectStyleImports picks up CSS imports that include import attributes', async () => {
+  const project = await createProject('knighted-module-graph-attr-')
+  try {
+    await project.writeFile('styles/button.css', '.button { color: coral; }')
+    await project.writeFile(
+      'entry.ts',
+      `import styles from './styles/button.css' with { type: "css" }
+void styles
+`,
+    )
+
+    const styles = await collectStyleImports(project.file('entry.ts'), {
+      cwd: project.root,
+      styleExtensions: ['.css'],
+      filter: () => true,
+    })
+
+    assert.deepEqual(
+      await realpathAll(styles),
+      await realpathAll([project.file('styles/button.css')]),
+    )
+  } finally {
+    await project.cleanup()
+  }
+})
+
+test('collectStyleImports treats extensionless imports with attributes as styles', async () => {
+  const project = await createProject('knighted-module-graph-attr-extensionless-')
+  try {
+    await project.writeFile('styles/panel.css', '.panel { color: teal; }')
+    await project.writeFile(
+      'entry.ts',
+      `import panel from './styles/panel' with { type: "css" }
+void panel
+`,
+    )
+
+    const styles = await collectStyleImports(project.file('entry.ts'), {
+      cwd: project.root,
+      styleExtensions: ['.css'],
+      filter: () => true,
+    })
+
+    assert.deepEqual(
+      await realpathAll(styles),
+      await realpathAll([project.file('styles/panel.css')]),
+    )
+  } finally {
+    await project.cleanup()
+  }
+})
+
+test('collectStyleImports honors attributes with path-mapped specifiers', async () => {
+  const project = await createProject('knighted-module-graph-attr-paths-')
+  try {
+    await project.writeFile('styles/theme.css', '.theme { color: sienna; }')
+    await project.writeFile(
+      'entry.ts',
+      `import theme from '@theme/panel' with { type: "css" }
+void theme
+`,
+    )
+
+    const styles = await collectStyleImports(project.file('entry.ts'), {
+      cwd: project.root,
+      styleExtensions: ['.css'],
+      filter: filePath => filePath.startsWith(project.root),
+      graphOptions: {
+        tsConfig: {
+          compilerOptions: {
+            baseUrl: '.',
+            paths: {
+              '@theme/panel': ['styles/theme.css'],
+            },
+          },
+        },
+      },
+    })
+
+    assert.deepEqual(
+      await realpathAll(styles),
+      await realpathAll([project.file('styles/theme.css')]),
+    )
+  } finally {
+    await project.cleanup()
+  }
+})
+
+test('collectStyleImports honors attributes on re-exports', async () => {
+  const project = await createProject('knighted-module-graph-attr-reexport-')
+  try {
+    await project.writeFile('styles/reexport.css', '.reexport { color: khaki; }')
+    await project.writeFile(
+      'entry.ts',
+      `export * from './styles/reexport.css' with { type: "css" }
+`,
+    )
+
+    const styles = await collectStyleImports(project.file('entry.ts'), {
+      cwd: project.root,
+      styleExtensions: ['.css'],
+      filter: () => true,
+    })
+
+    assert.deepEqual(
+      await realpathAll(styles),
+      await realpathAll([project.file('styles/reexport.css')]),
+    )
+  } finally {
+    await project.cleanup()
+  }
+})
+
+test('collectStyleImports honors asserts on re-exports', async () => {
+  const project = await createProject('knighted-module-graph-attr-reexport-assert-')
+  try {
+    await project.writeFile(
+      'styles/reexport-assert.css',
+      '.reexport-assert { color: indigo; }',
+    )
+    await project.writeFile(
+      'entry.ts',
+      `export * from './styles/reexport-assert.css' assert { type: "css" }
+`,
+    )
+
+    const styles = await collectStyleImports(project.file('entry.ts'), {
+      cwd: project.root,
+      styleExtensions: ['.css'],
+      filter: () => true,
+    })
+
+    assert.deepEqual(
+      await realpathAll(styles),
+      await realpathAll([project.file('styles/reexport-assert.css')]),
+    )
+  } finally {
+    await project.cleanup()
+  }
+})
+
+test('collectStyleImports supports legacy assert syntax for css type', async () => {
+  const project = await createProject('knighted-module-graph-attr-assert-')
+  try {
+    await project.writeFile('styles/assert.css', '.assert { color: plum; }')
+    await project.writeFile(
+      'entry.ts',
+      `import styles from './styles/assert.css' assert { type: "css" }
+void styles
+`,
+    )
+
+    const styles = await collectStyleImports(project.file('entry.ts'), {
+      cwd: project.root,
+      styleExtensions: ['.css'],
+      filter: () => true,
+    })
+
+    assert.deepEqual(
+      await realpathAll(styles),
+      await realpathAll([project.file('styles/assert.css')]),
+    )
+  } finally {
+    await project.cleanup()
+  }
+})
+
+test('collectStyleImports supports dynamic import attributes with static specifiers', async () => {
+  const project = await createProject('knighted-module-graph-attr-dynamic-')
+  try {
+    await project.writeFile('styles/dynamic.css', '.dynamic { color: orchid; }')
+    await project.writeFile(
+      'entry.ts',
+      `export async function load() {
+  return import('./styles/dynamic', { with: { type: "css" } })
+}
+`,
+    )
+
+    const styles = await collectStyleImports(project.file('entry.ts'), {
+      cwd: project.root,
+      styleExtensions: ['.css'],
+      filter: () => true,
+    })
+
+    assert.deepEqual(
+      await realpathAll(styles),
+      await realpathAll([project.file('styles/dynamic.css')]),
+    )
+  } finally {
+    await project.cleanup()
+  }
+})
+
+test('collectStyleImports supports dynamic import assert with static specifiers', async () => {
+  const project = await createProject('knighted-module-graph-attr-dynamic-assert-')
+  try {
+    await project.writeFile(
+      'styles/assert-dynamic.css',
+      '.assert-dynamic { color: olive; }',
+    )
+    await project.writeFile(
+      'entry.ts',
+      `export async function load() {
+  return import('./styles/assert-dynamic', { assert: { type: "css" } })
+}
+`,
+    )
+
+    const styles = await collectStyleImports(project.file('entry.ts'), {
+      cwd: project.root,
+      styleExtensions: ['.css'],
+      filter: () => true,
+    })
+
+    assert.deepEqual(
+      await realpathAll(styles),
+      await realpathAll([project.file('styles/assert-dynamic.css')]),
+    )
+  } finally {
+    await project.cleanup()
+  }
+})
+
+test('collectStyleImports ignores dynamic import attributes with non-static specifiers', async () => {
+  const project = await createProject('knighted-module-graph-attr-dynamic-negative-')
+  try {
+    await project.writeFile('styles/skip.css', '.skip { color: gray; }')
+    await project.writeFile(
+      'entry.ts',
+      [
+        "const name = 'skip'",
+        'async function load() {',
+        '  return import(`./styles/${name}.css`, { with: { type: "css" } })',
+        '}',
+        'void load',
+        '',
+      ].join('\n'),
+    )
+
+    const styles = await collectStyleImports(project.file('entry.ts'), {
+      cwd: project.root,
+      styleExtensions: ['.css'],
+      filter: () => true,
+    })
+
+    assert.deepEqual(styles, [])
+  } finally {
+    await project.cleanup()
+  }
+})
+
 test('collectStyleImports honors tsconfig paths loaded from a file', async () => {
   const project = await createProject('knighted-module-graph-tsconfig-file-')
   try {
