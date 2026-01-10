@@ -228,6 +228,34 @@ test('collectStyleImports honors attributes on re-exports', async () => {
   }
 })
 
+test('collectStyleImports honors asserts on re-exports', async () => {
+  const project = await createProject('knighted-module-graph-attr-reexport-assert-')
+  try {
+    await project.writeFile(
+      'styles/reexport-assert.css',
+      '.reexport-assert { color: indigo; }',
+    )
+    await project.writeFile(
+      'entry.ts',
+      `export * from './styles/reexport-assert.css' assert { type: "css" }
+`,
+    )
+
+    const styles = await collectStyleImports(project.file('entry.ts'), {
+      cwd: project.root,
+      styleExtensions: ['.css'],
+      filter: () => true,
+    })
+
+    assert.deepEqual(
+      await realpathAll(styles),
+      await realpathAll([project.file('styles/reexport-assert.css')]),
+    )
+  } finally {
+    await project.cleanup()
+  }
+})
+
 test('collectStyleImports supports legacy assert syntax for css type', async () => {
   const project = await createProject('knighted-module-graph-attr-assert-')
   try {
@@ -275,6 +303,36 @@ test('collectStyleImports supports dynamic import attributes with static specifi
     assert.deepEqual(
       await realpathAll(styles),
       await realpathAll([project.file('styles/dynamic.css')]),
+    )
+  } finally {
+    await project.cleanup()
+  }
+})
+
+test('collectStyleImports supports dynamic import assert with static specifiers', async () => {
+  const project = await createProject('knighted-module-graph-attr-dynamic-assert-')
+  try {
+    await project.writeFile(
+      'styles/assert-dynamic.css',
+      '.assert-dynamic { color: olive; }',
+    )
+    await project.writeFile(
+      'entry.ts',
+      `export async function load() {
+  return import('./styles/assert-dynamic', { assert: { type: "css" } })
+}
+`,
+    )
+
+    const styles = await collectStyleImports(project.file('entry.ts'), {
+      cwd: project.root,
+      styleExtensions: ['.css'],
+      filter: () => true,
+    })
+
+    assert.deepEqual(
+      await realpathAll(styles),
+      await realpathAll([project.file('styles/assert-dynamic.css')]),
     )
   } finally {
     await project.cleanup()
