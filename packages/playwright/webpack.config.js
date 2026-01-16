@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import webpack from 'webpack'
 import { VanillaExtractPlugin } from '@vanilla-extract/webpack-plugin'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -84,6 +85,9 @@ export default {
           },
           {
             loader: '@knighted/jsx/loader',
+            options: {
+              mode: 'react',
+            },
           },
         ],
       },
@@ -101,6 +105,11 @@ export default {
       },
     ],
   },
-  plugins: [new VanillaExtractPlugin()],
+  plugins: [
+    new VanillaExtractPlugin(),
+    new webpack.ProvidePlugin({
+      React: 'react',
+    }),
+  ],
   devtool: 'source-map',
 }

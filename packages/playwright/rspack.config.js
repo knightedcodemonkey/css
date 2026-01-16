@@ -87,6 +87,9 @@ export default {
         use: [
           {
             loader: '@knighted/jsx/loader',
+            options: {
+              mode: 'react',
+            },
           },
           {
             loader: 'builtin:swc-loader',
