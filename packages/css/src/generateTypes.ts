@@ -40,6 +40,7 @@ interface GenerateTypesInternalOptions {
   include: string[]
   cacheDir: string
   stableNamespace?: string
+  autoStable?: boolean
   tsconfig?: TsconfigResolutionContext
 }
 
@@ -55,6 +56,7 @@ export interface GenerateTypesOptions {
   include?: string[]
   outDir?: string
   stableNamespace?: string
+  autoStable?: boolean
 }
 
 const DEFAULT_SKIP_DIRS = new Set([
@@ -125,6 +127,7 @@ export async function generateTypes(
     include,
     cacheDir,
     stableNamespace: options.stableNamespace,
+    autoStable: options.autoStable,
     tsconfig,
   }
 
@@ -172,9 +175,15 @@ async function generateDeclarations(
       let selectorMap = selectorCache.get(cacheKey)
       if (!selectorMap) {
         try {
+          const shouldUseCssModules = resolvedPath.endsWith('.module.css')
           const { css } = await activeCssWithMeta(resolvedPath, {
             cwd: options.rootDir,
             peerResolver,
+            autoStable: options.autoStable ? { namespace: resolvedNamespace } : undefined,
+            lightningcss:
+              options.autoStable && shouldUseCssModules
+                ? { cssModules: true }
+                : undefined,
           })
           selectorMap = buildStableSelectorsLiteral({
             css,
@@ -616,6 +625,7 @@ export async function runGenerateTypesCli(argv = process.argv.slice(2)): Promise
       include: parsed.include,
       outDir: parsed.outDir,
       stableNamespace: parsed.stableNamespace,
+      autoStable: parsed.autoStable,
     })
     reportCliResult(result)
   } catch (error) {
@@ -630,6 +640,7 @@ export interface ParsedCliArgs {
   include?: string[]
   outDir?: string
   stableNamespace?: string
+  autoStable?: boolean
   help?: boolean
 }
 
@@ -638,11 +649,16 @@ function parseCliArgs(argv: string[]): ParsedCliArgs {
   const include: string[] = []
   let outDir: string | undefined
   let stableNamespace: string | undefined
+  let autoStable = false
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
     if (arg === '--help' || arg === '-h') {
-      return { rootDir, include, outDir, stableNamespace, help: true }
+      return { rootDir, include, outDir, stableNamespace, autoStable, help: true }
+    }
+    if (arg === '--auto-stable') {
+      autoStable = true
+      continue
     }
     if (arg === '--root' || arg === '-r') {
       const value = argv[++i]
@@ -682,7 +698,7 @@ function parseCliArgs(argv: string[]): ParsedCliArgs {
     include.push(arg)
   }
 
-  return { rootDir, include, outDir, stableNamespace }
+  return { rootDir, include, outDir, stableNamespace, autoStable }
 }
 
 function printHelp(): void {
@@ -693,6 +709,7 @@ Options:
   -i, --include <path>           Additional directories/files to scan (repeatable)
       --out-dir <path>           Directory to store selector module manifest cache
       --stable-namespace <name>  Stable namespace prefix for generated selector maps
+      --auto-stable              Enable autoStable when extracting CSS for selectors
   -h, --help                     Show this help message
 `)
 }

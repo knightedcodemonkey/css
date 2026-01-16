@@ -8,13 +8,14 @@ const __dirname = path.dirname(__filename)
 export default {
   mode: 'development',
   context: __dirname,
-  entry: './src/index.ts',
+  entry: './src/auto-stable/index.ts',
   output: {
-    path: path.resolve(__dirname, 'dist'),
-    filename: 'bundle.js',
+    path: path.resolve(__dirname, 'dist-auto-stable'),
+    filename: 'auto-stable-bundle.js',
+    cssFilename: 'auto-stable.css',
     library: {
       type: 'umd',
-      name: 'App',
+      name: 'AutoStableApp',
     },
   },
   resolve: {
@@ -29,42 +30,18 @@ export default {
   module: {
     rules: [
       {
-        test: /\.css\.ts$/,
-        use: [
-          {
-            loader: '@knighted/css/loader',
-            options: {
-              lightningcss: { minify: true },
-              vanilla: { transformToEsm: true },
-            },
-          },
-          {
-            loader: 'builtin:swc-loader',
-            options: {
-              jsc: {
-                target: 'es2022',
-                parser: {
-                  syntax: 'typescript',
-                  tsx: true,
-                },
-              },
-            },
-          },
-        ],
-      },
-      {
         test: /\.module\.css$/,
         type: 'css/module',
       },
       {
         test: /\.[jt]sx?$/,
         resourceQuery: /knighted-css/,
-        exclude: /\.css\.ts$/,
         use: [
           {
             loader: '@knighted/css/loader',
             options: {
               lightningcss: { minify: true },
+              autoStable: true,
             },
           },
           {
@@ -74,7 +51,6 @@ export default {
                 target: 'es2022',
                 parser: {
                   syntax: 'typescript',
-                  tsx: true,
                 },
               },
             },
@@ -83,7 +59,6 @@ export default {
       },
       {
         test: /\.tsx?$/,
-        exclude: [/node_modules/, /\.css\.ts$/],
         use: [
           {
             loader: '@knighted/jsx/loader',
@@ -98,25 +73,11 @@ export default {
                 target: 'es2022',
                 parser: {
                   syntax: 'typescript',
-                  tsx: false,
                 },
               },
             },
           },
         ],
-      },
-      {
-        test: /\.css$/,
-        exclude: /\.module\.css$/,
-        type: 'asset/source',
-      },
-      {
-        test: /\.s[ac]ss$/,
-        type: 'asset/source',
-      },
-      {
-        test: /\.less$/,
-        type: 'asset/source',
       },
     ],
   },

@@ -27,6 +27,7 @@ I needed a single source of truth for UI components that could drop into both li
 - Resolution parity via [`oxc-resolver`](https://github.com/oxc-project/oxc-resolver): tsconfig `paths`, package `exports` + `imports`, and extension aliasing (e.g., `.css.js` → `.css.ts`) are honored without wiring up a bundler.
 - Compiles `*.css`, `*.scss`, `*.sass`, `*.less`, and `*.css.ts` (vanilla-extract) files out of the box.
 - Optional post-processing via [`lightningcss`](https://github.com/parcel-bundler/lightningcss) for minification, prefixing, media query optimizations, or specificity boosts.
+- Deterministic selector duplication via `autoStable`: duplicate matching class selectors with a stable namespace (default `knighted-`) in both plain CSS and CSS Modules exports.
 - Pluggable resolver/filter hooks for custom module resolution (e.g., Rspack/Vite/webpack aliases) or selective inclusion.
 - First-class loader (`@knighted/css/loader`) so bundlers can import compiled CSS alongside their modules via `?knighted-css`.
 - Built-in type generation CLI (`knighted-css-generate-types`) that emits `.knighted-css.*` selector manifests so TypeScript gets literal tokens in lockstep with the loader exports.
@@ -68,6 +69,13 @@ type CssOptions = {
   extensions?: string[] // customize file extensions to scan
   cwd?: string // working directory (defaults to process.cwd())
   filter?: (filePath: string) => boolean
+  autoStable?:
+    | boolean
+    | {
+        namespace?: string
+        include?: RegExp
+        exclude?: RegExp
+      }
   lightningcss?: boolean | LightningTransformOptions
   specificityBoost?: {
     visitor?: LightningTransformOptions<never>['visitor']

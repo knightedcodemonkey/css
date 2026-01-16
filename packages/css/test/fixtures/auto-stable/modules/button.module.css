@@ -1,0 +1,9 @@
+/* CSS Modules composition is intentional for testing; editors may flag "composes" as non-standard */
+.button {
+  color: blue;
+}
+
+.primary {
+  composes: button;
+  color: green;
+}

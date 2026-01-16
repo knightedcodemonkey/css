@@ -9,13 +9,23 @@ import {
 import {
   applyStringSpecificityBoost,
   buildSpecificityVisitor,
+  escapeRegex,
   type SpecificitySelector,
   type SpecificityStrategy,
 } from './helpers.js'
+import {
+  buildAutoStableVisitor,
+  normalizeAutoStableOption,
+  type AutoStableOption,
+  type AutoStableVisitor,
+} from './autoStableSelectors.js'
+import { stableClass } from './stableSelectors.js'
+
 import { collectStyleImports } from './moduleGraph.js'
 import type { ModuleGraphOptions } from './moduleGraph.js'
 import { createSassImporter } from './sassInternals.js'
 import type { CssResolver } from './types.js'
+export type { AutoStableOption } from './autoStableSelectors.js'
 
 export type { CssResolver } from './types.js'
 export type { ModuleGraphOptions } from './moduleGraph.js'
@@ -28,13 +38,56 @@ type LightningCssConfig =
 
 type PeerLoader = (name: string) => Promise<unknown>
 
+type StrictLightningVisitor = Exclude<
+  LightningTransformOptions<never>['visitor'],
+  undefined
+>
+
+const isVisitor = (
+  value: LightningTransformOptions<never>['visitor'] | undefined,
+): value is StrictLightningVisitor => Boolean(value)
+
+function appendStableSelectorsFromExports(
+  css: string,
+  exportsMap: Record<string, string | string[] | { name: string }>,
+  config: AutoStableOption,
+): string {
+  let output = css
+  for (const [token, value] of Object.entries(exportsMap)) {
+    const hashed = Array.isArray(value)
+      ? value.join(' ')
+      : typeof value === 'object' && value !== null && 'name' in value
+        ? (value as { name: string }).name
+        : String(value)
+
+    const hashedClasses = hashed.split(/\s+/).filter(Boolean)
+    if (hashedClasses.length === 0) continue
+
+    const stable = stableClass(token, {
+      namespace:
+        typeof config === 'object' && config?.namespace ? config.namespace : undefined,
+    })
+
+    const stableAlreadyPresent = output.includes(`.${stable}`)
+    const hashedAlreadyIncludesStable = hashedClasses.includes(stable)
+    if (stableAlreadyPresent || hashedAlreadyIncludesStable) continue
+
+    for (const hashedClass of hashedClasses) {
+      const rx = new RegExp(`\\.${escapeRegex(hashedClass)}(?![\\w-])`, 'g')
+      output = output.replace(rx, `.${hashedClass}, .${stable}`)
+    }
+  }
+  return output
+}
+
 export interface CssOptions {
   extensions?: string[]
   cwd?: string
   filter?: (filePath: string) => boolean
   lightningcss?: LightningCssConfig
+  autoStable?: AutoStableOption
   specificityBoost?: {
-    visitor?: LightningTransformOptions<never>['visitor']
+    visitor?: StrictLightningVisitor
     strategy?: SpecificityStrategy
     match?: SpecificitySelector[]
   }
@@ -59,6 +112,7 @@ export interface VanillaCompileResult {
 export interface CssResult {
   css: string
   files: string[]
+  exports?: Record<string, string | string[]>
 }
 
 export async function css(entry: string, options: CssOptions = {}): Promise<string> {
@@ -102,29 +156,59 @@ export async function cssWithMeta(
 
   let output = chunks.join('\n')
 
-  if (options.lightningcss) {
-    const lightningOptions = normalizeLightningOptions(options.lightningcss)
+  const autoStableConfig = normalizeAutoStableOption(options.autoStable)
+  const shouldForceLightning = Boolean(autoStableConfig)
+  const shouldRunLightning = Boolean(options.lightningcss || shouldForceLightning)
+
+  let lightningExports: Record<string, string | string[]> | undefined
+
+  if (shouldRunLightning) {
+    const lightningOptions = normalizeLightningOptions(options.lightningcss ?? {})
     const boostVisitor = buildSpecificityVisitor(options.specificityBoost)
-    const combinedVisitor =
-      boostVisitor && lightningOptions.visitor
-        ? composeVisitors([boostVisitor, lightningOptions.visitor])
-        : (boostVisitor ?? lightningOptions.visitor)
-    if (combinedVisitor) {
-      lightningOptions.visitor = combinedVisitor
+    const shouldUseVisitor = Boolean(autoStableConfig) && !lightningOptions.cssModules
+    const autoStableVisitor: AutoStableVisitor | undefined =
+      shouldUseVisitor && autoStableConfig
+        ? buildAutoStableVisitor(autoStableConfig)
+        : undefined
+
+    const composedVisitors = [
+      boostVisitor,
+      autoStableVisitor,
+      lightningOptions.visitor,
+    ].filter(isVisitor)
+
+    if (composedVisitors.length === 1) {
+      lightningOptions.visitor = composedVisitors[0]
+    } else if (composedVisitors.length > 1) {
+      lightningOptions.visitor = composeVisitors(composedVisitors)
     }
-    const { code } = lightningTransform({
+
+    const result = lightningTransform({
       ...lightningOptions,
       filename: lightningOptions.filename ?? 'extracted.css',
       code: Buffer.from(output),
-    })
-    output = code.toString()
+    }) as ReturnType<typeof lightningTransform> & {
+      exports?: Record<string, string | string[]>
+    }
+
+    output = result.code.toString()
+    if (autoStableConfig && lightningOptions.cssModules && result.exports) {
+      output = appendStableSelectorsFromExports(output, result.exports, autoStableConfig)
+    }
+    if (result.exports) {
+      lightningExports = result.exports
+    }
   }
 
   if (options.specificityBoost?.strategy && !options.specificityBoost.visitor) {
     output = applyStringSpecificityBoost(output, options.specificityBoost)
   }
 
-  return { css: output, files: files.map(file => file.path) }
+  return {
+    css: output,
+    files: files.map(file => file.path),
+    exports: lightningExports,
+  }
 }
 
 async function resolveEntry(

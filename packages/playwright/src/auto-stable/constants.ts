@@ -1,0 +1,5 @@
+export const AUTO_STABLE_HOST_TAG = 'knighted-auto-stable-host'
+export const AUTO_STABLE_HOST_TEST_ID = 'auto-stable-host'
+export const AUTO_STABLE_LIGHT_TEST_ID = 'auto-stable-light'
+export const AUTO_STABLE_SHADOW_TEST_ID = 'auto-stable-shadow'
+export const AUTO_STABLE_TOKEN_TEST_ID = 'auto-stable-token'
