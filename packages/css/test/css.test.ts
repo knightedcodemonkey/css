@@ -197,8 +197,11 @@ test('buildSpecificityVisitor repeat-class mutates matching selectors', () => {
     ],
   }
 
-  const ruleVisitor = visitor.Rule as any
-  const updated = ruleVisitor.style(rule as any)
+  type TestRule = typeof rule
+  const ruleVisitor = visitor.Rule as unknown as {
+    style: (rule: TestRule) => { selectors?: TestRule['selectors'] }
+  }
+  const updated = ruleVisitor.style(rule)
   const [matchSel, skipSel] = (updated.selectors ?? []) as typeof rule.selectors
 
   const appended = matchSel.slice(-2)
@@ -228,11 +231,16 @@ test('buildSpecificityVisitor append-where applies token selectively', () => {
     ],
   }
 
-  const ruleVisitor = visitor.Rule as any
-  const updated = ruleVisitor.style(rule as any)
+  type TestRule = typeof rule
+  const ruleVisitor = visitor.Rule as unknown as {
+    style: (rule: TestRule) => { selectors?: TestRule['selectors'] }
+  }
+  const updated = ruleVisitor.style(rule)
   const [matchSel, skipSel] = (updated.selectors ?? []) as typeof rule.selectors
 
-  const pseudo = matchSel.at(-1) as any
+  const pseudo = matchSel.at(-1) as
+    | { type?: string; kind?: string; selectors?: unknown }
+    | undefined
   assert.equal(pseudo?.type, 'pseudo-class', 'expected pseudo-class at end of selector')
   assert.equal(pseudo?.kind, 'where')
   assert.deepEqual(pseudo?.selectors, [[{ type: 'class', value: 'boost' }]])

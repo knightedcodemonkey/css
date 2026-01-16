@@ -1,4 +1,7 @@
-import { transform as lightningTransform } from 'lightningcss'
+import {
+  type TransformOptions as LightningTransformOptions,
+  transform as lightningTransform,
+} from 'lightningcss'
 
 import { escapeRegex, serializeSelector } from './helpers.js'
 
@@ -6,6 +9,15 @@ export interface StableSelectorsLiteralResult {
   literal: string
   selectorMap: Map<string, string>
 }
+
+type LightningVisitor = LightningTransformOptions<Record<string, never>>['visitor']
+type LightningRuleVisitors = Extract<
+  NonNullable<LightningVisitor>['Rule'],
+  { style?: unknown }
+>
+type LightningStyleRuleVisitor = NonNullable<LightningRuleVisitors['style']>
+type LightningStyleRule = Parameters<LightningStyleRuleVisitor>[0]
+type LightningStyleRuleReturn = ReturnType<LightningStyleRuleVisitor>
 
 type StableSelectorsLiteralTarget = 'ts' | 'js'
 
@@ -78,15 +90,22 @@ function collectStableSelectorsFromAst(
       minify: false,
       visitor: {
         Rule: {
-          style(rule: any) {
-            const target = Array.isArray(rule?.selectors)
-              ? rule
-              : rule?.value && Array.isArray(rule.value.selectors)
-                ? rule.value
+          style(rule: LightningStyleRule): LightningStyleRuleReturn {
+            const candidate = rule as
+              | { selectors?: unknown; value?: { selectors?: unknown } }
+              | null
+              | undefined
+            const target = Array.isArray(candidate?.selectors)
+              ? (candidate as { selectors: unknown[] })
+              : candidate?.value && Array.isArray(candidate.value.selectors)
+                ? (candidate.value as { selectors: unknown[] })
                 : undefined
-            if (!target) return rule
+            if (!target) return rule as LightningStyleRuleReturn
             for (const selector of target.selectors) {
-              const selectorStr = serializeSelector(selector as any)
+              if (!Array.isArray(selector)) continue
+              const selectorStr = serializeSelector(
+                selector as Parameters<typeof serializeSelector>[0],
+              )
               pattern.lastIndex = 0
               let match: RegExpExecArray | null
               while ((match = pattern.exec(selectorStr)) !== null) {
@@ -95,7 +114,7 @@ function collectStableSelectorsFromAst(
                 tokens.set(token, `${namespace}-${token}`)
               }
             }
-            return rule
+            return rule as LightningStyleRuleReturn
           },
         },
       },

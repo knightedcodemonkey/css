@@ -625,7 +625,7 @@ function loadTsconfigPaths(
     if (cached !== undefined) {
       return cached ?? undefined
     }
-    const result = getTsconfig(target, undefined, tsconfigFsCache as Map<string, any>)
+    const result = getTsconfig(target, undefined, tsconfigFsCache as Map<string, unknown>)
     if (!result) {
       tsconfigResultCache.set(target, null)
       return undefined

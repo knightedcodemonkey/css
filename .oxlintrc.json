@@ -1,6 +1,15 @@
 {
   "$schema": "https://json.schemastore.org/oxlintrc",
-  "plugins": ["typescript", "unicorn", "oxc", "react", "node", "import", "vitest"],
+  "plugins": [
+    "eslint",
+    "typescript",
+    "unicorn",
+    "oxc",
+    "react",
+    "node",
+    "import",
+    "vitest"
+  ],
   "env": {
     "es2022": true,
     "node": true
@@ -9,6 +18,9 @@
     "process": "readonly"
   },
   "rules": {
+    "no-shadow": "off",
+    "@typescript-eslint/no-shadow": "error",
+    "@typescript-eslint/no-explicit-any": "error",
     "unicorn/filename-case": [
       "error",
       {

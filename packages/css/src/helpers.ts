@@ -4,6 +4,14 @@ export type SpecificitySelector = string | RegExp
 
 export type LightningVisitor = LightningTransformOptions<Record<string, never>>['visitor']
 
+type LightningRuleVisitors = Extract<
+  NonNullable<LightningVisitor>['Rule'],
+  { style?: unknown }
+>
+type LightningStyleRuleVisitor = NonNullable<LightningRuleVisitors['style']>
+type LightningStyleRule = Parameters<LightningStyleRuleVisitor>[0]
+type LightningStyleRuleReturn = ReturnType<LightningStyleRuleVisitor>
+
 export type SpecificityStrategy =
   | { type: 'append-where'; token: string }
   | { type: 'repeat-class'; times?: number }
@@ -27,10 +35,16 @@ export function buildSpecificityVisitor(boost?: {
     const times = Math.max(1, boost.strategy.times ?? 1)
     const visitor: LightningVisitor = {
       Rule: {
-        style(rule: any) {
-          if (!rule || !Array.isArray(rule.selectors)) return rule
-          const newSelectors = rule.selectors.map((sel: any) => {
-            const selectorStr = serializeSelector(sel)
+        style(rule: LightningStyleRule): LightningStyleRuleReturn {
+          const candidate = rule as { selectors?: unknown } | null | undefined
+          if (!candidate || !Array.isArray(candidate.selectors)) {
+            return rule as LightningStyleRuleReturn
+          }
+          const newSelectors = candidate.selectors.map((sel: unknown) => {
+            if (!Array.isArray(sel)) return sel
+            const selectorStr = serializeSelector(
+              sel as Parameters<typeof serializeSelector>[0],
+            )
             if (!shouldApply(selectorStr)) return sel
             const lastClassName = findLastClassName(selectorStr)
             if (!lastClassName) return sel
@@ -40,7 +54,10 @@ export function buildSpecificityVisitor(boost?: {
             }))
             return [...sel, ...repeats]
           })
-          return { ...rule, selectors: newSelectors }
+          return {
+            ...candidate,
+            selectors: newSelectors,
+          } as unknown as LightningStyleRuleReturn
         },
       },
     }
@@ -51,10 +68,16 @@ export function buildSpecificityVisitor(boost?: {
     const token = boost.strategy.token
     const visitor: LightningTransformOptions<never>['visitor'] = {
       Rule: {
-        style(rule: any) {
-          if (!rule || !Array.isArray(rule.selectors)) return rule
-          const newSelectors = rule.selectors.map((sel: any) => {
-            const selectorStr = serializeSelector(sel)
+        style(rule: LightningStyleRule): LightningStyleRuleReturn {
+          const candidate = rule as { selectors?: unknown } | null | undefined
+          if (!candidate || !Array.isArray(candidate.selectors)) {
+            return rule as LightningStyleRuleReturn
+          }
+          const newSelectors = candidate.selectors.map((sel: unknown) => {
+            if (!Array.isArray(sel)) return sel
+            const selectorStr = serializeSelector(
+              sel as Parameters<typeof serializeSelector>[0],
+            )
             if (!shouldApply(selectorStr)) return sel
             return [
               ...sel,
@@ -65,7 +88,10 @@ export function buildSpecificityVisitor(boost?: {
               },
             ]
           })
-          return { ...rule, selectors: newSelectors }
+          return {
+            ...candidate,
+            selectors: newSelectors,
+          } as unknown as LightningStyleRuleReturn
         },
       },
     }
