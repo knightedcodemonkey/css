@@ -1,16 +1,14 @@
 import { type TransformOptions as LightningTransformOptions } from 'lightningcss'
 
+import type {
+  LightningStyleRule,
+  LightningStyleRuleReturn,
+  LightningVisitor,
+} from './types.js'
+
 export type SpecificitySelector = string | RegExp
 
-export type LightningVisitor = LightningTransformOptions<Record<string, never>>['visitor']
-
-type LightningRuleVisitors = Extract<
-  NonNullable<LightningVisitor>['Rule'],
-  { style?: unknown }
->
-type LightningStyleRuleVisitor = NonNullable<LightningRuleVisitors['style']>
-type LightningStyleRule = Parameters<LightningStyleRuleVisitor>[0]
-type LightningStyleRuleReturn = ReturnType<LightningStyleRuleVisitor>
+export type { LightningVisitor }
 
 export type SpecificityStrategy =
   | { type: 'append-where'; token: string }

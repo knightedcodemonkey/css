@@ -1,23 +1,12 @@
-import {
-  type TransformOptions as LightningTransformOptions,
-  transform as lightningTransform,
-} from 'lightningcss'
+import { transform as lightningTransform } from 'lightningcss'
 
 import { escapeRegex, serializeSelector } from './helpers.js'
+import type { LightningStyleRule, LightningStyleRuleReturn } from './types.js'
 
 export interface StableSelectorsLiteralResult {
   literal: string
   selectorMap: Map<string, string>
 }
-
-type LightningVisitor = LightningTransformOptions<Record<string, never>>['visitor']
-type LightningRuleVisitors = Extract<
-  NonNullable<LightningVisitor>['Rule'],
-  { style?: unknown }
->
-type LightningStyleRuleVisitor = NonNullable<LightningRuleVisitors['style']>
-type LightningStyleRule = Parameters<LightningStyleRuleVisitor>[0]
-type LightningStyleRuleReturn = ReturnType<LightningStyleRuleVisitor>
 
 type StableSelectorsLiteralTarget = 'ts' | 'js'
 
