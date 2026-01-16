@@ -1,6 +1,7 @@
 import { transform as lightningTransform } from 'lightningcss'
 
 import { escapeRegex, serializeSelector } from './helpers.js'
+import type { LightningStyleRule, LightningStyleRuleReturn } from './types.js'
 
 export interface StableSelectorsLiteralResult {
   literal: string
@@ -78,15 +79,22 @@ function collectStableSelectorsFromAst(
       minify: false,
       visitor: {
         Rule: {
-          style(rule: any) {
-            const target = Array.isArray(rule?.selectors)
-              ? rule
-              : rule?.value && Array.isArray(rule.value.selectors)
-                ? rule.value
+          style(rule: LightningStyleRule): LightningStyleRuleReturn {
+            const candidate = rule as
+              | { selectors?: unknown; value?: { selectors?: unknown } }
+              | null
+              | undefined
+            const target = Array.isArray(candidate?.selectors)
+              ? (candidate as { selectors: unknown[] })
+              : candidate?.value && Array.isArray(candidate.value.selectors)
+                ? (candidate.value as { selectors: unknown[] })
                 : undefined
-            if (!target) return rule
+            if (!target) return rule as LightningStyleRuleReturn
             for (const selector of target.selectors) {
-              const selectorStr = serializeSelector(selector as any)
+              if (!Array.isArray(selector)) continue
+              const selectorStr = serializeSelector(
+                selector as Parameters<typeof serializeSelector>[0],
+              )
               pattern.lastIndex = 0
               let match: RegExpExecArray | null
               while ((match = pattern.exec(selectorStr)) !== null) {
@@ -95,7 +103,7 @@ function collectStableSelectorsFromAst(
                 tokens.set(token, `${namespace}-${token}`)
               }
             }
-            return rule
+            return rule as LightningStyleRuleReturn
           },
         },
       },
