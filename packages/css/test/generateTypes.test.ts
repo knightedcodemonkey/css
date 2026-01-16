@@ -219,6 +219,37 @@ test('generateTypes emits declarations and reuses cache', async () => {
   }
 })
 
+test('generateTypes autoStable emits selectors for CSS Modules', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-auto-stable-'))
+  try {
+    const srcDir = path.join(root, 'src')
+    await fs.mkdir(srcDir, { recursive: true })
+    const cssPath = path.join(srcDir, 'styles.module.css')
+    await fs.writeFile(cssPath, '.card { color: red; }\n')
+    await fs.writeFile(
+      path.join(srcDir, 'entry.ts'),
+      "import selectors from './styles.module.css.knighted-css'\n" +
+        'console.log(selectors.card)\n',
+    )
+
+    const outDir = path.join(root, '.knighted-css-test')
+    const result = await generateTypes({
+      rootDir: root,
+      include: ['src'],
+      outDir,
+      autoStable: true,
+    })
+    assert.ok(result.selectorModulesWritten >= 1)
+    assert.equal(result.warnings.length, 0)
+
+    const selectorModulePath = path.join(srcDir, 'styles.module.css.knighted-css.ts')
+    const selectorModule = await fs.readFile(selectorModulePath, 'utf8')
+    assert.match(selectorModule, /"card": "knighted-card"/)
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
 test('generateTypes resolves tsconfig baseUrl specifiers', async () => {
   const project = await setupBaseUrlFixture()
   try {
@@ -622,10 +653,12 @@ test('generateTypes internals support selector module helpers', async () => {
     'storybook',
     '--out-dir',
     '.knighted-css',
+    '--auto-stable',
   ]) as ParsedCliArgs
   assert.equal(parsed.rootDir, path.resolve('/tmp/project'))
   assert.deepEqual(parsed.include, ['src'])
   assert.equal(parsed.stableNamespace, 'storybook')
+  assert.equal(parsed.autoStable, true)
 
   assert.throws(() => parseCliArgs(['--root']), /Missing value/)
   assert.throws(() => parseCliArgs(['--include']), /Missing value/)
