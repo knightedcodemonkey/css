@@ -6,8 +6,14 @@ import type {
   PitchLoaderDefinitionFunction,
 } from 'webpack'
 
-import { cssWithMeta, compileVanillaModule, type CssOptions } from './css.js'
+import {
+  cssWithMeta,
+  compileVanillaModule,
+  type CssOptions,
+  type CssResult,
+} from './css.js'
 import { detectModuleDefaultExport, type ModuleDefaultSignal } from './moduleInfo.js'
+import { normalizeAutoStableOption } from './autoStableSelectors.js'
 import {
   buildSanitizedQuery,
   hasCombinedQuery,
@@ -19,6 +25,7 @@ import {
 } from './loaderInternals.js'
 import { buildStableSelectorsLiteral } from './stableSelectorsLiteral.js'
 import { resolveStableNamespace } from './stableNamespace.js'
+import { stableClass } from './stableSelectors.js'
 
 type KnightedCssCombinedExtras = Readonly<Record<string, unknown>>
 
@@ -29,6 +36,14 @@ export type KnightedCssCombinedModule<
   TExtras & {
     knightedCss: string
   }
+
+type CssModuleExportValue =
+  | string
+  | string[]
+  | {
+      name?: string
+      composes?: Array<{ name?: string } | string>
+    }
 
 export interface KnightedCssVanillaOptions {
   transformToEsm?: boolean
@@ -51,7 +66,20 @@ const loader: LoaderDefinitionFunction<KnightedCssLoaderOptions> = async functio
   } = resolveLoaderOptions(this)
   const resolvedNamespace = resolveStableNamespace(optionNamespace)
   const typesRequested = hasQueryFlag(this.resourceQuery, TYPES_QUERY_FLAG)
-  const css = await extractCss(this, cssOptions)
+  const isStyleModule = this.resourcePath.endsWith('.css.ts')
+  const cssOptionsForExtract = isStyleModule
+    ? { ...cssOptions, autoStable: undefined }
+    : cssOptions
+  const cssMeta = await extractCss(this, cssOptionsForExtract)
+  const activeAutoStable = normalizeAutoStableOption(cssOptionsForExtract.autoStable)
+  const cssModuleExports = activeAutoStable
+    ? mergeCssModuleExports(cssMeta.exports, {
+        namespace: activeAutoStable.namespace ?? resolvedNamespace,
+        include: activeAutoStable.include,
+        exclude: activeAutoStable.exclude,
+      })
+    : undefined
+  const css = cssMeta.css
   const stableSelectorsLiteral = typesRequested
     ? buildStableSelectorsLiteral({
         css,
@@ -61,10 +89,13 @@ const loader: LoaderDefinitionFunction<KnightedCssLoaderOptions> = async functio
         target: 'js',
       })
     : undefined
+  const emitCssModuleDefault =
+    isCssLikeResource(this.resourcePath) && Boolean(cssModuleExports)
   const injection = buildInjection(css, {
     stableSelectorsLiteral: stableSelectorsLiteral?.literal,
+    cssModuleExports,
+    emitCssModuleDefault,
   })
-  const isStyleModule = this.resourcePath.endsWith('.css.ts')
   if (isStyleModule) {
     const { source: compiledSource } = await compileVanillaModule(
       this.resourcePath,
@@ -128,24 +159,34 @@ export const pitch: PitchLoaderDefinitionFunction<KnightedCssLoaderOptions> =
       : detectModuleDefaultExport(this.resourcePath)
 
     return Promise.all([extractCss(this, cssOptions), defaultSignalPromise]).then(
-      ([css, defaultSignal]) => {
+      ([cssMeta, defaultSignal]) => {
         const emitDefault = shouldEmitCombinedDefault({
           request,
           skipSyntheticDefault,
           detection: defaultSignal,
         })
+        const activeAutoStable = normalizeAutoStableOption(cssOptions.autoStable)
+        const cssModuleExports = activeAutoStable
+          ? mergeCssModuleExports(cssMeta.exports, {
+              namespace: activeAutoStable.namespace ?? resolvedNamespace,
+              include: activeAutoStable.include,
+              exclude: activeAutoStable.exclude,
+            })
+          : undefined
         const stableSelectorsLiteral = typesRequested
           ? buildStableSelectorsLiteral({
-              css,
+              css: cssMeta.css,
               namespace: resolvedNamespace,
               resourcePath: this.resourcePath,
               emitWarning: message => emitKnightedWarning(this, message),
               target: 'js',
             })
           : undefined
-        return createCombinedModule(request, css, {
+        return createCombinedModule(request, cssMeta.css, {
           emitDefault,
           stableSelectorsLiteral: stableSelectorsLiteral?.literal,
+          cssModuleExports,
+          emitCssModuleDefault: false,
         })
       },
     )
@@ -177,13 +218,13 @@ function resolveLoaderOptions(ctx: LoaderContext<KnightedCssLoaderOptions>): {
 async function extractCss(
   ctx: LoaderContext<KnightedCssLoaderOptions>,
   options: CssOptions,
-): Promise<string> {
-  const { css, files } = await cssWithMeta(ctx.resourcePath, options)
-  const uniqueFiles = new Set([ctx.resourcePath, ...files])
+): Promise<CssResult> {
+  const result = await cssWithMeta(ctx.resourcePath, options)
+  const uniqueFiles = new Set([ctx.resourcePath, ...result.files])
   for (const file of uniqueFiles) {
     ctx.addDependency(file)
   }
-  return css
+  return result
 }
 
 function toSourceString(source: string | Buffer): string {
@@ -192,13 +233,80 @@ function toSourceString(source: string | Buffer): string {
 
 function buildInjection(
   css: string,
-  extras?: { stableSelectorsLiteral?: string },
+  extras?: {
+    stableSelectorsLiteral?: string
+    cssModuleExports?: Record<string, string>
+    emitCssModuleDefault?: boolean
+  },
 ): string {
   const lines = [`\n\nexport const ${DEFAULT_EXPORT_NAME} = ${JSON.stringify(css)};\n`]
   if (extras?.stableSelectorsLiteral) {
     lines.push(extras.stableSelectorsLiteral)
   }
+  if (extras?.cssModuleExports) {
+    lines.push(
+      `export const knightedCssModules = ${JSON.stringify(extras.cssModuleExports)};`,
+    )
+    if (extras.emitCssModuleDefault) {
+      lines.push('export default knightedCssModules;')
+    }
+  }
   return lines.join('')
+}
+
+function isCssLikeResource(resourcePath: string): boolean {
+  return (
+    /\.(css|scss|sass|less)(\?.*)?$/i.test(resourcePath) &&
+    !resourcePath.endsWith('.css.ts')
+  )
+}
+
+function mergeCssModuleExports(
+  exportsMap: CssResult['exports'],
+  options: { namespace?: string; include?: RegExp; exclude?: RegExp },
+): Record<string, string> | undefined {
+  if (!exportsMap) return undefined
+
+  const output: Record<string, string> = {}
+  for (const [token, value] of Object.entries(exportsMap)) {
+    const hashedParts = toClassParts(value)
+
+    if (options.exclude && options.exclude.test(token)) {
+      output[token] = hashedParts.join(' ')
+      continue
+    }
+    if (options.include && !options.include.test(token)) {
+      output[token] = hashedParts.join(' ')
+      continue
+    }
+
+    const stable = stableClass(token, { namespace: options.namespace })
+    if (stable && !hashedParts.includes(stable)) {
+      hashedParts.push(stable)
+    }
+    output[token] = hashedParts.join(' ')
+  }
+
+  return output
+}
+
+function toClassParts(value: CssModuleExportValue | undefined): string[] {
+  if (!value) return []
+  if (Array.isArray(value)) {
+    return value.flatMap(part => part.split(/\s+/).filter(Boolean))
+  }
+  if (typeof value === 'object') {
+    const parts = [
+      value.name,
+      ...(value.composes ?? []).map(entry =>
+        typeof entry === 'string' ? entry : entry?.name,
+      ),
+    ]
+      .filter(Boolean)
+      .map(String)
+    return parts.flatMap(part => part.split(/\s+/).filter(Boolean))
+  }
+  return value.split(/\s+/).filter(Boolean)
 }
 
 function buildProxyRequest(ctx: LoaderContext<KnightedCssLoaderOptions>): string {
@@ -298,6 +406,8 @@ function isRelativeSpecifier(specifier: string): boolean {
 interface CombinedModuleOptions {
   emitDefault?: boolean
   stableSelectorsLiteral?: string
+  cssModuleExports?: Record<string, string>
+  emitCssModuleDefault?: boolean
 }
 
 function createCombinedModule(
@@ -323,7 +433,11 @@ typeof __knightedModule.default !== 'undefined'
   }
 
   lines.push(
-    buildInjection(css, { stableSelectorsLiteral: options?.stableSelectorsLiteral }),
+    buildInjection(css, {
+      stableSelectorsLiteral: options?.stableSelectorsLiteral,
+      cssModuleExports: options?.cssModuleExports,
+      emitCssModuleDefault: options?.emitCssModuleDefault,
+    }),
   )
   return lines.join('\n')
 }

@@ -40,6 +40,23 @@ export default {
 > [!TIP]
 > Sass-only aliases such as `pkg:#button` never hit Node resolution. Add a small shim resolver (see [docs/sass-import-aliases.md](./sass-import-aliases.md)) when you need to rewrite those specifiers before the loader runs.
 
+### Deterministic selectors (`autoStable`)
+
+Pass `autoStable` to duplicate every matching class selector with a deterministic namespace (default `knighted-`). This runs without PostCSS and works for both plain CSS and CSS Modules:
+
+```js
+{
+  loader: '@knighted/css/loader',
+  options: {
+    autoStable: true, // or { namespace: 'myapp', include: /button|card/, exclude: /legacy/ }
+  },
+}
+```
+
+- Plain CSS: `.foo {}` becomes `.foo, .knighted-foo {}`.
+- CSS Modules: exports and generated class strings include both the hashed class and the stable class so you can reference either at runtime.
+- `autoStable` forces a LightningCSS pass; use `include`/`exclude` to scope which class tokens are duplicated.
+
 ### Combined imports
 
 Need the component exports **and** the compiled CSS from a single import? Use `?knighted-css&combined` and narrow the result with `KnightedCssCombinedModule` to keep TypeScript happy:
