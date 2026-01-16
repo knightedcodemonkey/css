@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 
 import { cssWithMeta } from '../src/css.js'
@@ -7,13 +8,13 @@ import type { LightningVisitor } from '../src/helpers.js'
 import type { SelectorComponent } from 'lightningcss'
 
 const fixturesDir = path.resolve(
-  path.dirname(new URL(import.meta.url).pathname),
+  path.dirname(fileURLToPath(import.meta.url)),
   'fixtures',
   'auto-stable',
   'plain',
 )
 const modulesDir = path.resolve(
-  path.dirname(new URL(import.meta.url).pathname),
+  path.dirname(fileURLToPath(import.meta.url)),
   'fixtures',
   'auto-stable',
   'modules',
