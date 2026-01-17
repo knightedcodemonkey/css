@@ -374,6 +374,10 @@ function extractSelectorSourceSpecifier(specifier: string): string | undefined {
   if (!base) {
     return undefined
   }
+  /**
+   * Handles specifiers like "./entry.knighted-css.ts" where the base has no
+   * extension but the selector suffix includes one.
+   */
   if (suffix && !path.extname(base)) {
     return `${base}${suffix}`
   }
@@ -595,6 +599,10 @@ async function resolveWithExtensionFallback(
   if (indexResolved) {
     return indexResolved
   }
+  /*
+   * Return the original candidate to preserve existing behavior when nothing
+   * resolves (callers may still want a best-effort path for warnings).
+   */
   return candidatePath
 }
 
