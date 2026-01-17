@@ -1,13 +1,14 @@
 import { reactJsx } from '@knighted/jsx/react'
-import { asKnightedCssCombinedModule } from '@knighted/css/loader-helpers'
 import { createRoot, type Root } from 'react-dom/client'
 import { LitElement, css, html, unsafeCSS, type PropertyValues } from 'lit'
 
-import * as shadowTree from './shadow-tree.js?knighted-css&combined&named-only'
-import { AUTO_STABLE_HOST_TAG } from './constants.js'
+import {
+  ShadowTree,
+  knightedCss as shadowTreeCss,
+  stableSelectors,
+} from './shadow-tree.knighted-css.js'
+import { AUTO_STABLE_HOST_TAG, AUTO_STABLE_PROXY_TEST_ID } from './constants.js'
 
-const { ShadowTree, knightedCss: shadowTreeCss } =
-  asKnightedCssCombinedModule<typeof import('./shadow-tree.js')>(shadowTree)
 const hostShell = css`
   :host {
     display: block;
@@ -52,7 +53,12 @@ export class AutoStableHost extends LitElement {
   }
 
   render() {
-    return html`<div data-react-root></div>`
+    return html`<div data-react-root></div>
+      <span
+        data-testid=${AUTO_STABLE_PROXY_TEST_ID}
+        data-stable-class=${stableSelectors.card}
+        data-css-length=${shadowTreeCss.length}
+      ></span>`
   }
 }
 

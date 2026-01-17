@@ -13,3 +13,4 @@ test-results/
 blob-report/
 .knighted-css/
 .knighted-css-auto/
+packages/playwright/src/**/*.knighted-css.ts

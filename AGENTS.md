@@ -51,6 +51,7 @@ Workspace-scoped (preferred when changing @knighted/css only):
 - ESM only (`type: module`).
 - Prettier: single quotes, no semicolons, `printWidth: 90`, `arrowParens: avoid`.
 - Keep functions small and side-effect aware; prefer pure helpers where possible.
+- Prefer multiline comment style (`/* ... */`) when a comment spans more than one line.
 
 ### Example style (good)
 
