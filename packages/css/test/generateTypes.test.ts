@@ -196,7 +196,7 @@ test('generateTypes emits declarations and reuses cache', async () => {
       project.root,
       'src',
       'fixture',
-      'entry.js.knighted-css.ts',
+      'entry.knighted-css.ts',
     )
     const selectorModule = await fs.readFile(selectorModulePath, 'utf8')
     assert.ok(selectorModule.includes("export * from './entry.js'"))
@@ -546,7 +546,7 @@ test('generateTypes emits unified proxy modules for JS/TS specifiers', async () 
     const result = await generateTypes({ rootDir: root, include: ['src'] })
     assert.equal(result.warnings.length, 0)
 
-    const buttonProxyPath = path.join(srcDir, 'button.ts.knighted-css.ts')
+    const buttonProxyPath = path.join(srcDir, 'button.knighted-css.ts')
     const buttonProxy = await fs.readFile(buttonProxyPath, 'utf8')
     assert.ok(buttonProxy.includes("export * from './button.js'"))
     assert.ok(buttonProxy.includes("export { default } from './button.js'"))
@@ -555,12 +555,12 @@ test('generateTypes emits unified proxy modules for JS/TS specifiers', async () 
     )
     assert.ok(buttonProxy.includes('"card": "knighted-card"'))
 
-    const helperProxyPath = path.join(srcDir, 'helper.ts.knighted-css.ts')
+    const helperProxyPath = path.join(srcDir, 'helper.knighted-css.ts')
     const helperProxy = await fs.readFile(helperProxyPath, 'utf8')
     assert.ok(helperProxy.includes("export * from './helper.js'"))
     assert.ok(!helperProxy.includes("export { default } from './helper.js'"))
 
-    const fancyProxyPath = path.join(srcDir, 'fancy.ts.knighted-css.ts')
+    const fancyProxyPath = path.join(srcDir, 'fancy.knighted-css.ts')
     const fancyProxy = await fs.readFile(fancyProxyPath, 'utf8')
     assert.ok(fancyProxy.includes("export * from './fancy.js'"))
     assert.ok(fancyProxy.includes("export { default } from './fancy.js'"))
@@ -656,6 +656,8 @@ test('generateTypes internals support selector module helpers', async () => {
   assert.equal(extractSelectorSourceSpecifier('./demo.ts.knighted-css'), './demo.ts')
   assert.equal(extractSelectorSourceSpecifier('./demo.ts.knighted-css.ts'), './demo.ts')
   assert.equal(extractSelectorSourceSpecifier('./demo.ts'), undefined)
+  assert.equal(extractSelectorSourceSpecifier('.knighted-css'), undefined)
+  assert.equal(extractSelectorSourceSpecifier('./demo.knighted-css.css'), undefined)
 
   const selectorMap = new Map([
     ['beta', 'knighted-beta'],
@@ -677,6 +679,9 @@ test('generateTypes internals support selector module helpers', async () => {
   assert.ok(manifestKey.includes('entry.js'))
   const modulePath = buildSelectorModulePath('/tmp/project/src/entry.js')
   assert.ok(modulePath.endsWith('.knighted-css.ts'))
+  assert.ok(!modulePath.includes('.js.knighted-css.ts'))
+  const cssModulePath = buildSelectorModulePath('/tmp/project/src/styles.css')
+  assert.ok(cssModulePath.endsWith('styles.css.knighted-css.ts'))
 
   const normalized = normalizeIncludeOptions(undefined, '/tmp/project')
   assert.deepEqual(normalized, ['/tmp/project'])
@@ -695,6 +700,11 @@ test('generateTypes internals support selector module helpers', async () => {
     const resolved = await resolveWithExtensionFallback(path.join(tempRoot, 'widget.js'))
     assert.equal(resolved, filePath)
 
+    const missingResolved = await resolveWithExtensionFallback(
+      path.join(tempRoot, 'missing.ts'),
+    )
+    assert.equal(missingResolved, path.join(tempRoot, 'missing.ts'))
+
     const indexDir = path.join(tempRoot, 'pkg')
     await fs.mkdir(indexDir, { recursive: true })
     const indexPath = path.join(indexDir, 'index.ts')
@@ -704,6 +714,9 @@ test('generateTypes internals support selector module helpers', async () => {
   } finally {
     await fs.rm(tempRoot, { recursive: true, force: true })
   }
+
+  const fallbackRoot = resolvePackageRoot()
+  assert.ok(fallbackRoot.endsWith(path.join('node_modules', '@knighted', 'css')))
 
   const nonFileEntry = path.join(os.tmpdir(), 'knighted-non-file-entry')
   const resolvedNonFileEntry = path.resolve(nonFileEntry)
@@ -910,8 +923,33 @@ test('generateTypes internals support selector module helpers', async () => {
       resolveRoot,
     )
     assert.equal(relativeResolved, path.join(resolveRoot, 'src', 'styles', 'demo.css'))
+
+    const absoluteTarget = path.join(resolveRoot, 'src', 'absolute.ts')
+    await fs.writeFile(absoluteTarget, 'export const abs = true')
+    const absoluteResolved = await resolveImportPath(
+      '/src/absolute.ts',
+      importer,
+      resolveRoot,
+    )
+    assert.equal(absoluteResolved, absoluteTarget)
   } finally {
     await fs.rm(resolveRoot, { recursive: true, force: true })
+  }
+
+  const baseUrlRoot = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'knighted-tsconfig-baseurl-'),
+  )
+  try {
+    const baseUrl = path.join(baseUrlRoot, 'src')
+    await fs.mkdir(baseUrl, { recursive: true })
+    const baseUrlFile = path.join(baseUrl, 'base.ts')
+    await fs.writeFile(baseUrlFile, 'export const base = true')
+    const resolvedBaseUrl = await resolveWithTsconfigPaths('base.ts', {
+      absoluteBaseUrl: baseUrl,
+    })
+    assert.equal(resolvedBaseUrl, baseUrlFile)
+  } finally {
+    await fs.rm(baseUrlRoot, { recursive: true, force: true })
   }
 
   const rooted = relativeToRoot(
