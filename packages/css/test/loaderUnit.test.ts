@@ -546,15 +546,45 @@ test('combined&types proxy surfaces runtime stableSelectors export', async () =>
   assert.match(combinedOutput, /export const knightedCss = /)
 })
 
+test('stable query behaves like combined&types', async () => {
+  const resourcePath = path.resolve(__dirname, 'fixtures/dialects/basic/entry.js')
+  const ctx = createMockContext({
+    resourcePath,
+    resourceQuery: '?knighted-css&stable',
+    loadModule: (_request: string, callback: LoaderCallback) => {
+      callback(null, 'export const Card = () => null;')
+    },
+  })
+
+  const result = await pitch.call(
+    ctx as LoaderContext<KnightedCssLoaderOptions>,
+    `${resourcePath}?knighted-css&stable`,
+    '',
+    {},
+  )
+
+  const combinedOutput = String(result ?? '')
+  assert.match(
+    combinedOutput,
+    /export const stableSelectors = Object\.freeze\(\{[^}]+\}\);/,
+  )
+  assert.match(combinedOutput, /export const knightedCss = /)
+})
+
 test('determineSelectorVariant maps query combinations to expected variants', () => {
   assert.equal(determineSelectorVariant('?knighted-css&types'), 'types')
   assert.equal(determineSelectorVariant('?knighted-css&combined'), 'combined')
+  assert.equal(determineSelectorVariant('?knighted-css&stable'), 'combined')
   assert.equal(
     determineSelectorVariant('?knighted-css&combined&named-only'),
     'combinedWithoutDefault',
   )
   assert.equal(
     determineSelectorVariant('?knighted-css&combined&no-default'),
+    'combinedWithoutDefault',
+  )
+  assert.equal(
+    determineSelectorVariant('?knighted-css&stable&named-only'),
     'combinedWithoutDefault',
   )
 })

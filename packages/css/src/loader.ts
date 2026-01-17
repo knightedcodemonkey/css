@@ -21,6 +21,7 @@ import {
   hasQueryFlag,
   shouldEmitCombinedDefault,
   shouldForwardDefaultExport,
+  STABLE_QUERY_FLAG,
   TYPES_QUERY_FLAG,
 } from './loaderInternals.js'
 import { buildStableSelectorsLiteral } from './stableSelectorsLiteral.js'
@@ -65,7 +66,9 @@ const loader: LoaderDefinitionFunction<KnightedCssLoaderOptions> = async functio
     stableNamespace: optionNamespace,
   } = resolveLoaderOptions(this)
   const resolvedNamespace = resolveStableNamespace(optionNamespace)
-  const typesRequested = hasQueryFlag(this.resourceQuery, TYPES_QUERY_FLAG)
+  const typesRequested =
+    hasQueryFlag(this.resourceQuery, TYPES_QUERY_FLAG) ||
+    hasQueryFlag(this.resourceQuery, STABLE_QUERY_FLAG)
   const isStyleModule = this.resourcePath.endsWith('.css.ts')
   const cssOptionsForExtract = isStyleModule
     ? { ...cssOptions, autoStable: undefined }
@@ -151,7 +154,9 @@ export const pitch: PitchLoaderDefinitionFunction<KnightedCssLoaderOptions> =
 
     const request = buildProxyRequest(this)
     const { cssOptions, stableNamespace: optionNamespace } = resolveLoaderOptions(this)
-    const typesRequested = hasQueryFlag(this.resourceQuery, TYPES_QUERY_FLAG)
+    const typesRequested =
+      hasQueryFlag(this.resourceQuery, TYPES_QUERY_FLAG) ||
+      hasQueryFlag(this.resourceQuery, STABLE_QUERY_FLAG)
     const resolvedNamespace = resolveStableNamespace(optionNamespace)
     const skipSyntheticDefault = hasNamedOnlyQueryFlag(this.resourceQuery)
     const defaultSignalPromise = skipSyntheticDefault

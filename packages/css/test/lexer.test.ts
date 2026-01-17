@@ -27,6 +27,7 @@ void styles
   })
 
   assert.equal(result.defaultSignal, 'has-default')
+  assert.deepEqual(result.exports, [])
   assert.deepEqual(result.imports.sort(), [
     '#hash/map.css',
     './styles/import-equals.css',
@@ -55,6 +56,7 @@ void spread
   })
 
   assert.equal(result.defaultSignal, 'has-default')
+  assert.deepEqual(result.exports.sort(), ['another', 'named'])
   assert.deepEqual(result.imports.sort(), [
     './styles/another.css',
     './styles/named.css',

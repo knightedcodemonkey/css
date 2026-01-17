@@ -25,6 +25,7 @@ interface ManifestEntry {
 }
 
 type SelectorModuleManifest = Record<string, ManifestEntry>
+type StableDeclarationManifest = Record<string, ManifestEntry>
 
 interface TsconfigResolutionContext {
   absoluteBaseUrl?: string
@@ -110,7 +111,10 @@ function getImportMetaUrl(): string | undefined {
 }
 
 const SELECTOR_REFERENCE = '.knighted-css'
+const KNIGHTED_CSS_QUERY_FLAG = 'knighted-css'
+const STABLE_QUERY_FLAG = 'stable'
 const SELECTOR_MODULE_SUFFIX = '.knighted-css.ts'
+const STABLE_DECLARATION_SUFFIX = '.knighted-css-stable.d.ts'
 
 export async function generateTypes(
   options: GenerateTypesOptions = {},
@@ -140,10 +144,27 @@ async function generateDeclarations(
   const peerResolver = createProjectPeerResolver(options.rootDir)
   const files = await collectCandidateFiles(options.include)
   const selectorModulesManifestPath = path.join(options.cacheDir, 'selector-modules.json')
+  const stableDeclarationsManifestPath = path.join(
+    options.cacheDir,
+    'stable-declarations.json',
+  )
   const previousSelectorManifest = await readManifest(selectorModulesManifestPath)
+  const previousStableManifest = await readManifest(stableDeclarationsManifestPath)
   const nextSelectorManifest: SelectorModuleManifest = {}
+  const nextStableManifest: StableDeclarationManifest = {}
   const selectorCache = new Map<string, Map<string, string>>()
+  const moduleExportCache = new Map<string, string[]>()
   const processedSelectors = new Set<string>()
+  const stableDeclarations = new Map<
+    string,
+    Array<{
+      specifier: string
+      resourcePath: string
+      selectorMap: Map<string, string>
+      exportNames: string[]
+      namedOnly: boolean
+    }>
+  >()
   const warnings: string[] = []
   let selectorModuleWrites = 0
 
@@ -152,8 +173,11 @@ async function generateDeclarations(
     for (const match of matches) {
       const cleaned = match.specifier.trim()
       const inlineFree = stripInlineLoader(cleaned)
-      const { resource } = splitResourceAndQuery(inlineFree)
-      const selectorSource = extractSelectorSourceSpecifier(resource)
+      const { resource, query } = splitResourceAndQuery(inlineFree)
+      const isStableImport = hasStableQuery(query)
+      const selectorSource =
+        extractSelectorSourceSpecifier(resource) ||
+        (isStableImport ? resource : undefined)
       if (!selectorSource) {
         continue
       }
@@ -208,19 +232,37 @@ async function generateDeclarations(
       }
 
       const manifestKey = buildSelectorModuleManifestKey(resolvedPath)
-      if (processedSelectors.has(manifestKey)) {
-        continue
+      if (!isStableImport) {
+        if (processedSelectors.has(manifestKey)) {
+          continue
+        }
+        const moduleWrite = await ensureSelectorModule(
+          resolvedPath,
+          selectorMap,
+          previousSelectorManifest,
+          nextSelectorManifest,
+        )
+        if (moduleWrite) {
+          selectorModuleWrites += 1
+        }
+        processedSelectors.add(manifestKey)
       }
-      const moduleWrite = await ensureSelectorModule(
-        resolvedPath,
-        selectorMap,
-        previousSelectorManifest,
-        nextSelectorManifest,
-      )
-      if (moduleWrite) {
-        selectorModuleWrites += 1
+
+      if (isStableImport) {
+        const namedOnly = hasNamedOnlyQueryFlag(query)
+        const exportNames = isScriptResource(resolvedPath)
+          ? await getModuleExportNames(resolvedPath, moduleExportCache)
+          : []
+        const stableEntries = stableDeclarations.get(match.importer) ?? []
+        stableEntries.push({
+          specifier: match.specifier,
+          resourcePath: resolvedPath,
+          selectorMap,
+          exportNames,
+          namedOnly,
+        })
+        stableDeclarations.set(match.importer, stableEntries)
       }
-      processedSelectors.add(manifestKey)
     }
   }
 
@@ -228,11 +270,30 @@ async function generateDeclarations(
     previousSelectorManifest,
     nextSelectorManifest,
   )
+  const stableDeclarationsRemoved = await removeStaleSelectorModules(
+    previousStableManifest,
+    nextStableManifest,
+  )
   await writeManifest(selectorModulesManifestPath, nextSelectorManifest)
+  await writeManifest(stableDeclarationsManifestPath, nextStableManifest)
+
+  for (const [importerPath, entries] of stableDeclarations) {
+    const declarationSource = formatStableDeclarationSource(entries)
+    const declarationPath = buildStableDeclarationPath(importerPath)
+    const hash = hashContent(declarationSource)
+    const manifestKey = buildSelectorModuleManifestKey(importerPath)
+    const previousEntry = previousStableManifest[manifestKey]
+    const needsWrite =
+      previousEntry?.hash !== hash || !(await fileExists(declarationPath))
+    if (needsWrite) {
+      await fs.writeFile(declarationPath, declarationSource, 'utf8')
+    }
+    nextStableManifest[manifestKey] = { file: declarationPath, hash }
+  }
 
   return {
     selectorModulesWritten: selectorModuleWrites,
-    selectorModulesRemoved,
+    selectorModulesRemoved: selectorModulesRemoved + stableDeclarationsRemoved,
     warnings,
     manifestPath: selectorModulesManifestPath,
   }
@@ -301,14 +362,14 @@ async function findSpecifierImports(filePath: string): Promise<ImportMatch[]> {
   } catch {
     return []
   }
-  if (!source.includes(SELECTOR_REFERENCE)) {
+  if (!source.includes(SELECTOR_REFERENCE) && !source.includes(KNIGHTED_CSS_QUERY_FLAG)) {
     return []
   }
   const matches: ImportMatch[] = []
   try {
     const { imports } = await analyzeModule(source, filePath)
     for (const specifier of imports) {
-      if (specifier.includes(SELECTOR_REFERENCE)) {
+      if (specifier.includes(SELECTOR_REFERENCE) || isStableQuerySpecifier(specifier)) {
         matches.push({ specifier, importer: filePath })
       }
     }
@@ -319,6 +380,15 @@ async function findSpecifierImports(filePath: string): Promise<ImportMatch[]> {
   let reqMatch: RegExpExecArray | null
   while ((reqMatch = requireRegex.exec(source)) !== null) {
     const spec = reqMatch[2]
+    if (spec) {
+      matches.push({ specifier: spec, importer: filePath })
+    }
+  }
+  const stableSpecifierRegex =
+    /(?:import\s+(?:[^'"`]+?\s+from\s+)?|export\s+[^'"`]+?\s+from\s+|import\s*\(\s*|require\()(['"])([^'"`]+?\?[^'"`]*knighted-css[^'"`]*stable[^'"`]*)\1/g
+  let stableMatch: RegExpExecArray | null
+  while ((stableMatch = stableSpecifierRegex.exec(source)) !== null) {
+    const spec = stableMatch[2]
     if (spec) {
       matches.push({ specifier: spec, importer: filePath })
     }
@@ -339,6 +409,44 @@ function splitResourceAndQuery(specifier: string): { resource: string; query: st
     return { resource: trimmed, query: '' }
   }
   return { resource: trimmed.slice(0, queryIndex), query: trimmed.slice(queryIndex) }
+}
+
+function splitQuery(query: string): string[] {
+  const trimmed = query.startsWith('?') ? query.slice(1) : query
+  if (!trimmed) return []
+  return trimmed.split('&').filter(Boolean)
+}
+
+function isQueryFlag(entry: string, flag: string): boolean {
+  const [rawKey] = entry.split('=')
+  try {
+    return decodeURIComponent(rawKey) === flag
+  } catch {
+    return rawKey === flag
+  }
+}
+
+function hasQueryFlag(query: string, flag: string): boolean {
+  if (!query) return false
+  const entries = splitQuery(query)
+  if (entries.length === 0) return false
+  return entries.some(part => isQueryFlag(part, flag))
+}
+
+function hasStableQuery(query: string): boolean {
+  return (
+    hasQueryFlag(query, KNIGHTED_CSS_QUERY_FLAG) && hasQueryFlag(query, STABLE_QUERY_FLAG)
+  )
+}
+
+function hasNamedOnlyQueryFlag(query: string): boolean {
+  return hasQueryFlag(query, 'named-only') || hasQueryFlag(query, 'no-default')
+}
+
+function isStableQuerySpecifier(specifier: string): boolean {
+  const cleaned = stripInlineLoader(specifier)
+  const { query } = splitResourceAndQuery(cleaned)
+  return hasStableQuery(query)
 }
 
 function extractSelectorSourceSpecifier(specifier: string): string | undefined {
@@ -367,18 +475,21 @@ async function resolveImportPath(
 ): Promise<string | undefined> {
   if (!resourceSpecifier) return undefined
   if (resourceSpecifier.startsWith('.')) {
-    return path.resolve(path.dirname(importerPath), resourceSpecifier)
+    const resolved = path.resolve(path.dirname(importerPath), resourceSpecifier)
+    return resolveScriptExtensionAlias(resolved)
   }
   if (resourceSpecifier.startsWith('/')) {
-    return path.resolve(rootDir, resourceSpecifier.slice(1))
+    const resolved = path.resolve(rootDir, resourceSpecifier.slice(1))
+    return resolveScriptExtensionAlias(resolved)
   }
   const tsconfigResolved = await resolveWithTsconfigPaths(resourceSpecifier, tsconfig)
   if (tsconfigResolved) {
-    return tsconfigResolved
+    return resolveScriptExtensionAlias(tsconfigResolved)
   }
   const requireFromRoot = getProjectRequire(rootDir)
   try {
-    return requireFromRoot.resolve(resourceSpecifier)
+    const resolved = requireFromRoot.resolve(resourceSpecifier)
+    return resolveScriptExtensionAlias(resolved)
   } catch {
     return undefined
   }
@@ -390,6 +501,33 @@ function buildSelectorModuleManifestKey(resolvedPath: string): string {
 
 function buildSelectorModulePath(resolvedPath: string): string {
   return `${resolvedPath}${SELECTOR_MODULE_SUFFIX}`
+}
+
+function buildStableDeclarationPath(importerPath: string): string {
+  return `${importerPath}${STABLE_DECLARATION_SUFFIX}`
+}
+
+function isScriptResource(resourcePath: string): boolean {
+  return SUPPORTED_EXTENSIONS.has(path.extname(resourcePath).toLowerCase())
+}
+
+async function getModuleExportNames(
+  resourcePath: string,
+  cache: Map<string, string[]>,
+): Promise<string[]> {
+  const cached = cache.get(resourcePath)
+  if (cached) {
+    return cached
+  }
+  try {
+    const source = await fs.readFile(resourcePath, 'utf8')
+    const { exports } = await analyzeModule(source, resourcePath)
+    cache.set(resourcePath, exports)
+    return exports
+  } catch {
+    cache.set(resourcePath, [])
+    return []
+  }
 }
 
 function formatSelectorModuleSource(selectors: Map<string, string>): string {
@@ -414,14 +552,75 @@ export default stableSelectors
 `
 }
 
+function formatStableSelectorTypeLiteral(selectors: Map<string, string>): string {
+  const entries = Array.from(selectors.entries()).sort(([a], [b]) => a.localeCompare(b))
+  const lines = entries.map(
+    ([token, selector]) => `  ${JSON.stringify(token)}: ${JSON.stringify(selector)},`,
+  )
+  return lines.length > 0
+    ? `{
+${lines.join('\n')}
+}`
+    : '{}'
+}
+
+function formatStableDeclarationSource(
+  entries: Array<{
+    specifier: string
+    resourcePath: string
+    selectorMap: Map<string, string>
+    exportNames: string[]
+    namedOnly: boolean
+  }>,
+): string {
+  const header = '// Generated by @knighted/css/generate-types\n// Do not edit.\n'
+  const blocks = entries.map(entry => {
+    const { resource } = splitResourceAndQuery(stripInlineLoader(entry.specifier))
+    const moduleSpecifier = resource || entry.resourcePath
+    const selectorType = formatStableSelectorTypeLiteral(entry.selectorMap)
+    const namedExports = entry.exportNames.filter(name => name !== 'default')
+    const namedExportBlock =
+      namedExports.length > 0
+        ? namedExports
+            .sort()
+            .map(
+              name =>
+                `export const ${name}: typeof import(${JSON.stringify(
+                  moduleSpecifier,
+                )}).${name};`,
+            )
+            .join('\n')
+        : ''
+    const defaultBlock = entry.namedOnly
+      ? ''
+      : `declare const combined: (typeof import(${JSON.stringify(
+          moduleSpecifier,
+        )})) & { knightedCss: string; stableSelectors: Readonly<${selectorType}> };
+`
+    const exportsBlock = entry.namedOnly
+      ? namedExportBlock
+      : `${namedExportBlock}${namedExportBlock ? '\n' : ''}export default combined;`
+    return `${header}
+declare module ${JSON.stringify(entry.specifier)} {
+  export const knightedCss: string
+  export const stableSelectors: Readonly<${selectorType}>
+  ${defaultBlock}  ${exportsBlock}
+}
+`
+  })
+  return blocks.join('\n')
+}
+
 function hashContent(content: string): string {
   return crypto.createHash('sha1').update(content).digest('hex')
 }
 
-async function readManifest(manifestPath: string): Promise<SelectorModuleManifest> {
+async function readManifest(
+  manifestPath: string,
+): Promise<Record<string, ManifestEntry>> {
   try {
     const raw = await fs.readFile(manifestPath, 'utf8')
-    return JSON.parse(raw) as SelectorModuleManifest
+    return JSON.parse(raw) as Record<string, ManifestEntry>
   } catch {
     return {}
   }
@@ -429,14 +628,14 @@ async function readManifest(manifestPath: string): Promise<SelectorModuleManifes
 
 async function writeManifest(
   manifestPath: string,
-  manifest: SelectorModuleManifest,
+  manifest: Record<string, ManifestEntry>,
 ): Promise<void> {
   await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), 'utf8')
 }
 
 async function removeStaleSelectorModules(
-  previous: SelectorModuleManifest,
-  next: SelectorModuleManifest,
+  previous: Record<string, ManifestEntry>,
+  next: Record<string, ManifestEntry>,
 ): Promise<number> {
   const stale = Object.entries(previous).filter(([key]) => !next[key])
   let removed = 0
@@ -493,6 +692,34 @@ async function fileExists(target: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+async function resolveScriptExtensionAlias(resolvedPath: string): Promise<string> {
+  if (await fileExists(resolvedPath)) {
+    return resolvedPath
+  }
+  const ext = path.extname(resolvedPath).toLowerCase()
+  const base = resolvedPath.slice(0, resolvedPath.length - ext.length)
+  const candidates: string[] = []
+  if (ext === '.js') {
+    candidates.push(
+      `${base}.ts`,
+      `${base}.tsx`,
+      `${base}.mts`,
+      `${base}.cts`,
+      `${base}.jsx`,
+    )
+  } else if (ext === '.mjs') {
+    candidates.push(`${base}.mts`)
+  } else if (ext === '.cjs') {
+    candidates.push(`${base}.cts`)
+  }
+  for (const candidate of candidates) {
+    if (await fileExists(candidate)) {
+      return candidate
+    }
+  }
+  return resolvedPath
 }
 
 async function resolveWithTsconfigPaths(

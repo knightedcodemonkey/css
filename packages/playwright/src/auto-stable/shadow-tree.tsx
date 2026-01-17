@@ -1,8 +1,17 @@
 import './styles.module.css'
-import stableSelectors from './styles.module.css.knighted-css.js'
 import { AUTO_STABLE_SHADOW_TEST_ID, AUTO_STABLE_TOKEN_TEST_ID } from './constants.js'
 
-export function ShadowTree() {
+import type { KnightedCssStableSelectors } from './styles.module.css.knighted-css.js'
+
+type ShadowTreeStableSelectors = Readonly<
+  Record<keyof KnightedCssStableSelectors, string>
+>
+
+type ShadowTreeProps = {
+  stableSelectors: ShadowTreeStableSelectors
+}
+
+export function ShadowTree({ stableSelectors }: ShadowTreeProps) {
   return (
     <article className={stableSelectors.card} data-testid={AUTO_STABLE_SHADOW_TEST_ID}>
       <div className={stableSelectors.stack}>

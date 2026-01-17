@@ -3,7 +3,7 @@
 This document summarizes how `?knighted-css&combined` behaves for different module export shapes and how to structure your imports accordingly. Use it as guidance when filing documentation feedback for `@knighted/css`.
 
 > [!NOTE]
-> TypeScript reads literal selector tokens from the generated `.knighted-css.ts` modules (emitted by `knighted-css-generate-types`). Append `&types` to combined imports only when you also need `stableSelectors` at runtime—the loader still exports the map, while the double-extension modules keep your editors in sync.
+> TypeScript reads literal selector tokens from the generated `.knighted-css.ts` modules (emitted by `knighted-css-generate-types`). Append `&types` to combined imports only when you also need `stableSelectors` at runtime—the loader still exports the map, while the double-extension modules keep your editors in sync. The `&stable` flag is an additive alias that expands to `&combined&types` and also marks the import for type generation.
 
 > [!TIP]
 > Prefer importing `asKnightedCssCombinedModule` from `@knighted/css/loader-helpers` when you want a runtime helper—the file has zero Node dependencies, so both browser and Node builds stay green.
@@ -15,9 +15,9 @@ This document summarizes how `?knighted-css&combined` behaves for different modu
 | **Named only**                         | `?knighted-css&combined&named-only`                                                | [Snippet](#named-exports-only)                              | `&named-only` disables the synthetic default export so you only destructure the original named members plus `knightedCss`. |
 | **Default only**                       | `?knighted-css&combined`                                                           | [Snippet](#default-export-only)                             | Loader mirrors the default export and adds `knightedCss`, so default-import code keeps working.                            |
 | **Default + named**                    | `?knighted-css&combined` (append `&named-only` when you never consume the default) | [Snippet](#default-and-named-exports)                       | Without the flag you get both default + named exports; adding it drops the synthetic default for stricter codebases.       |
-| **Named + stable selectors**           | `?knighted-css&combined&named-only&types`                                          | [Snippet](#named-exports-with-stable-selectors)             | Adds a `stableSelectors` named export; configure namespaces via the loader option or CLI flag.                             |
-| **Default only + stable selectors**    | `?knighted-css&combined&types`                                                     | [Snippet](#default-export-with-stable-selectors)            | Keep your default-import flow and add `stableSelectors`; namespaces come from loader/CLI configuration.                    |
-| **Default + named + stable selectors** | `?knighted-css&combined&types` (append `&named-only` if you skip the default)      | [Snippet](#default-and-named-exports-with-stable-selectors) | Best of both worlds—`stableSelectors` is exported alongside `knightedCss`; add `&named-only` if you don’t use the default. |
+| **Named + stable selectors**           | `?knighted-css&stable&named-only` (alias: `&combined&named-only&types`)            | [Snippet](#named-exports-with-stable-selectors)             | Adds a `stableSelectors` named export; configure namespaces via the loader option or CLI flag.                             |
+| **Default only + stable selectors**    | `?knighted-css&stable` (alias: `&combined&types`)                                  | [Snippet](#default-export-with-stable-selectors)            | Keep your default-import flow and add `stableSelectors`; namespaces come from loader/CLI configuration.                    |
+| **Default + named + stable selectors** | `?knighted-css&stable` (append `&named-only` if you skip the default)              | [Snippet](#default-and-named-exports-with-stable-selectors) | Best of both worlds—`stableSelectors` is exported alongside `knightedCss`; add `&named-only` if you don’t use the default. |
 
 ### Jump to a scenario
 
@@ -72,9 +72,13 @@ const {
 
 Prefer `?knighted-css&combined&named-only` plus the [named exports only](#named-exports-only) snippet when you intentionally avoid default exports but still need the named members and `knightedCss`.
 
-## Adding stable selectors (`&types`)
+## Adding stable selectors (`&stable` or `&types`)
 
-Append `&types` whenever you need the runtime `stableSelectors` map in addition to `knightedCss`. Configure the loader’s `stableNamespace` option (or pass `--stable-namespace` to the CLI) so runtime exports and generated `.knighted-css.ts` modules stay aligned.
+Use `&stable` when you want a single import that provides everything the loader can export: the module itself, `knightedCss`, and the runtime `stableSelectors` map. `&stable` is an additive alias for `&combined&types`, and it also marks the import for type generation so the CLI emits the `.knighted-css.ts` module that TypeScript reads for selector tokens.
+
+Use `&types` when you only need the runtime `stableSelectors` map alongside the combined import and you already wire type generation elsewhere.
+
+Configure the loader’s `stableNamespace` option (or pass `--stable-namespace` to the CLI) so runtime exports and generated `.knighted-css.ts` modules stay aligned.
 
 ### Named exports with stable selectors
 
@@ -83,7 +87,7 @@ _Use when you only consume named exports (no default) but still want typed `stab
 ```ts
 import { asKnightedCssCombinedModule } from '@knighted/css/loader-helpers'
 import type { KnightedCssStableSelectors as ModuleStableSelectors } from './module.css.knighted-css.js'
-import * as combinedModule from './module.js?knighted-css&combined&named-only&types'
+import * as combinedModule from './module.js?knighted-css&stable&named-only'
 
 const { Component, knightedCss, stableSelectors } = asKnightedCssCombinedModule<
   typeof import('./module.js'),
@@ -103,7 +107,7 @@ _Use when you stick with default imports but also need access to the selector ma
 ```ts
 import { asKnightedCssCombinedModule } from '@knighted/css/loader-helpers'
 import type { KnightedCssStableSelectors as ModuleStableSelectors } from './module.css.knighted-css.js'
-import * as combinedModule from './module.js?knighted-css&combined&types'
+import * as combinedModule from './module.js?knighted-css&stable'
 
 const {
   default: Component,
@@ -124,7 +128,7 @@ _Use when you consume every export from the module and still want the selector m
 ```ts
 import { asKnightedCssCombinedModule } from '@knighted/css/loader-helpers'
 import type { KnightedCssStableSelectors as ModuleStableSelectors } from './module.css.knighted-css.js'
-import * as combinedModule from './module.js?knighted-css&combined&types'
+import * as combinedModule from './module.js?knighted-css&stable'
 
 const {
   default: Component,
@@ -144,7 +148,7 @@ stableSelectors.card // "knighted-card" (or your configured namespace)
 - The loader always injects `knightedCss` alongside the module’s exports.
 - To avoid synthetic defaults (and TypeScript warnings) for modules that only expose named exports, add `&named-only` and use a namespace import.
 - Namespace imports plus `KnightedCssCombinedModule<typeof import('./module')>` work universally; default imports are optional conveniences when the source module exposes a default you actually consume.
-- Add `&types` when you also need the `stableSelectors` map. Configure the namespace globally (loader option or CLI flag) so runtime + generated types stay consistent.
+- Add `&stable` when you want the single-import UX (module + `knightedCss` + `stableSelectors`). Use `&types` for the legacy combined selector map only.
 
 ## When to use `KnightedCssCombinedModule`
 

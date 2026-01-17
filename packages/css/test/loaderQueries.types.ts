@@ -7,6 +7,9 @@ import '@knighted/css/loader-queries'
 type CombinedModule =
   typeof import('./fixtures/combined/runtime-entry.ts?knighted-css&combined&types')
 
+type StableModule =
+  typeof import('./fixtures/combined/runtime-entry.ts?knighted-css&stable')
+
 type ExpectTrue<T extends true> = T
 
 type KnightedCssIsString = ExpectTrue<
@@ -18,3 +21,14 @@ type StableSelectorsAreReadonly = ExpectTrue<
     : false
 >
 export type LoaderQueriesSmokeTest = [KnightedCssIsString, StableSelectorsAreReadonly]
+
+type StableKnightedCssIsString = ExpectTrue<
+  StableModule['knightedCss'] extends string ? true : false
+>
+type StableSelectorsAreReadonlyForStable = ExpectTrue<
+  StableModule['stableSelectors'] extends Readonly<Record<string, string>> ? true : false
+>
+export type LoaderQueriesStableSmokeTest = [
+  StableKnightedCssIsString,
+  StableSelectorsAreReadonlyForStable,
+]

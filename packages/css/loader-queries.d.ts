@@ -28,6 +28,11 @@ type KnightedCssCombinedModule<
   TExtras extends KnightedCssCombinedExtras = Record<never, never>,
 > = TModule & TExtras & { knightedCss: string }
 
+type KnightedCssStableCombinedModule<TModule> = KnightedCssCombinedModule<
+  TModule,
+  { stableSelectors: KnightedCssStableSelectorMap }
+>
+
 declare module '*?knighted-css&combined' {
   const combined: KnightedCssCombinedModule<Record<string, unknown>>
   export default combined
@@ -53,6 +58,20 @@ declare module '*?knighted-css&combined&types' {
   export const stableSelectors: KnightedCssStableSelectorMap
 }
 
+declare module '*?knighted-css&stable' {
+  const combined: KnightedCssStableCombinedModule<Record<string, unknown>>
+  export default combined
+  export const knightedCss: string
+  export const stableSelectors: KnightedCssStableSelectorMap
+}
+
+declare module '*?knighted-css&combined&stable' {
+  const combined: KnightedCssStableCombinedModule<Record<string, unknown>>
+  export default combined
+  export const knightedCss: string
+  export const stableSelectors: KnightedCssStableSelectorMap
+}
+
 declare module '*?knighted-css&combined&named-only&types' {
   const combined: KnightedCssCombinedModule<Record<string, unknown>>
   export default combined
@@ -60,8 +79,50 @@ declare module '*?knighted-css&combined&named-only&types' {
   export const stableSelectors: KnightedCssStableSelectorMap
 }
 
+declare module '*?knighted-css&stable&named-only' {
+  const combined: KnightedCssStableCombinedModule<Record<string, unknown>>
+  export default combined
+  export const knightedCss: string
+  export const stableSelectors: KnightedCssStableSelectorMap
+}
+
+declare module '*?knighted-css&combined&stable&named-only' {
+  const combined: KnightedCssStableCombinedModule<Record<string, unknown>>
+  export default combined
+  export const knightedCss: string
+  export const stableSelectors: KnightedCssStableSelectorMap
+}
+
+declare module '*?knighted-css&combined&named-only&stable' {
+  const combined: KnightedCssStableCombinedModule<Record<string, unknown>>
+  export default combined
+  export const knightedCss: string
+  export const stableSelectors: KnightedCssStableSelectorMap
+}
+
 declare module '*?knighted-css&combined&no-default&types' {
   const combined: KnightedCssCombinedModule<Record<string, unknown>>
+  export default combined
+  export const knightedCss: string
+  export const stableSelectors: KnightedCssStableSelectorMap
+}
+
+declare module '*?knighted-css&stable&no-default' {
+  const combined: KnightedCssStableCombinedModule<Record<string, unknown>>
+  export default combined
+  export const knightedCss: string
+  export const stableSelectors: KnightedCssStableSelectorMap
+}
+
+declare module '*?knighted-css&combined&stable&no-default' {
+  const combined: KnightedCssStableCombinedModule<Record<string, unknown>>
+  export default combined
+  export const knightedCss: string
+  export const stableSelectors: KnightedCssStableSelectorMap
+}
+
+declare module '*?knighted-css&combined&no-default&stable' {
+  const combined: KnightedCssStableCombinedModule<Record<string, unknown>>
   export default combined
   export const knightedCss: string
   export const stableSelectors: KnightedCssStableSelectorMap

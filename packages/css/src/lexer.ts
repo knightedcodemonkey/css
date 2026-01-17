@@ -21,6 +21,7 @@ interface AnalyzeOptions {
 interface ModuleAnalysis {
   imports: string[]
   defaultSignal: DefaultExportSignal
+  exports: string[]
 }
 
 const JSX_EXTENSIONS = new Set(['.jsx', '.tsx'])
@@ -44,6 +45,7 @@ export async function analyzeModule(
     return {
       imports: normalizeEsImports(imports, sourceText),
       defaultSignal: classifyDefault(exports),
+      exports: normalizeEsExports(exports),
     }
   } catch {
     // fall through to oxc fallback
@@ -104,10 +106,11 @@ function parseWithOxc(sourceText: string, filePath: string): ModuleAnalysis {
   }
 
   if (!program) {
-    return { imports: [], defaultSignal: 'unknown' }
+    return { imports: [], defaultSignal: 'unknown', exports: [] }
   }
 
   const imports: string[] = []
+  const exports = new Set<string>()
   let defaultSignal: DefaultExportSignal = 'unknown'
   const addSpecifier = (raw?: string | null) => {
     if (!raw) {
@@ -127,6 +130,17 @@ function parseWithOxc(sourceText: string, filePath: string): ModuleAnalysis {
       if (node.source) {
         addSpecifier(node.source.value)
       }
+      if (node.declaration) {
+        for (const name of getExportedNamesFromDeclaration(node.declaration)) {
+          exports.add(name)
+        }
+      }
+      for (const spec of node.specifiers ?? []) {
+        const exportedName = getExportedName(spec.exported)
+        if (exportedName && exportedName !== 'default') {
+          exports.add(exportedName)
+        }
+      }
       if (hasDefaultSpecifier(node)) {
         defaultSignal = 'has-default'
       } else if (defaultSignal === 'unknown' && hasAnySpecifier(node)) {
@@ -137,6 +151,10 @@ function parseWithOxc(sourceText: string, filePath: string): ModuleAnalysis {
       addSpecifier(node.source?.value)
       if (node.exported && isExportedAsDefault(node.exported)) {
         defaultSignal = 'has-default'
+      }
+      const exportedName = getExportedName(node.exported)
+      if (exportedName && exportedName !== 'default') {
+        exports.add(exportedName)
       }
     },
     ExportDefaultDeclaration() {
@@ -172,7 +190,19 @@ function parseWithOxc(sourceText: string, filePath: string): ModuleAnalysis {
 
   visitor.visit(program)
 
-  return { imports, defaultSignal }
+  return { imports, defaultSignal, exports: Array.from(exports) }
+}
+
+function normalizeEsExports(records: readonly { n: string | undefined }[]): string[] {
+  const exports = new Set<string>()
+  for (const record of records) {
+    const name = record.n?.trim()
+    if (!name || name === 'default' || name === '*') {
+      continue
+    }
+    exports.add(name)
+  }
+  return Array.from(exports)
 }
 
 function normalizeSpecifier(raw: string): string {
@@ -201,6 +231,95 @@ function hasDefaultSpecifier(node: ExportNamedDeclaration): boolean {
 
 function hasAnySpecifier(node: ExportNamedDeclaration): boolean {
   return Array.isArray(node.specifiers) && node.specifiers.length > 0
+}
+
+function getExportedName(
+  exported: { name?: string; value?: string } | null | undefined,
+): string | undefined {
+  if (!exported) return undefined
+  if (typeof exported.name === 'string') {
+    return exported.name
+  }
+  if (typeof exported.value === 'string') {
+    return exported.value
+  }
+  return undefined
+}
+
+function getExportedNamesFromDeclaration(declaration: unknown): string[] {
+  if (!declaration || typeof declaration !== 'object') {
+    return []
+  }
+  if (isFunctionDeclaration(declaration) || isClassDeclaration(declaration)) {
+    const name = declaration.id?.name
+    return name ? [name] : []
+  }
+  if (isVariableDeclaration(declaration)) {
+    const names: string[] = []
+    for (const declarator of declaration.declarations) {
+      names.push(...collectBindingNames(declarator.id))
+    }
+    return names
+  }
+  return []
+}
+
+type IdentifierLike = { type: 'Identifier'; name: string }
+type BindingPatternLike = IdentifierLike | { type: string }
+type VariableDeclaratorLike = { id: BindingPatternLike }
+type VariableDeclarationLike = {
+  type: 'VariableDeclaration'
+  declarations: VariableDeclaratorLike[]
+}
+type FunctionDeclarationLike = { type: 'FunctionDeclaration'; id?: IdentifierLike | null }
+type ClassDeclarationLike = { type: 'ClassDeclaration'; id?: IdentifierLike | null }
+
+function isIdentifier(value: unknown): value is IdentifierLike {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  if (!('type' in value) || !('name' in value)) {
+    return false
+  }
+  return value.type === 'Identifier' && typeof value.name === 'string'
+}
+
+function isVariableDeclaration(value: unknown): value is VariableDeclarationLike {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  if (!('type' in value) || !('declarations' in value)) {
+    return false
+  }
+  return value.type === 'VariableDeclaration' && Array.isArray(value.declarations)
+}
+
+function isFunctionDeclaration(value: unknown): value is FunctionDeclarationLike {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  if (!('type' in value)) {
+    return false
+  }
+  return value.type === 'FunctionDeclaration'
+}
+
+function isClassDeclaration(value: unknown): value is ClassDeclarationLike {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  if (!('type' in value)) {
+    return false
+  }
+  return value.type === 'ClassDeclaration'
+}
+
+function collectBindingNames(binding: BindingPatternLike | undefined): string[] {
+  if (!binding) return []
+  if (isIdentifier(binding)) {
+    return [binding.name]
+  }
+  return []
 }
 
 function isExportedAsDefault(

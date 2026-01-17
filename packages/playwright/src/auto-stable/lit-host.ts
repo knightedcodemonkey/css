@@ -3,11 +3,17 @@ import { asKnightedCssCombinedModule } from '@knighted/css/loader-helpers'
 import { createRoot, type Root } from 'react-dom/client'
 import { LitElement, css, html, unsafeCSS, type PropertyValues } from 'lit'
 
-import * as shadowTree from './shadow-tree.js?knighted-css&combined&named-only'
+import * as shadowTree from './shadow-tree.js?knighted-css&combined&named-only&stable'
 import { AUTO_STABLE_HOST_TAG } from './constants.js'
 
-const { ShadowTree, knightedCss: shadowTreeCss } =
-  asKnightedCssCombinedModule<typeof import('./shadow-tree.js')>(shadowTree)
+const {
+  ShadowTree,
+  knightedCss: shadowTreeCss,
+  stableSelectors,
+} = asKnightedCssCombinedModule<
+  typeof import('./shadow-tree.js'),
+  { stableSelectors: typeof shadowTree.stableSelectors }
+>(shadowTree)
 const hostShell = css`
   :host {
     display: block;
@@ -44,7 +50,7 @@ export class AutoStableHost extends LitElement {
 
   #renderReactTree(): void {
     if (!this.#reactRoot) return
-    this.#reactRoot.render(reactJsx`<${ShadowTree} />`)
+    this.#reactRoot.render(reactJsx`<${ShadowTree} stableSelectors=${stableSelectors} />`)
   }
 
   protected updated(changed: PropertyValues<this>): void {

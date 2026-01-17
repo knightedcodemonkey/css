@@ -1,6 +1,7 @@
 import type { ModuleDefaultSignal } from './moduleInfo.js'
 
 export const COMBINED_QUERY_FLAG = 'combined'
+export const STABLE_QUERY_FLAG = 'stable'
 export const TYPES_QUERY_FLAG = 'types'
 export const NAMED_ONLY_QUERY_FLAGS = ['named-only', 'no-default'] as const
 export type SelectorTypeVariant = 'types' | 'combined' | 'combinedWithoutDefault'
@@ -32,6 +33,9 @@ export function buildSanitizedQuery(query?: string | null): string {
     if (isQueryFlag(part, TYPES_QUERY_FLAG)) {
       return false
     }
+    if (isQueryFlag(part, STABLE_QUERY_FLAG)) {
+      return false
+    }
     if (NAMED_ONLY_QUERY_FLAGS.some(flag => isQueryFlag(part, flag))) {
       return false
     }
@@ -58,7 +62,9 @@ export function shouldForwardDefaultExport(request: string): boolean {
 }
 
 export function hasCombinedQuery(query?: string | null): boolean {
-  return hasQueryFlag(query, COMBINED_QUERY_FLAG)
+  return (
+    hasQueryFlag(query, COMBINED_QUERY_FLAG) || hasQueryFlag(query, STABLE_QUERY_FLAG)
+  )
 }
 
 export function hasNamedOnlyQueryFlag(query?: string | null): boolean {

@@ -44,6 +44,29 @@ console.log(stableSelectors.demo)
   }
 }
 
+async function setupStableQueryProject(): Promise<{
+  root: string
+  cleanup: () => Promise<void>
+}> {
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-generate-stable-'))
+  const srcDir = path.join(tmpRoot, 'src')
+  await fs.mkdir(srcDir, { recursive: true })
+  const fixtureDir = path.join(__dirname, 'fixtures', 'dialects', 'basic')
+  const projectFixtureDir = path.join(srcDir, 'fixture')
+  await fs.cp(fixtureDir, projectFixtureDir, { recursive: true })
+  const fixtureSource = path.join(projectFixtureDir, 'entry.js')
+  const relativeImport = path.relative(srcDir, fixtureSource).split(path.sep).join('/')
+  const specifier = `./${relativeImport}?knighted-css&stable`
+  const entrySource = `import { stableSelectors } from '${specifier}'
+console.log(stableSelectors.demo)
+`
+  await fs.writeFile(path.join(srcDir, 'entry.ts'), entrySource)
+  return {
+    root: tmpRoot,
+    cleanup: () => fs.rm(tmpRoot, { recursive: true, force: true }),
+  }
+}
+
 async function setupBaseUrlFixture(): Promise<{
   root: string
   cleanup: () => Promise<void>
@@ -214,6 +237,33 @@ test('generateTypes emits declarations and reuses cache', async () => {
     assert.equal(secondRun.selectorModulesWritten, 0)
     assert.equal(secondRun.selectorModulesRemoved, 0)
     assert.equal(secondRun.warnings.length, 0)
+  } finally {
+    await project.cleanup()
+  }
+})
+
+test('generateTypes scans ?knighted-css&stable imports', async () => {
+  const project = await setupStableQueryProject()
+  try {
+    const outDir = path.join(project.root, '.knighted-css-test')
+    const sharedOptions = { rootDir: project.root, include: ['src'], outDir }
+
+    const result = await generateTypes(sharedOptions)
+    assert.equal(result.selectorModulesWritten, 0)
+    assert.equal(result.warnings.length, 0)
+
+    const declarationPath = path.join(
+      project.root,
+      'src',
+      'entry.ts.knighted-css-stable.d.ts',
+    )
+    const declarationSource = await fs.readFile(declarationPath, 'utf8')
+    assert.ok(
+      declarationSource.includes(
+        'declare module "./fixture/entry.js?knighted-css&stable"',
+      ),
+    )
+    assert.ok(declarationSource.includes('export const stableSelectors'))
   } finally {
     await project.cleanup()
   }
