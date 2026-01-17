@@ -561,8 +561,13 @@ async function resolveWithTsconfigPaths(
 async function resolveWithExtensionFallback(
   candidatePath: string,
 ): Promise<string | undefined> {
-  if (await fileExists(candidatePath)) {
-    return candidatePath
+  try {
+    const stat = await fs.stat(candidatePath)
+    if (stat.isFile()) {
+      return candidatePath
+    }
+  } catch {
+    // continue to resolution fallbacks
   }
   const ext = path.extname(candidatePath)
   const base = ext ? candidatePath.slice(0, -ext.length) : candidatePath
@@ -707,7 +712,7 @@ function buildProxyModuleSpecifier(resolvedPath: string, selectorSource: string)
   const resolvedExt = path.extname(resolvedPath)
   const baseName = path.basename(resolvedPath, resolvedExt)
   const selectorExt = path.extname(selectorSource)
-  const fileName = selectorExt ? `${baseName}${selectorExt}` : baseName
+  const fileName = selectorExt ? `${baseName}${selectorExt}` : `${baseName}.js`
   return `./${fileName}`
 }
 
