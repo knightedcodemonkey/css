@@ -113,6 +113,12 @@ Run `knighted-css-generate-types` so every specifier that ends with `.knighted-c
 import stableSelectors from './button.module.scss.knighted-css.js'
 ```
 
+When the `.knighted-css` import targets a JavaScript/TypeScript module, the generated proxy also re-exports the module’s exports and `knightedCss`, so a single import can provide component exports, typed selectors, and the compiled stylesheet string:
+
+```ts
+import Button, { knightedCss, stableSelectors } from './button.knighted-css.js'
+```
+
 Refer to [docs/type-generation.md](../../docs/type-generation.md) for CLI options and workflow tips.
 
 ### Combined + runtime selectors
@@ -135,6 +141,9 @@ const {
 
 stableSelectors.shell
 ```
+
+> [!TIP]
+> If you run `knighted-css-generate-types`, prefer the double-extension proxy import shown above instead of `?knighted-css&combined` and `asKnightedCssCombinedModule`.
 
 > [!NOTE]
 > `stableSelectors` here is for runtime use; TypeScript still reads literal tokens from the generated `.knighted-css.*` modules. For a full decision matrix, see [docs/combined-queries.md](../../docs/combined-queries.md).

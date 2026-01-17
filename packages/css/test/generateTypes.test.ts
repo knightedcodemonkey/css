@@ -199,6 +199,10 @@ test('generateTypes emits declarations and reuses cache', async () => {
       'entry.js.knighted-css.ts',
     )
     const selectorModule = await fs.readFile(selectorModulePath, 'utf8')
+    assert.ok(selectorModule.includes("export * from './entry.js'"))
+    assert.ok(
+      selectorModule.includes("export { knightedCss } from './entry.js?knighted-css'"),
+    )
     assert.ok(selectorModule.includes('export const stableSelectors'))
     assert.ok(selectorModule.includes('"demo": "knighted-demo"'))
 

@@ -10,5 +10,4 @@ export const stableSelectors = {
 
 export type KnightedCssStableSelectors = typeof stableSelectors
 export type KnightedCssStableSelectorToken = keyof typeof stableSelectors
-
 export default stableSelectors

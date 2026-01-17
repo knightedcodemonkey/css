@@ -1,12 +1,12 @@
 # Knighted CSS Combined Loader Reference
 
-This document summarizes how `?knighted-css&combined` behaves for different module export shapes and how to structure your imports accordingly. Use it as guidance when filing documentation feedback for `@knighted/css`.
+This document summarizes how `?knighted-css&combined` behaves for different module export shapes and how to structure your imports accordingly, plus how the double-extension proxy import replaces most combined-query use cases.
 
 > [!NOTE]
-> TypeScript reads literal selector tokens from the generated `.knighted-css.ts` modules (emitted by `knighted-css-generate-types`). Append `&types` to combined imports only when you also need `stableSelectors` at runtime—the loader still exports the map, while the double-extension modules keep your editors in sync.
+> TypeScript reads literal selector tokens from the generated `.knighted-css.ts` modules (emitted by `knighted-css-generate-types`). The double-extension modules also re-export the original module exports and `knightedCss`, so a single import can provide component exports, typed selectors, and the compiled stylesheet string without helper casts.
 
 > [!TIP]
-> Prefer importing `asKnightedCssCombinedModule` from `@knighted/css/loader-helpers` when you want a runtime helper—the file has zero Node dependencies, so both browser and Node builds stay green.
+> Prefer the double-extension import when you run `knighted-css-generate-types`—it removes the need for `asKnightedCssCombinedModule`. Use the helper only for `?knighted-css&combined` queries or when you cannot rely on generated proxy modules.
 
 ## Decision Matrix
 
@@ -43,6 +43,12 @@ const { Component, knightedCss } =
 > [!NOTE]
 > Namespace imports (`import * as combined …`) are the most reliable pattern for `&named-only` queries because you intentionally drop the default export. Keep using the helper type to narrow the namespace.
 
+If you run `knighted-css-generate-types`, use the unified proxy import instead:
+
+```ts
+import { Component, knightedCss, stableSelectors } from './module.knighted-css.js'
+```
+
 ## Default export only
 
 _Use when your component only exposes a default export and you want `knightedCss` beside it._
@@ -53,6 +59,12 @@ import * as combinedModule from './module.js?knighted-css&combined'
 
 const { default: Component, knightedCss } =
   asKnightedCssCombinedModule<typeof import('./module.js')>(combinedModule)
+```
+
+With generated proxies, use a single import instead:
+
+```ts
+import Component, { knightedCss, stableSelectors } from './module.knighted-css.js'
 ```
 
 ## Default and named exports
@@ -70,11 +82,19 @@ const {
 } = asKnightedCssCombinedModule<typeof import('./module.js')>(combinedModule)
 ```
 
+With generated proxies, a single import covers everything:
+
+```ts
+import Component, { helper, knightedCss, stableSelectors } from './module.knighted-css.js'
+```
+
 Prefer `?knighted-css&combined&named-only` plus the [named exports only](#named-exports-only) snippet when you intentionally avoid default exports but still need the named members and `knightedCss`.
 
 ## Adding stable selectors (`&types`)
 
 Append `&types` whenever you need the runtime `stableSelectors` map in addition to `knightedCss`. Configure the loader’s `stableNamespace` option (or pass `--stable-namespace` to the CLI) so runtime exports and generated `.knighted-css.ts` modules stay aligned.
+
+If you run `knighted-css-generate-types`, the double-extension proxy already exports `stableSelectors` and keeps the literal types in sync—no `&types` query or helper required.
 
 ### Named exports with stable selectors
 
@@ -91,6 +111,12 @@ const { Component, knightedCss, stableSelectors } = asKnightedCssCombinedModule<
 >(combinedModule)
 
 stableSelectors.card // "knighted-card"
+```
+
+With generated proxies, use a single import instead:
+
+```ts
+import { Component, knightedCss, stableSelectors } from './module.knighted-css.js'
 ```
 
 > [!TIP]
@@ -117,6 +143,12 @@ const {
 stableSelectors.badge // "knighted-badge"
 ```
 
+With generated proxies, use a single import instead:
+
+```ts
+import Component, { knightedCss, stableSelectors } from './module.knighted-css.js'
+```
+
 ### Default and named exports with stable selectors
 
 _Use when you consume every export from the module and still want the selector map._
@@ -139,16 +171,22 @@ const {
 stableSelectors.card // "knighted-card" (or your configured namespace)
 ```
 
+With generated proxies, a single import covers everything:
+
+```ts
+import Component, { helper, knightedCss, stableSelectors } from './module.knighted-css.js'
+```
+
 ## Key Takeaways
 
 - The loader always injects `knightedCss` alongside the module’s exports.
-- To avoid synthetic defaults (and TypeScript warnings) for modules that only expose named exports, add `&named-only` and use a namespace import.
-- Namespace imports plus `KnightedCssCombinedModule<typeof import('./module')>` work universally; default imports are optional conveniences when the source module exposes a default you actually consume.
-- Add `&types` when you also need the `stableSelectors` map. Configure the namespace globally (loader option or CLI flag) so runtime + generated types stay consistent.
+- When you run `knighted-css-generate-types`, prefer the double-extension proxy import to get component exports, `knightedCss`, and `stableSelectors` in one place.
+- Use `?knighted-css&combined` (plus `asKnightedCssCombinedModule`) when you need runtime combined imports without generated proxy modules.
+- Add `&types` only when you need a runtime selector map and cannot rely on the generated proxy files.
 
 ## When to use `KnightedCssCombinedModule`
 
-The helper type still earns its keep when you need to narrow combined results without `asKnightedCssCombinedModule` (for example, in test doubles or custom wrappers):
+The helper type still earns its keep when you need to narrow combined results without `asKnightedCssCombinedModule` (for example, in test doubles, custom wrappers, or when you skip generated proxies):
 
 ```ts
 import type { KnightedCssCombinedModule } from '@knighted/css/loader'
