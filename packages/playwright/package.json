@@ -12,6 +12,7 @@
     "build:auto-stable": "rspack --config rspack.auto-stable.config.js",
     "build:webpack": "webpack --config webpack.config.js",
     "build:ssr": "tsx scripts/render-ssr-preview.ts",
+    "precheck-types": "npm run types",
     "check-types": "tsc --noEmit",
     "preview": "npm run build && http-server . -p 4174",
     "preview:auto-stable": "npm run build:auto-stable && http-server . -p 4175",
