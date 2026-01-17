@@ -38,6 +38,8 @@ jobs:
         run: npm run check:cycles
       - name: Test
         run: npm test
+      - name: Generate Playwright Types
+        run: npm run types -w @knighted/css-playwright-fixture
       - name: Check Types
         run: npm run check-types
       - name: Report Coverage
