@@ -334,21 +334,19 @@ async function compileSass(
   if (typeof (sass as { compileAsync?: Function }).compileAsync === 'function') {
     const importers: unknown[] = []
     /*
-     * Include NodePackageImporter if available and no custom resolver is provided.
-     * Custom resolvers handle pkg: imports themselves (e.g., pkg:#styles/file.scss).
-     * NodePackageImporter only handles standard pkg: imports (e.g., pkg:package/file.scss).
+     * Add custom importer first to handle project-specific imports (e.g., pkg:#).
+     * Then add NodePackageImporter to handle standard pkg: URLs.
      */
+    if (importer) {
+      importers.push(importer)
+    }
     if (
-      !resolver &&
       typeof (sass as { NodePackageImporter?: unknown }).NodePackageImporter ===
-        'function'
+      'function'
     ) {
       const NodePackageImporter = (sass as { NodePackageImporter: new () => unknown })
         .NodePackageImporter
       importers.push(new NodePackageImporter())
-    }
-    if (importer) {
-      importers.push(importer)
     }
     const result = await (
       sass as { compileAsync: typeof import('sass').compileAsync }
