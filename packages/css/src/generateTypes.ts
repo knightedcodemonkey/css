@@ -11,6 +11,7 @@ import { createMatchPath, type MatchPath } from 'tsconfig-paths'
 
 import { cssWithMeta, DEFAULT_EXTENSIONS } from './css.js'
 import { analyzeModule, type DefaultExportSignal } from './lexer.js'
+import { createResolverFactory, resolveWithFactory } from './moduleResolution.js'
 import { buildStableSelectorsLiteral } from './stableSelectorsLiteral.js'
 import { resolveStableNamespace } from './stableNamespace.js'
 
@@ -117,6 +118,10 @@ function getImportMetaUrl(): string | undefined {
 const SELECTOR_REFERENCE = '.knighted-css'
 const SELECTOR_MODULE_SUFFIX = '.knighted-css.ts'
 const STYLE_EXTENSIONS = DEFAULT_EXTENSIONS.map(ext => ext.toLowerCase())
+const SCRIPT_EXTENSIONS = Array.from(SUPPORTED_EXTENSIONS)
+const RESOLUTION_EXTENSIONS = Array.from(
+  new Set<string>([...SCRIPT_EXTENSIONS, ...STYLE_EXTENSIONS]),
+)
 const EXTENSION_FALLBACKS: Record<string, string[]> = {
   '.js': ['.ts', '.tsx', '.jsx', '.mjs', '.cjs'],
   '.mjs': ['.mts', '.mjs', '.js', '.ts', '.tsx'],
@@ -127,7 +132,7 @@ const EXTENSION_FALLBACKS: Record<string, string[]> = {
 export async function generateTypes(
   options: GenerateTypesOptions = {},
 ): Promise<GenerateTypesResult> {
-  const rootDir = path.resolve(options.rootDir ?? process.cwd())
+  const rootDir = await resolveRootDir(path.resolve(options.rootDir ?? process.cwd()))
   const include = normalizeIncludeOptions(options.include, rootDir)
   const cacheDir = path.resolve(options.outDir ?? path.join(rootDir, '.knighted-css'))
   const tsconfig = loadTsconfigResolutionContext(rootDir)
@@ -146,10 +151,23 @@ export async function generateTypes(
   return generateDeclarations(internalOptions)
 }
 
+async function resolveRootDir(rootDir: string): Promise<string> {
+  try {
+    return await fs.realpath(rootDir)
+  } catch {
+    return rootDir
+  }
+}
+
 async function generateDeclarations(
   options: GenerateTypesInternalOptions,
 ): Promise<GenerateTypesResult> {
   const peerResolver = createProjectPeerResolver(options.rootDir)
+  const resolverFactory = createResolverFactory(
+    options.rootDir,
+    RESOLUTION_EXTENSIONS,
+    SCRIPT_EXTENSIONS,
+  )
   const files = await collectCandidateFiles(options.include)
   const selectorModulesManifestPath = path.join(options.cacheDir, 'selector-modules.json')
   const previousSelectorManifest = await readManifest(selectorModulesManifestPath)
@@ -176,6 +194,8 @@ async function generateDeclarations(
         match.importer,
         options.rootDir,
         options.tsconfig,
+        resolverFactory,
+        RESOLUTION_EXTENSIONS,
       )
       if (!resolvedPath) {
         warnings.push(
@@ -352,7 +372,8 @@ function stripInlineLoader(specifier: string): string {
 }
 
 function splitResourceAndQuery(specifier: string): { resource: string; query: string } {
-  const hashIndex = specifier.indexOf('#')
+  const hashOffset = specifier.startsWith('#') ? 1 : 0
+  const hashIndex = specifier.indexOf('#', hashOffset)
   const trimmed = hashIndex >= 0 ? specifier.slice(0, hashIndex) : specifier
   const queryIndex = trimmed.indexOf('?')
   if (queryIndex < 0) {
@@ -391,6 +412,8 @@ async function resolveImportPath(
   importerPath: string,
   rootDir: string,
   tsconfig?: TsconfigResolutionContext,
+  resolverFactory?: ReturnType<typeof createResolverFactory>,
+  resolutionExtensions: string[] = RESOLUTION_EXTENSIONS,
 ): Promise<string | undefined> {
   if (!resourceSpecifier) return undefined
   if (resourceSpecifier.startsWith('.')) {
@@ -404,6 +427,17 @@ async function resolveImportPath(
   const tsconfigResolved = await resolveWithTsconfigPaths(resourceSpecifier, tsconfig)
   if (tsconfigResolved) {
     return resolveWithExtensionFallback(tsconfigResolved)
+  }
+  if (resolverFactory) {
+    const resolved = resolveWithFactory(
+      resolverFactory,
+      resourceSpecifier,
+      importerPath,
+      resolutionExtensions,
+    )
+    if (resolved) {
+      return resolved
+    }
   }
   const requireFromRoot = getProjectRequire(rootDir)
   try {

@@ -26,7 +26,8 @@ async function setupFixtureProject(): Promise<{
   cleanup: () => Promise<void>
 }> {
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-generate-types-'))
-  const srcDir = path.join(tmpRoot, 'src')
+  const root = await fs.realpath(tmpRoot)
+  const srcDir = path.join(root, 'src')
   await fs.mkdir(srcDir, { recursive: true })
   const fixtureDir = path.join(__dirname, 'fixtures', 'dialects', 'basic')
   const projectFixtureDir = path.join(srcDir, 'fixture')
@@ -39,8 +40,8 @@ console.log(stableSelectors.demo)
 `
   await fs.writeFile(path.join(srcDir, 'entry.ts'), entrySource)
   return {
-    root: tmpRoot,
-    cleanup: () => fs.rm(tmpRoot, { recursive: true, force: true }),
+    root,
+    cleanup: () => fs.rm(root, { recursive: true, force: true }),
   }
 }
 
@@ -49,7 +50,8 @@ async function setupBaseUrlFixture(): Promise<{
   cleanup: () => Promise<void>
 }> {
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-tsconfig-'))
-  const srcDir = path.join(tmpRoot, 'src')
+  const root = await fs.realpath(tmpRoot)
+  const srcDir = path.join(root, 'src')
   const stylesDir = path.join(srcDir, 'styles')
   await fs.mkdir(stylesDir, { recursive: true })
   const cssPath = path.join(stylesDir, 'demo.css')
@@ -69,13 +71,70 @@ console.log(stableSelectors.demo)
       baseUrl: './src',
     },
   }
+  await fs.writeFile(path.join(root, 'tsconfig.json'), JSON.stringify(tsconfig, null, 2))
+  return {
+    root,
+    cleanup: () => fs.rm(root, { recursive: true, force: true }),
+  }
+}
+
+async function setupPackageImportsFixture(): Promise<{
+  root: string
+  cleanup: () => Promise<void>
+}> {
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-imports-'))
+  const root = await fs.realpath(tmpRoot)
+  const srcDir = path.join(root, 'src')
+  await fs.mkdir(srcDir, { recursive: true })
+  const cssPath = path.join(srcDir, 'imports.css')
   await fs.writeFile(
-    path.join(tmpRoot, 'tsconfig.json'),
-    JSON.stringify(tsconfig, null, 2),
+    cssPath,
+    `.demo { color: hotpink; }
+.knighted-demo { color: rebeccapurple; }
+`,
+  )
+  const entrySource = `import stableSelectors from '#styles.knighted-css'
+console.log(stableSelectors.demo)
+`
+  await fs.writeFile(path.join(srcDir, 'entry.ts'), entrySource)
+  await fs.writeFile(
+    path.join(root, 'package.json'),
+    JSON.stringify(
+      {
+        name: 'knighted-imports-fixture',
+        type: 'module',
+        imports: {
+          '#styles': './src/imports.css',
+        },
+      },
+      null,
+      2,
+    ),
   )
   return {
-    root: tmpRoot,
-    cleanup: () => fs.rm(tmpRoot, { recursive: true, force: true }),
+    root,
+    cleanup: () => fs.rm(root, { recursive: true, force: true }),
+  }
+}
+
+async function setupHashImportsWorkspaceFixture(): Promise<{
+  root: string
+  cleanup: () => Promise<void>
+}> {
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-hash-imports-'))
+  const root = await fs.realpath(tmpRoot)
+  const sourceRoot = path.resolve(
+    __dirname,
+    '..',
+    '..',
+    'playwright',
+    'src',
+    'hash-imports-workspace',
+  )
+  await fs.cp(sourceRoot, root, { recursive: true })
+  return {
+    root,
+    cleanup: () => fs.rm(root, { recursive: true, force: true }),
   }
 }
 
@@ -273,6 +332,59 @@ test('generateTypes resolves tsconfig baseUrl specifiers', async () => {
     assert.equal(Object.keys(manifest).length, 1)
   } finally {
     await project.cleanup()
+  }
+})
+
+test('generateTypes resolves package.json imports specifiers', async () => {
+  const project = await setupPackageImportsFixture()
+  try {
+    const outDir = path.join(project.root, '.knighted-css-test')
+    const result = await generateTypes({
+      rootDir: project.root,
+      include: ['src'],
+      outDir,
+    })
+    assert.ok(result.selectorModulesWritten >= 1)
+    assert.equal(result.warnings.length, 0)
+    const selectorModulePath = path.join(
+      project.root,
+      'src',
+      'imports.css.knighted-css.ts',
+    )
+    assert.equal(await pathExists(selectorModulePath), true)
+  } finally {
+    await project.cleanup()
+  }
+})
+
+test('generateTypes resolves hash-imports workspace package.json imports', async () => {
+  const workspace = await setupHashImportsWorkspaceFixture()
+  try {
+    const appRoot = path.join(workspace.root, 'apps', 'hash-import-demo')
+    const bridgeDir = path.join(appRoot, 'src', 'workspace-bridge')
+    await fs.writeFile(
+      path.join(bridgeDir, 'workspace-card.css'),
+      '.knighted-demo { color: dodgerblue; }\n',
+    )
+    await fs.writeFile(
+      path.join(appRoot, 'src', 'types-entry.ts'),
+      "import selectors from '#workspace/ui/workspace-card.css.knighted-css'\n" +
+        'console.log(selectors.demo)\n',
+    )
+
+    const outDir = path.join(appRoot, '.knighted-css-test')
+    const result = await generateTypes({
+      rootDir: appRoot,
+      include: ['src'],
+      outDir,
+    })
+    assert.ok(result.selectorModulesWritten >= 1)
+    assert.equal(result.warnings.length, 0)
+
+    const selectorModulePath = path.join(bridgeDir, 'workspace-card.css.knighted-css.ts')
+    assert.equal(await pathExists(selectorModulePath), true)
+  } finally {
+    await workspace.cleanup()
   }
 })
 
