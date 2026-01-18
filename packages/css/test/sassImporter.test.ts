@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import test from 'node:test'
+import fs from 'node:fs/promises'
+import os from 'node:os'
 
 import { __sassInternals, type CssResolver } from '../src/sassInternals.ts'
 
@@ -113,4 +115,39 @@ test('resolveAliasSpecifier normalizes returned file urls', async () => {
     sassFixturesDir,
   )
   assert.equal(result, target)
+})
+
+test('sass importer resolves pkg: specifiers via oxc-resolver', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-sass-pkg-'))
+  try {
+    const srcDir = path.join(root, 'src')
+    const stylesDir = path.join(srcDir, 'styles')
+    await fs.mkdir(stylesDir, { recursive: true })
+    await fs.writeFile(path.join(stylesDir, 'color.scss'), '.color { color: red; }')
+    await fs.writeFile(
+      path.join(root, 'package.json'),
+      JSON.stringify(
+        {
+          name: 'knighted-sass-pkg-fixture',
+          type: 'module',
+          imports: {
+            '#styles/*': './src/styles/*',
+          },
+        },
+        null,
+        2,
+      ),
+    )
+    const importer = __sassInternals.createSassImporter({ cwd: root })
+    assert.ok(importer, 'expected importer to be created')
+
+    const containing = pathToFileURL(path.join(srcDir, 'entry.scss'))
+    const resolved = await importer.canonicalize('pkg:#styles/color.scss', {
+      containingUrl: containing,
+    })
+    assert.ok(resolved, 'expected pkg: specifier to resolve')
+    assert.ok(resolved?.href.endsWith('/color.scss'))
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
 })

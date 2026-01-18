@@ -113,6 +113,8 @@ Run `knighted-css-generate-types` so every specifier that ends with `.knighted-c
 import stableSelectors from './button.module.scss.knighted-css.js'
 ```
 
+Need bespoke resolution? Pass `--resolver` to load a module exporting a `CssResolver` and apply it during type generation.
+
 When the `.knighted-css` import targets a JavaScript/TypeScript module, the generated proxy also re-exports the module’s exports and `knightedCss`, so a single import can provide component exports, typed selectors, and the compiled stylesheet string:
 
 ```ts

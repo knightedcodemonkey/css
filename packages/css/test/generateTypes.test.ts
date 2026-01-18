@@ -715,6 +715,51 @@ test('runGenerateTypesCli executes generation and reports summaries', async () =
   }
 })
 
+test('runGenerateTypesCli loads a custom resolver module', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-cli-resolver-'))
+  try {
+    const srcDir = path.join(root, 'src')
+    await fs.mkdir(srcDir, { recursive: true })
+    await fs.writeFile(
+      path.join(srcDir, 'styles.css'),
+      '.knighted-card { color: teal; }\n',
+    )
+    await fs.writeFile(
+      path.join(srcDir, 'entry.ts'),
+      "import selectors from '@alias/styles.css.knighted-css'\n" +
+        'console.log(selectors.card)\n',
+    )
+    const resolverPath = path.join(root, 'resolver.mjs')
+    await fs.writeFile(
+      resolverPath,
+      "import path from 'node:path'\n" +
+        'export default function resolver(specifier, { cwd }) {\n' +
+        "  if (specifier === '@alias/styles.css') {\n" +
+        "    return path.join(cwd, 'src', 'styles.css')\n" +
+        '  }\n' +
+        '  return undefined\n' +
+        '}\n',
+    )
+
+    const outDir = path.join(root, '.knighted-css-cli')
+    await runGenerateTypesCli([
+      '--root',
+      root,
+      '--include',
+      'src',
+      '--out-dir',
+      outDir,
+      '--resolver',
+      './resolver.mjs',
+    ])
+
+    const selectorModulePath = path.join(srcDir, 'styles.css.knighted-css.ts')
+    assert.equal(await pathExists(selectorModulePath), true)
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
 test('runGenerateTypesCli prints help output when requested', async () => {
   const printed: string[] = []
   const originalLog = console.log
@@ -879,16 +924,20 @@ test('generateTypes internals support selector module helpers', async () => {
     '--out-dir',
     '.knighted-css',
     '--auto-stable',
+    '--resolver',
+    './resolver.mjs',
   ]) as ParsedCliArgs
   assert.equal(parsed.rootDir, path.resolve('/tmp/project'))
   assert.deepEqual(parsed.include, ['src'])
   assert.equal(parsed.stableNamespace, 'storybook')
   assert.equal(parsed.autoStable, true)
+  assert.equal(parsed.resolver, './resolver.mjs')
 
   assert.throws(() => parseCliArgs(['--root']), /Missing value/)
   assert.throws(() => parseCliArgs(['--include']), /Missing value/)
   assert.throws(() => parseCliArgs(['--out-dir']), /Missing value/)
   assert.throws(() => parseCliArgs(['--stable-namespace']), /Missing value/)
+  assert.throws(() => parseCliArgs(['--resolver']), /Missing value/)
   assert.throws(() => parseCliArgs(['--wat']), /Unknown flag/)
   const helpParsed = parseCliArgs(['--help'])
   assert.equal(helpParsed.help, true)
