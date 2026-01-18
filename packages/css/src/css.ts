@@ -333,10 +333,15 @@ async function compileSass(
 
   if (typeof (sass as { compileAsync?: Function }).compileAsync === 'function') {
     const importers: unknown[] = []
-    /* Include NodePackageImporter if available for pkg: scheme support */
+    /*
+     * Include NodePackageImporter if available and no custom resolver is provided.
+     * Custom resolvers handle pkg: imports themselves (e.g., pkg:#styles/file.scss).
+     * NodePackageImporter only handles standard pkg: imports (e.g., pkg:package/file.scss).
+     */
     if (
+      !resolver &&
       typeof (sass as { NodePackageImporter?: unknown }).NodePackageImporter ===
-      'function'
+        'function'
     ) {
       const NodePackageImporter = (sass as { NodePackageImporter: new () => unknown })
         .NodePackageImporter
