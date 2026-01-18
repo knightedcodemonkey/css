@@ -42,11 +42,16 @@ export function resolveWithFactory(
       return undefined
     }
   }
-  if (/^[a-z][\w+.-]*:/i.test(specifier)) {
+  /* Strip pkg: prefix for Sass node package imports before resolution */
+  let normalizedSpecifier = specifier
+  if (specifier.startsWith('pkg:')) {
+    normalizedSpecifier = specifier.slice('pkg:'.length)
+  }
+  if (/^[a-z][\w+.-]*:/i.test(normalizedSpecifier)) {
     return undefined
   }
   try {
-    const result = factory.resolveFileSync(importer, specifier)
+    const result = factory.resolveFileSync(importer, normalizedSpecifier)
     return result?.path
   } catch {
     return undefined

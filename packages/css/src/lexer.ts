@@ -189,7 +189,11 @@ function normalizeSpecifier(raw: string): string {
   if (!withoutQuery) {
     return ''
   }
-  if (/^[a-z][\w+.-]*:/i.test(withoutQuery) && !withoutQuery.startsWith('file:')) {
+  if (
+    /^[a-z][\w+.-]*:/i.test(withoutQuery) &&
+    !withoutQuery.startsWith('file:') &&
+    !withoutQuery.startsWith('pkg:')
+  ) {
     return ''
   }
   return withoutQuery

@@ -332,12 +332,22 @@ async function compileSass(
   const loadPaths = buildSassLoadPaths(filePath)
 
   if (typeof (sass as { compileAsync?: Function }).compileAsync === 'function') {
+    const importers = []
+    /* Include NodePackageImporter if available for pkg: scheme support */
+    if (typeof (sass as { NodePackageImporter?: unknown }).NodePackageImporter === 'function') {
+      const NodePackageImporter = (sass as { NodePackageImporter: new () => unknown })
+        .NodePackageImporter
+      importers.push(new NodePackageImporter())
+    }
+    if (importer) {
+      importers.push(importer)
+    }
     const result = await (
       sass as { compileAsync: typeof import('sass').compileAsync }
     ).compileAsync(filePath, {
       style: 'expanded',
       loadPaths,
-      importers: importer ? [importer] : undefined,
+      importers: importers.length > 0 ? importers : undefined,
     })
     return result.css
   }

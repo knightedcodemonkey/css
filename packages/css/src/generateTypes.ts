@@ -416,22 +416,29 @@ async function resolveImportPath(
   resolutionExtensions: string[] = RESOLUTION_EXTENSIONS,
 ): Promise<string | undefined> {
   if (!resourceSpecifier) return undefined
-  if (resourceSpecifier.startsWith('.')) {
+  /* Strip pkg: prefix for Sass node package imports */
+  let normalizedSpecifier = resourceSpecifier
+  if (resourceSpecifier.startsWith('pkg:')) {
+    normalizedSpecifier = resourceSpecifier.slice('pkg:'.length)
+  }
+  if (normalizedSpecifier.startsWith('.')) {
     return resolveWithExtensionFallback(
-      path.resolve(path.dirname(importerPath), resourceSpecifier),
+      path.resolve(path.dirname(importerPath), normalizedSpecifier),
     )
   }
-  if (resourceSpecifier.startsWith('/')) {
-    return resolveWithExtensionFallback(path.resolve(rootDir, resourceSpecifier.slice(1)))
+  if (normalizedSpecifier.startsWith('/')) {
+    return resolveWithExtensionFallback(
+      path.resolve(rootDir, normalizedSpecifier.slice(1)),
+    )
   }
-  const tsconfigResolved = await resolveWithTsconfigPaths(resourceSpecifier, tsconfig)
+  const tsconfigResolved = await resolveWithTsconfigPaths(normalizedSpecifier, tsconfig)
   if (tsconfigResolved) {
     return resolveWithExtensionFallback(tsconfigResolved)
   }
   if (resolverFactory) {
     const resolved = resolveWithFactory(
       resolverFactory,
-      resourceSpecifier,
+      normalizedSpecifier,
       importerPath,
       resolutionExtensions,
     )
@@ -441,7 +448,7 @@ async function resolveImportPath(
   }
   const requireFromRoot = getProjectRequire(rootDir)
   try {
-    return requireFromRoot.resolve(resourceSpecifier)
+    return requireFromRoot.resolve(normalizedSpecifier)
   } catch {
     return undefined
   }
