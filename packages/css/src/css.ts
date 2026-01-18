@@ -335,7 +335,8 @@ async function compileSass(
     const importers: unknown[] = []
     /* Include NodePackageImporter if available for pkg: scheme support */
     if (
-      typeof (sass as { NodePackageImporter?: unknown }).NodePackageImporter === 'function'
+      typeof (sass as { NodePackageImporter?: unknown }).NodePackageImporter ===
+      'function'
     ) {
       const NodePackageImporter = (sass as { NodePackageImporter: new () => unknown })
         .NodePackageImporter
