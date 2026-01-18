@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { existsSync, promises as fs } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { createRequire } from 'node:module'
 
 import type { CssResolver } from './types.js'
 import { createResolverFactory, resolveWithFactory } from './moduleResolution.js'
@@ -10,9 +11,11 @@ export type { CssResolver } from './types.js'
 export function createSassImporter({
   cwd,
   resolver,
+  entryPath,
 }: {
   cwd: string
   resolver?: CssResolver
+  entryPath?: string
 }) {
   const debug = process.env.KNIGHTED_CSS_DEBUG_SASS === '1'
   const pkgResolver = createPkgResolver(cwd)
@@ -27,7 +30,7 @@ export function createSassImporter({
       }
       const containingPath = context?.containingUrl
         ? fileURLToPath(context.containingUrl)
-        : undefined
+        : entryPath
       if (resolver && shouldNormalizeSpecifier(url)) {
         const resolvedPath = await resolveAliasSpecifier(
           url,
@@ -88,9 +91,11 @@ export function createSassImporter({
 export function createLegacySassImporter({
   cwd,
   resolver,
+  entryPath,
 }: {
   cwd: string
   resolver?: CssResolver
+  entryPath?: string
 }) {
   const debug = process.env.KNIGHTED_CSS_DEBUG_SASS === '1'
   const pkgResolver = createPkgResolver(cwd)
@@ -100,7 +105,7 @@ export function createLegacySassImporter({
     prev: string,
     done?: (result: { file: string } | null) => void,
   ) => {
-    const containingPath = prev && prev !== 'stdin' ? prev : undefined
+    const containingPath = prev && prev !== 'stdin' ? prev : entryPath
     let resolvedPath: string | undefined
 
     if (resolver && shouldNormalizeSpecifier(url)) {
@@ -209,10 +214,22 @@ export function createPkgResolver(cwd: string) {
   return async (specifier: string, containingPath?: string) => {
     const importer = containingPath ?? path.join(cwd, 'index.scss')
     const resolved = resolveWithFactory(factory, specifier, importer, SASS_EXTENSIONS)
-    if (!resolved) {
+    if (resolved) {
+      return ensureSassPath(resolved) ?? resolved
+    }
+    const resolvedViaNode = resolveWithNode(specifier, importer)
+    if (!resolvedViaNode) {
       return undefined
     }
-    return ensureSassPath(resolved) ?? resolved
+    return ensureSassPath(resolvedViaNode) ?? resolvedViaNode
+  }
+}
+
+function resolveWithNode(specifier: string, importerPath: string): string | undefined {
+  try {
+    return createRequire(importerPath).resolve(specifier)
+  } catch {
+    return undefined
   }
 }
 

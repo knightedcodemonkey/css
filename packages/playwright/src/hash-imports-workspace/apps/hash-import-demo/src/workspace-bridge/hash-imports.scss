@@ -1,0 +1,5 @@
+@use 'pkg:#workspace/ui/tokens.scss' as tokens;
+
+.knighted-demo {
+  color: tokens.$accent-color;
+}

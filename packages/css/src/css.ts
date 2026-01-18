@@ -328,8 +328,8 @@ async function compileSass(
     peerResolver,
   )
   const sass = resolveSassNamespace(sassModule)
-  const importer = createSassImporter({ cwd, resolver })
-  const legacyImporter = createLegacySassImporter({ cwd, resolver })
+  const importer = createSassImporter({ cwd, resolver, entryPath: filePath })
+  const legacyImporter = createLegacySassImporter({ cwd, resolver, entryPath: filePath })
   const loadPaths = buildSassLoadPaths(filePath)
 
   if (typeof (sass as { compileAsync?: Function }).compileAsync === 'function') {

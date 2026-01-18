@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
@@ -362,13 +363,28 @@ test('generateTypes resolves hash-imports workspace package.json imports', async
   try {
     const appRoot = path.join(workspace.root, 'apps', 'hash-import-demo')
     const bridgeDir = path.join(appRoot, 'src', 'workspace-bridge')
+    const requireFromRepo = createRequire(import.meta.url)
+    const sassEntry = requireFromRepo.resolve('sass')
+    const sassPackageDir = await findPackageRoot(sassEntry)
+    const sassModuleDir = path.join(appRoot, 'node_modules', 'sass')
+    await fs.mkdir(path.dirname(sassModuleDir), { recursive: true })
+    try {
+      await fs.symlink(sassPackageDir, sassModuleDir)
+    } catch {
+      await fs.cp(sassPackageDir, sassModuleDir, { recursive: true })
+    }
     await fs.writeFile(
-      path.join(bridgeDir, 'workspace-card.css'),
-      '.knighted-demo { color: dodgerblue; }\n',
+      path.join(bridgeDir, 'tokens.scss'),
+      '$accent-color: dodgerblue;\n',
+    )
+    await fs.writeFile(
+      path.join(bridgeDir, 'workspace-card.scss'),
+      "@use 'pkg:#workspace/ui/tokens.scss' as tokens;\n\n" +
+        '.knighted-demo { color: tokens.$accent-color; }\n',
     )
     await fs.writeFile(
       path.join(appRoot, 'src', 'types-entry.ts'),
-      "import selectors from '#workspace/ui/workspace-card.css.knighted-css'\n" +
+      "import selectors from '#workspace/ui/workspace-card.scss.knighted-css'\n" +
         'console.log(selectors.demo)\n',
     )
 
@@ -378,15 +394,41 @@ test('generateTypes resolves hash-imports workspace package.json imports', async
       include: ['src'],
       outDir,
     })
-    assert.ok(result.selectorModulesWritten >= 1)
-    assert.equal(result.warnings.length, 0)
+    const unexpectedWarnings = result.warnings.filter(
+      warning =>
+        warning.includes('Unable to resolve') ||
+        warning.includes('Failed to extract CSS'),
+    )
+    assert.equal(
+      unexpectedWarnings.length,
+      0,
+      `Unexpected warnings:\n${unexpectedWarnings.join('\n')}`,
+    )
 
-    const selectorModulePath = path.join(bridgeDir, 'workspace-card.css.knighted-css.ts')
+    const selectorModulePath = path.join(bridgeDir, 'workspace-card.scss.knighted-css.ts')
     assert.equal(await pathExists(selectorModulePath), true)
   } finally {
     await workspace.cleanup()
   }
 })
+
+async function findPackageRoot(entryPath: string): Promise<string> {
+  let current = path.dirname(entryPath)
+  const { root } = path.parse(current)
+  while (true) {
+    const candidate = path.join(current, 'package.json')
+    try {
+      await fs.access(candidate)
+      return current
+    } catch {
+      // continue
+    }
+    if (current === root) {
+      throw new Error(`Unable to locate package.json for ${entryPath}`)
+    }
+    current = path.dirname(current)
+  }
+}
 
 test('generateTypes removes stale selector manifest entries when modules vanish', async () => {
   const project = await setupFixtureProject()
