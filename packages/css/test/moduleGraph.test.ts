@@ -661,3 +661,37 @@ test('collectStyleImports normalizes resolver results, file URLs, and template l
     await project.cleanup()
   }
 })
+
+test('collectStyleImports resolves pkg: scheme with custom resolver', async () => {
+  const project = await createProject('knighted-module-graph-pkg-')
+  try {
+    await project.writeFile('styles/colors.scss', '.colors { color: red; }')
+    await project.writeFile(
+      'entry.ts',
+      `import 'pkg:#styles/colors.scss'
+`,
+    )
+
+    const resolver: CssResolver = async specifier => {
+      if (specifier.startsWith('pkg:#')) {
+        const relativePath = specifier.replace(/^pkg:#/, '')
+        return path.join(project.root, relativePath)
+      }
+      return undefined
+    }
+
+    const styles = await collectStyleImports(project.file('entry.ts'), {
+      cwd: project.root,
+      styleExtensions: ['.scss'],
+      filter: () => true,
+      resolver,
+    })
+
+    assert.deepEqual(
+      await realpathAll(styles),
+      await realpathAll([project.file('styles/colors.scss')]),
+    )
+  } finally {
+    await project.cleanup()
+  }
+})

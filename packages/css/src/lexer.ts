@@ -181,6 +181,17 @@ function normalizeSpecifier(raw: string): string {
   if (!trimmed || trimmed.startsWith('\0')) {
     return ''
   }
+  /*
+   * For pkg: scheme, only strip actual query strings (?key=value),
+   * but preserve # as it's part of Sass package importer syntax
+   */
+  if (trimmed.startsWith('pkg:')) {
+    const queryIndex = trimmed.indexOf('?')
+    if (queryIndex >= 0) {
+      return trimmed.slice(0, queryIndex)
+    }
+    return trimmed
+  }
   const querySearchOffset = trimmed.startsWith('#') ? 1 : 0
   const remainder = trimmed.slice(querySearchOffset)
   const queryMatchIndex = remainder.search(/[?#]/)

@@ -62,3 +62,24 @@ void spread
     './styles/resolved.css',
   ])
 })
+
+test('analyzeModule allows pkg: scheme for Sass node package imports', async () => {
+  const source = `import 'pkg:#styles/colors.scss'
+import 'pkg:@scope/design-tokens/colors.scss?inline'
+import './local/styles.css'
+import 'http://example.com/remote.css'
+`
+
+  const result = await analyzeModule(source, 'entry.ts', {
+    esParse: () => {
+      throw new Error('force-oxc')
+    },
+  })
+
+  assert.equal(result.defaultSignal, 'unknown')
+  assert.deepEqual(result.imports.sort(), [
+    './local/styles.css',
+    'pkg:#styles/colors.scss',
+    'pkg:@scope/design-tokens/colors.scss',
+  ])
+})

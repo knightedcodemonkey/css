@@ -332,9 +332,11 @@ async function compileSass(
   const loadPaths = buildSassLoadPaths(filePath)
 
   if (typeof (sass as { compileAsync?: Function }).compileAsync === 'function') {
-    const importers = []
+    const importers: unknown[] = []
     /* Include NodePackageImporter if available for pkg: scheme support */
-    if (typeof (sass as { NodePackageImporter?: unknown }).NodePackageImporter === 'function') {
+    if (
+      typeof (sass as { NodePackageImporter?: unknown }).NodePackageImporter === 'function'
+    ) {
       const NodePackageImporter = (sass as { NodePackageImporter: new () => unknown })
         .NodePackageImporter
       importers.push(new NodePackageImporter())
@@ -347,7 +349,7 @@ async function compileSass(
     ).compileAsync(filePath, {
       style: 'expanded',
       loadPaths,
-      importers: importers.length > 0 ? importers : undefined,
+      importers: importers.length > 0 ? (importers as never) : undefined,
     })
     return result.css
   }
