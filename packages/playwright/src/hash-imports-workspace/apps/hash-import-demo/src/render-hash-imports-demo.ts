@@ -1,7 +1,7 @@
 import { HASH_IMPORTS_SECTION_ID } from '../../../constants.js'
 import { createWorkspaceCard } from '#workspace/ui/workspace-card.js'
 import { knightedCss as workspaceCardCss } from '#workspace/ui/workspace-card.js?knighted-css'
-import stableSelectors from '#workspace/ui/hash-imports.css.knighted-css.js'
+import stableSelectors from '#workspace/ui/hash-imports.scss.knighted-css.js'
 
 export function renderHashImportsWorkspaceDemo(root: HTMLElement): void {
   const mount = root ?? document.body

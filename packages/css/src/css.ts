@@ -23,7 +23,7 @@ import { stableClass } from './stableSelectors.js'
 
 import { collectStyleImports } from './moduleGraph.js'
 import type { ModuleGraphOptions } from './moduleGraph.js'
-import { createSassImporter } from './sassInternals.js'
+import { createLegacySassImporter, createSassImporter } from './sassInternals.js'
 import type { CssResolver } from './types.js'
 export type { AutoStableOption } from './autoStableSelectors.js'
 
@@ -328,7 +328,8 @@ async function compileSass(
     peerResolver,
   )
   const sass = resolveSassNamespace(sassModule)
-  const importer = createSassImporter({ cwd, resolver })
+  const importer = createSassImporter({ cwd, resolver, entryPath: filePath })
+  const legacyImporter = createLegacySassImporter({ cwd, resolver, entryPath: filePath })
   const loadPaths = buildSassLoadPaths(filePath)
 
   if (typeof (sass as { compileAsync?: Function }).compileAsync === 'function') {
@@ -348,6 +349,7 @@ async function compileSass(
       filePath,
       indented,
       loadPaths,
+      legacyImporter,
     )
   }
 
@@ -361,6 +363,7 @@ function renderLegacySass(
   filePath: string,
   indented: boolean,
   loadPaths: string[],
+  importer?: ReturnType<typeof createLegacySassImporter>,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     sass.render(
@@ -369,6 +372,7 @@ function renderLegacySass(
         indentedSyntax: indented,
         outputStyle: 'expanded',
         includePaths: loadPaths,
+        importer: importer ? [importer] : undefined,
       },
       (error, result) => {
         if (error) {

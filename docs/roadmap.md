@@ -15,3 +15,8 @@
 
 - Evaluate promoting `lightningcss` to a peer dependency so consumers can align with their own upgrade cadence.
 - Document fallbacks for specificity workflows if teams opt to satisfy the peer via compatible forks or alternative transformers.
+
+## Sass Resolver Options
+
+- Allow configuring conditionNames for `pkg:` resolution (e.g., opt into `sass` or custom priority ordering).
+- Allow opting into explicit `tsconfig` selection instead of `tsconfig: auto` when resolving `pkg:` specifiers.

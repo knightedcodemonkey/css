@@ -14,6 +14,7 @@ import { analyzeModule, type DefaultExportSignal } from './lexer.js'
 import { createResolverFactory, resolveWithFactory } from './moduleResolution.js'
 import { buildStableSelectorsLiteral } from './stableSelectorsLiteral.js'
 import { resolveStableNamespace } from './stableNamespace.js'
+import type { CssResolver } from './types.js'
 
 interface ImportMatch {
   specifier: string
@@ -48,6 +49,7 @@ interface GenerateTypesInternalOptions {
   stableNamespace?: string
   autoStable?: boolean
   tsconfig?: TsconfigResolutionContext
+  resolver?: CssResolver
 }
 
 export interface GenerateTypesResult {
@@ -63,6 +65,7 @@ export interface GenerateTypesOptions {
   outDir?: string
   stableNamespace?: string
   autoStable?: boolean
+  resolver?: CssResolver
 }
 
 const DEFAULT_SKIP_DIRS = new Set([
@@ -146,6 +149,7 @@ export async function generateTypes(
     stableNamespace: options.stableNamespace,
     autoStable: options.autoStable,
     tsconfig,
+    resolver: options.resolver,
   }
 
   return generateDeclarations(internalOptions)
@@ -194,6 +198,7 @@ async function generateDeclarations(
         match.importer,
         options.rootDir,
         options.tsconfig,
+        options.resolver,
         resolverFactory,
         RESOLUTION_EXTENSIONS,
       )
@@ -217,6 +222,7 @@ async function generateDeclarations(
               options.autoStable && shouldUseCssModules
                 ? { cssModules: true }
                 : undefined,
+            resolver: options.resolver,
           })
           selectorMap = buildStableSelectorsLiteral({
             css,
@@ -412,6 +418,7 @@ async function resolveImportPath(
   importerPath: string,
   rootDir: string,
   tsconfig?: TsconfigResolutionContext,
+  resolver?: CssResolver,
   resolverFactory?: ReturnType<typeof createResolverFactory>,
   resolutionExtensions: string[] = RESOLUTION_EXTENSIONS,
 ): Promise<string | undefined> {
@@ -423,6 +430,17 @@ async function resolveImportPath(
   }
   if (resourceSpecifier.startsWith('/')) {
     return resolveWithExtensionFallback(path.resolve(rootDir, resourceSpecifier.slice(1)))
+  }
+  if (resolver) {
+    const resolved = await resolveWithResolver(
+      resourceSpecifier,
+      resolver,
+      rootDir,
+      importerPath,
+    )
+    if (resolved) {
+      return resolveWithExtensionFallback(resolved)
+    }
   }
   const tsconfigResolved = await resolveWithTsconfigPaths(resourceSpecifier, tsconfig)
   if (tsconfigResolved) {
@@ -445,6 +463,26 @@ async function resolveImportPath(
   } catch {
     return undefined
   }
+}
+
+async function resolveWithResolver(
+  specifier: string,
+  resolver: CssResolver,
+  rootDir: string,
+  importerPath?: string,
+): Promise<string | undefined> {
+  const resolved = await resolver(specifier, { cwd: rootDir, from: importerPath })
+  if (!resolved) {
+    return undefined
+  }
+  if (resolved.startsWith('file://')) {
+    try {
+      return fileURLToPath(new URL(resolved))
+    } catch {
+      return undefined
+    }
+  }
+  return path.isAbsolute(resolved) ? resolved : path.resolve(rootDir, resolved)
 }
 
 function buildSelectorModuleManifestKey(resolvedPath: string): string {
@@ -798,6 +836,37 @@ function getProjectRequire(rootDir: string): ReturnType<typeof createRequire> {
   return loader
 }
 
+function resolveResolverModulePath(specifier: string, rootDir: string): string {
+  if (specifier.startsWith('file://')) {
+    return fileURLToPath(new URL(specifier))
+  }
+  if (specifier.startsWith('.') || specifier.startsWith('/')) {
+    return path.resolve(rootDir, specifier)
+  }
+  const requireFromRoot = getProjectRequire(rootDir)
+  return requireFromRoot.resolve(specifier)
+}
+
+async function loadResolverModule(
+  specifier: string,
+  rootDir: string,
+): Promise<CssResolver> {
+  const resolvedPath = resolveResolverModulePath(specifier, rootDir)
+  const mod = await import(pathToFileURL(resolvedPath).href)
+  const candidate =
+    typeof mod.default === 'function'
+      ? (mod.default as CssResolver)
+      : typeof (mod as { resolver?: unknown }).resolver === 'function'
+        ? ((mod as { resolver: CssResolver }).resolver as CssResolver)
+        : undefined
+  if (!candidate) {
+    throw new Error(
+      'Resolver module must export a function as the default export or a named export named "resolver".',
+    )
+  }
+  return candidate
+}
+
 export async function runGenerateTypesCli(argv = process.argv.slice(2)): Promise<void> {
   let parsed: ParsedCliArgs
   try {
@@ -812,12 +881,16 @@ export async function runGenerateTypesCli(argv = process.argv.slice(2)): Promise
     return
   }
   try {
+    const resolver = parsed.resolver
+      ? await loadResolverModule(parsed.resolver, parsed.rootDir)
+      : undefined
     const result = await generateTypes({
       rootDir: parsed.rootDir,
       include: parsed.include,
       outDir: parsed.outDir,
       stableNamespace: parsed.stableNamespace,
       autoStable: parsed.autoStable,
+      resolver,
     })
     reportCliResult(result)
   } catch (error) {
@@ -833,6 +906,7 @@ export interface ParsedCliArgs {
   outDir?: string
   stableNamespace?: string
   autoStable?: boolean
+  resolver?: string
   help?: boolean
 }
 
@@ -842,6 +916,7 @@ function parseCliArgs(argv: string[]): ParsedCliArgs {
   let outDir: string | undefined
   let stableNamespace: string | undefined
   let autoStable = false
+  let resolver: string | undefined
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
@@ -884,13 +959,21 @@ function parseCliArgs(argv: string[]): ParsedCliArgs {
       stableNamespace = value
       continue
     }
+    if (arg === '--resolver') {
+      const value = argv[++i]
+      if (!value) {
+        throw new Error('Missing value for --resolver')
+      }
+      resolver = value
+      continue
+    }
     if (arg.startsWith('-')) {
       throw new Error(`Unknown flag: ${arg}`)
     }
     include.push(arg)
   }
 
-  return { rootDir, include, outDir, stableNamespace, autoStable }
+  return { rootDir, include, outDir, stableNamespace, autoStable, resolver }
 }
 
 function printHelp(): void {
@@ -902,6 +985,7 @@ Options:
       --out-dir <path>           Directory to store selector module manifest cache
       --stable-namespace <name>  Stable namespace prefix for generated selector maps
       --auto-stable              Enable autoStable when extracting CSS for selectors
+      --resolver <path>          Path or package name exporting a CssResolver
   -h, --help                     Show this help message
 `)
 }
@@ -948,11 +1032,14 @@ export const __generateTypesInternals = {
   setImportMetaUrlProvider,
   isNonRelativeSpecifier,
   isStyleResource,
+  resolveProxyInfo,
   resolveWithExtensionFallback,
+  resolveIndexFallback,
   createProjectPeerResolver,
   getProjectRequire,
   loadTsconfigResolutionContext,
   resolveWithTsconfigPaths,
+  loadResolverModule,
   parseCliArgs,
   printHelp,
   reportCliResult,
