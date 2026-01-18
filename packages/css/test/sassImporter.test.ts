@@ -151,3 +151,41 @@ test('sass importer resolves pkg: specifiers via oxc-resolver', async () => {
     await fs.rm(root, { recursive: true, force: true })
   }
 })
+
+test('sass importer honors sass condition name', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-sass-conditions-'))
+  try {
+    const srcDir = path.join(root, 'src')
+    const stylesDir = path.join(srcDir, 'styles')
+    await fs.mkdir(stylesDir, { recursive: true })
+    await fs.writeFile(path.join(stylesDir, 'sass.scss'), '.sass { color: blue; }')
+    await fs.writeFile(path.join(stylesDir, 'default.scss'), '.default { color: red; }')
+    await fs.writeFile(
+      path.join(root, 'package.json'),
+      JSON.stringify(
+        {
+          name: 'knighted-sass-conditions-fixture',
+          type: 'module',
+          imports: {
+            '#styles/entry.scss': {
+              sass: './src/styles/sass.scss',
+              default: './src/styles/default.scss',
+            },
+          },
+        },
+        null,
+        2,
+      ),
+    )
+
+    const importer = __sassInternals.createSassImporter({ cwd: root })
+    const containing = pathToFileURL(path.join(srcDir, 'entry.scss'))
+    const resolved = await importer.canonicalize('pkg:#styles/entry.scss', {
+      containingUrl: containing,
+    })
+    assert.ok(resolved, 'expected pkg: specifier to resolve')
+    assert.ok(resolved?.href.endsWith('/sass.scss'))
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})

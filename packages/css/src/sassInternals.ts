@@ -210,7 +210,9 @@ export function resolveRelativeSpecifier(
 const SASS_EXTENSIONS = ['.scss', '.sass', '.css']
 
 export function createPkgResolver(cwd: string) {
-  const factory = createResolverFactory(cwd, SASS_EXTENSIONS, SASS_EXTENSIONS)
+  const factory = createResolverFactory(cwd, SASS_EXTENSIONS, SASS_EXTENSIONS, {
+    conditions: ['sass', 'import', 'require', 'node', 'default'],
+  })
   return async (specifier: string, containingPath?: string) => {
     const importer = containingPath ?? path.join(cwd, 'index.scss')
     const resolved = resolveWithFactory(factory, specifier, importer, SASS_EXTENSIONS)
