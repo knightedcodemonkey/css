@@ -813,6 +813,201 @@ test('runGenerateTypesCli prints help output when requested', async () => {
   }
   await expectCliSnapshot('cli-help-output', printed.join('\n'))
 })
+
+test('generateTypes internals cover edge cases', async () => {
+  const {
+    resolvePackageRoot,
+    setModuleTypeDetector,
+    collectCandidateFiles,
+    findSpecifierImports,
+    resolveImportPath,
+    formatSelectorModuleSource,
+    removeStaleSelectorModules,
+    resolveIndexFallback,
+    loadTsconfigResolutionContext,
+    isNonRelativeSpecifier,
+    resolveProxyInfo,
+    loadResolverModule,
+    parseCliArgs,
+  } = __generateTypesInternals
+
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-internals-'))
+  try {
+    await fs.writeFile(
+      path.join(tempRoot, 'package.json'),
+      JSON.stringify({ name: 'knighted-temp-root', type: 'module' }),
+    )
+    const originalDirname = (globalThis as { __dirname?: string }).__dirname
+    try {
+      ;(globalThis as { __dirname?: string }).__dirname = path.join(tempRoot, 'src')
+      setModuleTypeDetector(() => 'commonjs')
+      assert.equal(resolvePackageRoot(), path.resolve(tempRoot, 'src', '..'))
+    } finally {
+      setModuleTypeDetector(undefined)
+      if (typeof originalDirname === 'undefined') {
+        delete (globalThis as { __dirname?: string }).__dirname
+      } else {
+        ;(globalThis as { __dirname?: string }).__dirname = originalDirname
+      }
+    }
+
+    assert.deepEqual(await collectCandidateFiles([path.join(tempRoot, 'missing')]), [])
+    assert.deepEqual(await findSpecifierImports(path.join(tempRoot, 'missing.ts')), [])
+
+    const brokenFile = path.join(tempRoot, 'broken.ts')
+    await fs.writeFile(
+      brokenFile,
+      "import { broken } from ;\nrequire('./styles.css.knighted-css')\n",
+    )
+    const brokenMatches = await findSpecifierImports(brokenFile)
+    assert.ok(brokenMatches.length >= 1)
+
+    const resolverUndefined = await resolveImportPath(
+      '@missing',
+      brokenFile,
+      tempRoot,
+      undefined,
+      async () => undefined,
+      undefined,
+    )
+    assert.equal(resolverUndefined, undefined)
+
+    const resolverBadUrl = await resolveImportPath(
+      '@bad',
+      brokenFile,
+      tempRoot,
+      undefined,
+      async () => 'file://%invalid',
+      undefined,
+    )
+    assert.equal(resolverBadUrl, undefined)
+
+    const source = formatSelectorModuleSource(new Map(), undefined)
+    assert.ok(source.includes('{} as const'))
+    const populated = formatSelectorModuleSource(new Map([['demo', '.knighted-demo']]), {
+      moduleSpecifier: './entry.js',
+      includeDefault: true,
+    })
+    assert.ok(populated.includes('"demo": ".knighted-demo"'))
+
+    const removed = await removeStaleSelectorModules(
+      { demo: { file: path.join(tempRoot, 'missing.ts'), hash: 'missing' } },
+      {},
+    )
+    assert.equal(removed, 0)
+
+    const candidate = path.join(tempRoot, 'not-a-dir')
+    await fs.writeFile(candidate, 'noop')
+    assert.equal(await resolveIndexFallback(candidate), undefined)
+
+    const tsconfig = loadTsconfigResolutionContext(tempRoot, () => ({
+      path: path.join(tempRoot, 'tsconfig.json'),
+      config: {
+        compilerOptions: {
+          baseUrl: './src',
+          paths: { '@app/*': ['./app/*'] },
+        },
+      },
+    }))
+    assert.ok(tsconfig?.absoluteBaseUrl)
+    assert.ok(tsconfig?.matchPath)
+
+    assert.equal(isNonRelativeSpecifier('http://example.com/style.css'), false)
+
+    const proxyCache = new Map<string, Awaited<ReturnType<typeof resolveProxyInfo>>>()
+    const proxyInfo = await resolveProxyInfo(
+      'demo',
+      './entry.ts',
+      path.join(tempRoot, 'missing-entry.ts'),
+      proxyCache,
+    )
+    assert.ok(proxyInfo?.moduleSpecifier)
+    const proxyCached = await resolveProxyInfo(
+      'demo',
+      './entry.ts',
+      path.join(tempRoot, 'missing-entry.ts'),
+      proxyCache,
+    )
+    assert.equal(proxyCached, proxyInfo)
+
+    const resolverFile = path.join(tempRoot, 'resolver-file.mjs')
+    await fs.writeFile(resolverFile, 'export default function resolver() { return null }')
+    const fileResolver = await loadResolverModule(
+      pathToFileURL(resolverFile).href,
+      tempRoot,
+    )
+    assert.equal(typeof fileResolver, 'function')
+
+    const nodeModulesDir = path.join(tempRoot, 'node_modules', 'fixture-resolver')
+    await fs.mkdir(nodeModulesDir, { recursive: true })
+    await fs.writeFile(
+      path.join(nodeModulesDir, 'package.json'),
+      JSON.stringify({ name: 'fixture-resolver', type: 'module', exports: './index.js' }),
+    )
+    await fs.writeFile(
+      path.join(nodeModulesDir, 'index.js'),
+      'export default function resolver() { return null }',
+    )
+    const packageResolver = await loadResolverModule('fixture-resolver', tempRoot)
+    assert.equal(typeof packageResolver, 'function')
+
+    const badResolver = path.join(tempRoot, 'resolver-bad.mjs')
+    await fs.writeFile(badResolver, 'export const resolver = 123')
+    await assert.rejects(
+      () => loadResolverModule(pathToFileURL(badResolver).href, tempRoot),
+      /Resolver module must export a function/,
+    )
+
+    const namedResolverFile = path.join(tempRoot, 'resolver-named.mjs')
+    await fs.writeFile(namedResolverFile, 'export function resolver() { return null }')
+    const namedResolver = await loadResolverModule(
+      pathToFileURL(namedResolverFile).href,
+      tempRoot,
+    )
+    assert.equal(typeof namedResolver, 'function')
+
+    const parsed = parseCliArgs(['--root', tempRoot, 'src'])
+    assert.deepEqual(parsed.include, ['src'])
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true })
+  }
+})
+
+test('generateTypes falls back when root realpath fails', async () => {
+  const sandbox = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-root-fallback-'))
+  const missingRoot = path.join(sandbox, 'missing-root')
+  const outDir = path.join(sandbox, 'out')
+  await fs.mkdir(outDir, { recursive: true })
+
+  try {
+    const result = await generateTypes({
+      rootDir: missingRoot,
+      include: ['src'],
+      outDir,
+    })
+    assert.equal(result.selectorModulesWritten, 0)
+    assert.equal(result.warnings.length, 0)
+  } finally {
+    await fs.rm(sandbox, { recursive: true, force: true })
+  }
+})
+
+test('generateTypes skips invalid selector sources', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-invalid-selector-'))
+  try {
+    const srcDir = path.join(root, 'src')
+    await fs.mkdir(srcDir, { recursive: true })
+    await fs.writeFile(
+      path.join(srcDir, 'entry.ts'),
+      "import selectors from '.knighted-css'\nconsole.log(selectors)\n",
+    )
+    const result = await generateTypes({ rootDir: root, include: ['src'] })
+    assert.equal(result.selectorModulesWritten, 0)
+    assert.equal(result.warnings.length, 0)
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
 test('generateTypes internals support selector module helpers', async () => {
   const {
     stripInlineLoader,
