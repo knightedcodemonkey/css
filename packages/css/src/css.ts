@@ -23,7 +23,7 @@ import { stableClass } from './stableSelectors.js'
 
 import { collectStyleImports } from './moduleGraph.js'
 import type { ModuleGraphOptions } from './moduleGraph.js'
-import { createSassImporter } from './sassInternals.js'
+import { createSassImporter, createPkgImporter } from './sassInternals.js'
 import type { CssResolver } from './types.js'
 export type { AutoStableOption } from './autoStableSelectors.js'
 
@@ -334,20 +334,22 @@ async function compileSass(
   if (typeof (sass as { compileAsync?: Function }).compileAsync === 'function') {
     const importers: unknown[] = []
     /*
-     * Add custom importer first to handle project-specific imports (e.g., pkg:#).
-     * Then add NodePackageImporter to handle standard pkg: URLs.
+     * Add custom importer first to handle user-provided resolver.
+     * Then add built-in pkg:# importer for native bundler-style resolution.
+     * Note: NodePackageImporter is not added because it conflicts with pkg:#
+     * imports (it throws an error for pkg:# URLs instead of returning null).
+     * Our pkgImporter handles pkg:# natively using oxc-resolver.
      */
     if (importer) {
       importers.push(importer)
     }
-    if (
-      typeof (sass as { NodePackageImporter?: unknown }).NodePackageImporter ===
-      'function'
-    ) {
-      const NodePackageImporter = (sass as { NodePackageImporter: new () => unknown })
-        .NodePackageImporter
-      importers.push(new NodePackageImporter())
-    }
+    /* Add built-in pkg:# importer using Node.js resolution */
+    const pkgImporter = createPkgImporter({
+      cwd,
+      extensions: ['.scss', '.sass', '.css'],
+    })
+    importers.push(pkgImporter)
+
     const result = await (
       sass as { compileAsync: typeof import('sass').compileAsync }
     ).compileAsync(filePath, {

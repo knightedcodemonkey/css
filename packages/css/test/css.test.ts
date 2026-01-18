@@ -43,14 +43,8 @@ test('supports indented sass compilation', async () => {
   assert.match(result, /padding-inline:\s*1\.25rem/)
 })
 
-test('normalizes custom scheme specifiers before Sass resolves relatives', async () => {
-  const result = await css(pkgAliasEntry, {
-    resolver: async specifier => {
-      if (!specifier.startsWith('pkg:#')) return undefined
-      const relativePath = specifier.replace(/^pkg:#/, '')
-      return path.join(pkgAliasDir, relativePath)
-    },
-  })
+test('resolves pkg:# imports natively using oxc-resolver', async () => {
+  const result = await css(pkgAliasEntry)
 
   assert.match(result, /\.alias-demo/)
   assert.match(result, /font-family:\s*["']Space Grotesk["'], sans-serif/)
