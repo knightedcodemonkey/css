@@ -251,17 +251,7 @@ function resolveCssModules(
   return collectNamedExportsLocal(module)
 }
 
-function collectNamedExports(value: unknown): Record<string, string> | undefined {
-  if (!value || typeof value !== 'object') return undefined
-  const output: Record<string, string> = {}
-  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
-    if (key === 'default' || key === '__esModule') continue
-    if (typeof entry === 'string') {
-      output[key] = entry
-    }
-  }
-  return Object.keys(output).length > 0 ? output : undefined
-}
+
 
 interface BridgeModuleOptions {
   localsRequest: string
@@ -430,7 +420,6 @@ export const __loaderBridgeInternals = {
   isJsLikeResource,
   resolveCssModules,
   resolveCssText,
-  collectNamedExports,
   buildProxyRequest,
   createBridgeModule,
 }

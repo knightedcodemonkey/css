@@ -109,11 +109,9 @@ test('pitch returns combined module wrapper when combined flag is present', asyn
     } as unknown as LoaderContext<KnightedCssBridgeLoaderOptions>['_module'],
   })
 
-  const result = await pitch.call(
+  const result = await (pitch as any).call(
     ctx as LoaderContext<KnightedCssBridgeLoaderOptions>,
     './styles.module.css?knighted-css&combined',
-    '',
-    {},
   )
 
   const output = String(result ?? '')
@@ -128,11 +126,9 @@ test('pitch omits knightedCssModules when emitCssModules is false', async () => 
     getOptions: () => ({ emitCssModules: false }),
   })
 
-  const result = await pitch.call(
+  const result = await (pitch as any).call(
     ctx as LoaderContext<KnightedCssBridgeLoaderOptions>,
     './styles.module.css?knighted-css',
-    '',
-    {},
   )
 
   const output = String(result ?? '')
@@ -145,11 +141,9 @@ test('pitch warns when types query is used', async () => {
     resourceQuery: '?knighted-css&types',
   })
 
-  await pitch.call(
+  await (pitch as any).call(
     ctx as LoaderContext<KnightedCssBridgeLoaderOptions>,
     './styles.module.css?knighted-css&types',
-    '',
-    {},
   )
 
   assert.equal(ctx.warnings.length, 1)
