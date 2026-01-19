@@ -2,7 +2,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import webpack from 'webpack'
-import { VanillaExtractPlugin } from '@vanilla-extract/webpack-plugin'
+import MiniCssExtractPlugin from 'mini-css-extract-plugin'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -10,10 +10,10 @@ const __dirname = path.dirname(__filename)
 export default {
   mode: 'development',
   context: __dirname,
-  entry: './src/webpack-react/index.ts',
+  entry: './src/bridge/bridge-entry.ts',
   output: {
-    filename: 'webpack-bundle.js',
-    path: path.resolve(__dirname, 'dist-webpack'),
+    filename: 'bridge-webpack-bundle.js',
+    path: path.resolve(__dirname, 'dist-bridge-webpack'),
     clean: true,
   },
   resolve: {
@@ -25,20 +25,38 @@ export default {
   module: {
     rules: [
       {
-        test: /\.css\.ts$/,
-        exclude: /node_modules/,
-        use: [
-          VanillaExtractPlugin.loader,
+        test: /\.module\.css$/,
+        oneOf: [
           {
-            loader: 'swc-loader',
-            options: {
-              jsc: {
-                target: 'es2022',
-                parser: {
-                  syntax: 'typescript',
+            resourceQuery: /knighted-css/,
+            type: 'javascript/auto',
+            use: [
+              {
+                loader: '@knighted/css/loader-bridge',
+              },
+              {
+                loader: 'css-loader',
+                options: {
+                  exportType: 'string',
+                  modules: {
+                    namedExport: true,
+                  },
                 },
               },
-            },
+            ],
+          },
+          {
+            use: [
+              MiniCssExtractPlugin.loader,
+              {
+                loader: 'css-loader',
+                options: {
+                  modules: {
+                    namedExport: false,
+                  },
+                },
+              },
+            ],
           },
         ],
       },
@@ -48,10 +66,12 @@ export default {
         exclude: /\.css\.ts$/,
         use: [
           {
-            loader: '@knighted/css/loader',
+            loader: '@knighted/css/loader-bridge',
+          },
+          {
+            loader: '@knighted/jsx/loader',
             options: {
-              lightningcss: { minify: true },
-              vanilla: { transformToEsm: true },
+              mode: 'react',
             },
           },
           {
@@ -70,7 +90,7 @@ export default {
       },
       {
         test: /\.tsx?$/,
-        exclude: [/node_modules/, /\.css\.ts$/],
+        exclude: /node_modules/,
         use: [
           {
             loader: 'swc-loader',
@@ -92,22 +112,12 @@ export default {
           },
         ],
       },
-      {
-        test: /\.css$/,
-        type: 'asset/source',
-      },
-      {
-        test: /\.s[ac]ss$/,
-        type: 'asset/source',
-      },
-      {
-        test: /\.less$/,
-        type: 'asset/source',
-      },
     ],
   },
   plugins: [
-    new VanillaExtractPlugin(),
+    new MiniCssExtractPlugin({
+      filename: 'bridge-webpack-bundle.css',
+    }),
     new webpack.ProvidePlugin({
       React: 'react',
     }),

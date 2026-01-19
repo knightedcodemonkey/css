@@ -1,6 +1,6 @@
 {
   "name": "@knighted/css",
-  "version": "1.1.0-rc.5",
+  "version": "1.1.0-rc.6",
   "description": "A build-time utility that traverses JavaScript/TypeScript module dependency graphs to extract, compile, and optimize all imported CSS into a single, in-memory string.",
   "type": "module",
   "main": "./dist/css.js",
@@ -9,6 +9,9 @@
     "*": {
       "loader": [
         "./dist/loader.d.ts"
+      ],
+      "loader-bridge": [
+        "./dist/loaderBridge.d.ts"
       ],
       "loader-helpers": [
         "./dist/loader-helpers.d.ts"
@@ -34,6 +37,11 @@
       "types": "./dist/loader.d.ts",
       "import": "./dist/loader.js",
       "require": "./dist/cjs/loader.cjs"
+    },
+    "./loader-bridge": {
+      "types": "./dist/loaderBridge.d.ts",
+      "import": "./dist/loaderBridge.js",
+      "require": "./dist/cjs/loaderBridge.cjs"
     },
     "./loader-helpers": {
       "types": "./dist/loader-helpers.d.ts",

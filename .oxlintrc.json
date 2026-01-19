@@ -20,6 +20,14 @@
   "rules": {
     "no-shadow": "off",
     "@typescript-eslint/no-shadow": "error",
+    "@typescript-eslint/no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_",
+        "ignoreRestSiblings": true
+      }
+    ],
     "@typescript-eslint/no-explicit-any": "error",
     "unicorn/filename-case": [
       "error",
