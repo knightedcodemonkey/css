@@ -1,11 +1,13 @@
 import { reactJsx } from '@knighted/jsx/react'
 import { createRoot, type Root } from 'react-dom/client'
 import { LitElement, css, html, unsafeCSS } from 'lit'
+import { asKnightedCssCombinedModule } from '@knighted/css/loader-helpers'
 
-import { BridgeCard } from './bridge-card.js'
+import * as bridgeModule from './bridge-card.js?knighted-css&combined'
 import { BRIDGE_HOST_TAG, BRIDGE_MARKER_TEST_ID } from './constants.js'
-import { knightedCss } from './styles.module.css?knighted-css'
 
+const { BridgeCard, knightedCss } =
+  asKnightedCssCombinedModule<typeof import('./bridge-card.js')>(bridgeModule)
 const hostShell = css`
   :host {
     display: block;

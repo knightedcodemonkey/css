@@ -60,6 +60,34 @@ export default {
         ],
       },
       {
+        test: /\.[jt]sx?$/,
+        resourceQuery: /knighted-css/,
+        exclude: /\.css\.ts$/,
+        use: [
+          {
+            loader: '@knighted/css/loader-bridge',
+          },
+          {
+            loader: '@knighted/jsx/loader',
+            options: {
+              mode: 'react',
+            },
+          },
+          {
+            loader: 'builtin:swc-loader',
+            options: {
+              jsc: {
+                target: 'es2022',
+                parser: {
+                  syntax: 'typescript',
+                  tsx: true,
+                },
+              },
+            },
+          },
+        ],
+      },
+      {
         test: /\.tsx?$/,
         exclude: /node_modules/,
         use: [

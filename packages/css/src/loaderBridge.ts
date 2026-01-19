@@ -34,6 +34,29 @@ const loader: LoaderDefinitionFunction<KnightedCssBridgeLoaderOptions> = functio
 
 export const pitch: PitchLoaderDefinitionFunction<KnightedCssBridgeLoaderOptions> =
   function pitch(remainingRequest) {
+    if (isJsLikeResource(this.resourcePath) && hasCombinedQuery(this.resourceQuery)) {
+      const callback = this.async()
+      if (!callback) {
+        return createCombinedJsBridgeModuleSync(this, remainingRequest)
+      }
+      readResourceSource(this)
+        .then(source => {
+          const cssRequests = collectCssModuleRequests(source).map(request =>
+            buildBridgeCssRequest(request),
+          )
+          const upstreamRequest = buildUpstreamRequest(remainingRequest)
+          callback(
+            null,
+            createCombinedJsBridgeModule({
+              upstreamRequest: upstreamRequest || '',
+              cssRequests,
+              emitDefault: false,
+            }),
+          )
+        })
+        .catch(error => callback(error as Error))
+      return
+    }
     const localsRequest = buildProxyRequest(this)
     const upstreamRequest = buildUpstreamRequest(remainingRequest)
     const { emitCssModules } = resolveLoaderOptions(this)
@@ -76,6 +99,100 @@ function resolveLoaderOptions(
   return {
     emitCssModules: rawOptions.emitCssModules !== false,
   }
+}
+
+function readResourceSource(
+  ctx: LoaderContext<KnightedCssBridgeLoaderOptions>,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    ctx.fs.readFile(ctx.resourcePath, (error, data) => {
+      if (error) {
+        reject(error)
+        return
+      }
+      if (!data) {
+        reject(new Error(`Unable to read ${ctx.resourcePath}`))
+        return
+      }
+      resolve(data.toString('utf8'))
+    })
+  })
+}
+
+function collectCssModuleRequests(source: string): string[] {
+  const matches = new Set<string>()
+  const importPattern =
+    /(?:import|export)\s+(?:[^'"\n]+\s+from\s+)?['"]([^'"\n]+?\.module\.(?:css|scss|sass|less)(?:\?[^'"\n]+)?)['"]/g
+  let match: RegExpExecArray | null
+  while ((match = importPattern.exec(source))) {
+    if (match[1]) {
+      matches.add(match[1])
+    }
+  }
+  return Array.from(matches)
+}
+
+function buildBridgeCssRequest(specifier: string): string {
+  if (specifier.includes('knighted-css')) {
+    return specifier
+  }
+  const [resource, query] = specifier.split('?')
+  if (query) {
+    return `${resource}?${query}&knighted-css`
+  }
+  return `${specifier}?knighted-css`
+}
+
+interface CombinedJsBridgeOptions {
+  upstreamRequest: string
+  cssRequests: string[]
+  emitDefault: boolean
+}
+
+function createCombinedJsBridgeModuleSync(
+  ctx: LoaderContext<KnightedCssBridgeLoaderOptions>,
+  remainingRequest?: string,
+): string {
+  const upstreamRequest = buildUpstreamRequest(remainingRequest)
+  return createCombinedJsBridgeModule({
+    upstreamRequest: upstreamRequest || '',
+    cssRequests: [],
+    emitDefault: false,
+  })
+}
+
+function createCombinedJsBridgeModule(options: CombinedJsBridgeOptions): string {
+  const upstreamLiteral = JSON.stringify(options.upstreamRequest)
+  const cssImports = options.cssRequests.map((request, index) => {
+    const literal = JSON.stringify(request)
+    return `import { knightedCss as __knightedCss${index}, knightedCssModules as __knightedCssModules${index} } from ${literal};`
+  })
+  const cssValues = options.cssRequests.map((_, index) => `__knightedCss${index}`)
+  const cssModulesValues = options.cssRequests.map(
+    (_, index) => `__knightedCssModules${index}`,
+  )
+  const lines = [
+    `import * as __knightedUpstream from ${upstreamLiteral};`,
+    ...cssImports,
+    options.emitDefault
+      ? "const __knightedDefault = Object.prototype.hasOwnProperty.call(__knightedUpstream, 'default') ? __knightedUpstream['default'] : undefined;"
+      : '',
+    `const __knightedCss = [${cssValues.join(', ')}].filter(Boolean).join('\\n');`,
+    `const __knightedCssModules = Object.assign({}, ...[${cssModulesValues.join(
+      ', ',
+    )}].filter(Boolean));`,
+    `export const ${DEFAULT_EXPORT_NAME} = __knightedCss;`,
+    'export const knightedCssModules = __knightedCssModules;',
+    `export * from ${upstreamLiteral};`,
+  ]
+  if (options.emitDefault) {
+    lines.push('export default __knightedDefault;')
+  }
+  return lines.filter(Boolean).join('\n')
+}
+
+function isJsLikeResource(resourcePath: string): boolean {
+  return /\.[cm]?[jt]sx?$/.test(resourcePath)
 }
 
 function resolveCssText(primary: unknown, module?: BridgeModuleLike): string {
@@ -307,6 +424,10 @@ function emitKnightedWarning(
 }
 
 export const __loaderBridgeInternals = {
+  collectCssModuleRequests,
+  buildBridgeCssRequest,
+  createCombinedJsBridgeModule,
+  isJsLikeResource,
   resolveCssModules,
   resolveCssText,
   collectNamedExports,
