@@ -6,7 +6,6 @@ import { VanillaExtractPlugin } from '@vanilla-extract/webpack-plugin'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
-const tsconfig = path.resolve(__dirname, 'tsconfig.json')
 
 export default {
   mode: 'development',
@@ -31,13 +30,13 @@ export default {
         use: [
           VanillaExtractPlugin.loader,
           {
-            loader: 'ts-loader',
+            loader: 'swc-loader',
             options: {
-              configFile: tsconfig,
-              transpileOnly: true,
-              compilerOptions: {
-                module: 'esnext',
-                moduleResolution: 'bundler',
+              jsc: {
+                target: 'es2022',
+                parser: {
+                  syntax: 'typescript',
+                },
               },
             },
           },
@@ -56,13 +55,14 @@ export default {
             },
           },
           {
-            loader: 'ts-loader',
+            loader: 'swc-loader',
             options: {
-              configFile: tsconfig,
-              transpileOnly: true,
-              compilerOptions: {
-                module: 'esnext',
-                moduleResolution: 'bundler',
+              jsc: {
+                target: 'es2022',
+                parser: {
+                  syntax: 'typescript',
+                  tsx: true,
+                },
               },
             },
           },
@@ -73,13 +73,14 @@ export default {
         exclude: [/node_modules/, /\.css\.ts$/],
         use: [
           {
-            loader: 'ts-loader',
+            loader: 'swc-loader',
             options: {
-              configFile: tsconfig,
-              transpileOnly: true,
-              compilerOptions: {
-                module: 'esnext',
-                moduleResolution: 'bundler',
+              jsc: {
+                target: 'es2022',
+                parser: {
+                  syntax: 'typescript',
+                  tsx: true,
+                },
               },
             },
           },

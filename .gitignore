@@ -3,6 +3,8 @@ node_modules/
 dist/
 dist-webpack/
 dist-auto-stable/
+dist-bridge/
+dist-bridge-webpack/
 coverage/
 .c8/
 .duel-cache/

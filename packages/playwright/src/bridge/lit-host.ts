@@ -1,0 +1,61 @@
+import { reactJsx } from '@knighted/jsx/react'
+import { createRoot, type Root } from 'react-dom/client'
+import { LitElement, css, html, unsafeCSS } from 'lit'
+
+import { BridgeCard } from './bridge-card.js'
+import { BRIDGE_HOST_TAG, BRIDGE_MARKER_TEST_ID } from './constants.js'
+import { knightedCss } from './styles.module.css?knighted-css'
+
+const hostShell = css`
+  :host {
+    display: block;
+    padding: 1.5rem;
+    border-radius: 1.25rem;
+    background: #0b1120;
+    box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.2);
+  }
+`
+
+export class BridgeHost extends LitElement {
+  static styles = [hostShell, unsafeCSS(knightedCss)]
+  #reactRoot?: Root
+
+  firstUpdated(): void {
+    this.#mountReact()
+  }
+
+  disconnectedCallback(): void {
+    this.#reactRoot?.unmount()
+    super.disconnectedCallback()
+  }
+
+  #mountReact(): void {
+    if (!this.#reactRoot) {
+      const outlet = this.renderRoot.querySelector(
+        '[data-react-root]',
+      ) as HTMLDivElement | null
+      if (!outlet) return
+      this.#reactRoot = createRoot(outlet)
+    }
+    this.#renderReactTree()
+  }
+
+  #renderReactTree(): void {
+    if (!this.#reactRoot) return
+    this.#reactRoot.render(reactJsx`<${BridgeCard} location="shadow" />`)
+  }
+
+  render() {
+    return html`<div data-react-root></div>
+      <span
+        data-testid=${BRIDGE_MARKER_TEST_ID}
+        data-css-length=${knightedCss.length}
+      ></span>`
+  }
+}
+
+export function ensureBridgeHostDefined(): void {
+  if (!customElements.get(BRIDGE_HOST_TAG)) {
+    customElements.define(BRIDGE_HOST_TAG, BridgeHost)
+  }
+}

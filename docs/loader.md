@@ -57,6 +57,71 @@ Pass `autoStable` to duplicate every matching class selector with a deterministi
 - CSS Modules: exports and generated class strings include both the hashed class and the stable class so you can reference either at runtime.
 - `autoStable` forces a LightningCSS pass; use `include`/`exclude` to scope which class tokens are duplicated.
 
+### Bridge loader (CSS Modules)
+
+When you want `knightedCss` to reflect the **hashed class names produced by your existing
+CSS Modules pipeline**, use the companion loader `@knighted/css/loader-bridge`. It runs
+after your Sass/CSS modules loaders and simply wraps their output (no reprocessing).
+
+```js
+// rspack.config.js or webpack.config.js
+export default {
+  module: {
+    rules: [
+      {
+        test: /\.module\.(css|scss|sass)$/,
+        oneOf: [
+          {
+            resourceQuery: /knighted-css/,
+            use: [
+              {
+                loader: '@knighted/css/loader-bridge',
+              },
+              {
+                loader: 'css-loader',
+                options: {
+                  exportType: 'string',
+                  modules: true,
+                },
+              },
+              'sass-loader',
+            ],
+          },
+          {
+            use: [
+              {
+                loader: 'css-loader',
+                options: {
+                  modules: true,
+                },
+              },
+              'sass-loader',
+            ],
+          },
+        ],
+      },
+    ],
+  },
+}
+```
+
+```ts
+import { knightedCss, knightedCssModules } from './card.module.scss?knighted-css'
+
+// knightedCss uses the same hashed selectors as the DOM
+shadowRoot.adoptedStyleSheets[0].replaceSync(knightedCss)
+
+// optional convenience mapping of the CSS module locals
+console.log(knightedCssModules)
+```
+
+> [!NOTE]
+> The bridge loader does not generate `stableSelectors`. It simply re-exports the
+> upstream output and resolves `knightedCss` by calling the upstream module’s
+> `toString()` or using its default string export when present. For CSS Modules
+> pipelines, configure the `?knighted-css` branch to emit a string (for example,
+> `css-loader` with `exportType: 'string'`) so `knightedCss` is populated.
+
 ### Combined imports
 
 Need the component exports **and** the compiled CSS from a single import? Use `?knighted-css&combined` and narrow the result with `KnightedCssCombinedModule` to keep TypeScript happy:

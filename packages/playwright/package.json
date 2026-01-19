@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npm run build:rspack && npm run build:auto-stable && npm run build:webpack && npm run build:ssr",
+    "build": "npm run build:rspack && npm run build:auto-stable && npm run build:webpack && npm run build:ssr && npm run build:bridge:rspack && npm run build:bridge:webpack",
     "types": "npm run types:base && npm run types:auto-stable",
     "types:base": "knighted-css-generate-types --root . --include src --out-dir .knighted-css",
     "types:auto-stable": "knighted-css-generate-types --root . --include src/auto-stable --auto-stable --out-dir .knighted-css-auto",
@@ -12,16 +12,22 @@
     "build:auto-stable": "rspack --config rspack.auto-stable.config.js",
     "build:webpack": "webpack --config webpack.config.js",
     "build:ssr": "tsx scripts/render-ssr-preview.ts",
+    "build:bridge:rspack": "rspack --config rspack.bridge.config.js",
+    "build:bridge:webpack": "webpack --config webpack.bridge.config.js",
     "precheck-types": "npm run types",
     "check-types": "tsc --noEmit",
     "preview": "npm run build && http-server . -p 4174",
     "preview:auto-stable": "npm run build:auto-stable && http-server . -p 4175",
+    "preview:bridge": "npm run build:bridge:rspack && http-server . -p 4176 -o /bridge.html",
+    "preview:bridge-webpack": "npm run build:bridge:webpack && http-server . -p 4177 -o /bridge-webpack.html",
+    "prepreview:bridge": "npm run build -w @knighted/css",
+    "prepreview:bridge-webpack": "npm run build -w @knighted/css",
     "serve": "http-server dist -p 4174",
     "test": "playwright test",
     "pretest": "npm run types && npm run build"
   },
   "dependencies": {
-    "@knighted/css": "1.1.0-rc.5",
+    "@knighted/css": "1.1.0-rc.6",
     "@knighted/jsx": "^1.7.3",
     "lit": "^3.2.1",
     "react": "^19.0.0",
@@ -31,7 +37,9 @@
     "@types/react": "^19.0.4",
     "@types/react-dom": "^19.0.2",
     "@vanilla-extract/webpack-plugin": "^2.3.15",
-    "ts-loader": "^9.5.1",
+    "css-loader": "^7.1.2",
+    "mini-css-extract-plugin": "^2.10.0",
+    "swc-loader": "^0.2.7",
     "webpack": "^5.97.1",
     "webpack-cli": "^5.1.4"
   }
