@@ -39,7 +39,7 @@ export const pitch: PitchLoaderDefinitionFunction<KnightedCssBridgeLoaderOptions
     if (isJsLikeResource(this.resourcePath) && hasCombinedQuery(this.resourceQuery)) {
       const callback = this.async()
       if (!callback) {
-        return createCombinedJsBridgeModuleSync(this, resolvedRemainingRequest)
+        return createCombinedJsBridgeModuleSync(resolvedRemainingRequest)
       }
       readResourceSource(this)
         .then(source => {
@@ -154,10 +154,7 @@ interface CombinedJsBridgeOptions {
   emitDefault: boolean
 }
 
-function createCombinedJsBridgeModuleSync(
-  ctx: LoaderContext<KnightedCssBridgeLoaderOptions>,
-  remainingRequest?: string,
-): string {
+function createCombinedJsBridgeModuleSync(remainingRequest?: string): string {
   const upstreamRequest = buildUpstreamRequest(remainingRequest)
   return createCombinedJsBridgeModule({
     upstreamRequest: upstreamRequest || '',

@@ -7,7 +7,7 @@ import { BridgeHost, ensureBridgeHostDefined } from './lit-host.js'
 
 export function renderBridgeDemo(root: HTMLElement): void {
   ensureBridgeHostDefined()
-  const mountPoint = root ?? document.body
+  const mountPoint = root
 
   const lightMount = document.createElement('section')
   lightMount.setAttribute('data-section', 'bridge-light')
