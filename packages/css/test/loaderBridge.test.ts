@@ -47,7 +47,7 @@ function createMockContext(
 function callPitch(
   ctx: LoaderContext<KnightedCssBridgeLoaderOptions>,
   remainingRequest: string,
-) {
+): ReturnType<typeof pitch> {
   return (pitch as (this: typeof ctx, remainingRequest: string) => ReturnType<typeof pitch>).call(
     ctx,
     remainingRequest,
