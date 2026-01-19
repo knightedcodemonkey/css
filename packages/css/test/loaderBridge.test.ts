@@ -38,6 +38,22 @@ function createMockContext(
   }
 }
 
+/*
+ * Helper to call pitch loader with only the required remainingRequest parameter.
+ * The pitch function's signature requires previousRequest and data parameters per
+ * the webpack PitchLoaderDefinitionFunction interface, but our implementation
+ * doesn't use them, so we omit them in tests for clarity.
+ */
+function callPitch(
+  ctx: LoaderContext<KnightedCssBridgeLoaderOptions>,
+  remainingRequest: string,
+) {
+  return (pitch as (this: typeof ctx, remainingRequest: string) => ReturnType<typeof pitch>).call(
+    ctx,
+    remainingRequest,
+  )
+}
+
 test('resolveCssText prefers string default export', () => {
   const module = { default: '.card{color:red}' }
   assert.equal(
@@ -109,7 +125,7 @@ test('pitch returns combined module wrapper when combined flag is present', asyn
     } as unknown as LoaderContext<KnightedCssBridgeLoaderOptions>['_module'],
   })
 
-  const result = await (pitch as any).call(
+  const result = await callPitch(
     ctx as LoaderContext<KnightedCssBridgeLoaderOptions>,
     './styles.module.css?knighted-css&combined',
   )
@@ -126,7 +142,7 @@ test('pitch omits knightedCssModules when emitCssModules is false', async () => 
     getOptions: () => ({ emitCssModules: false }),
   })
 
-  const result = await (pitch as any).call(
+  const result = await callPitch(
     ctx as LoaderContext<KnightedCssBridgeLoaderOptions>,
     './styles.module.css?knighted-css',
   )
@@ -141,7 +157,7 @@ test('pitch warns when types query is used', async () => {
     resourceQuery: '?knighted-css&types',
   })
 
-  await (pitch as any).call(
+  await callPitch(
     ctx as LoaderContext<KnightedCssBridgeLoaderOptions>,
     './styles.module.css?knighted-css&types',
   )
