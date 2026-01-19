@@ -112,8 +112,8 @@ test('pitch returns combined module wrapper when combined flag is present', asyn
   const result = await pitch.call(
     ctx as LoaderContext<KnightedCssBridgeLoaderOptions>,
     './styles.module.css?knighted-css&combined',
-    '',
-    {},
+    undefined as unknown as string,
+    undefined as unknown as Record<string, unknown>,
   )
 
   const output = String(result ?? '')
@@ -131,8 +131,8 @@ test('pitch omits knightedCssModules when emitCssModules is false', async () => 
   const result = await pitch.call(
     ctx as LoaderContext<KnightedCssBridgeLoaderOptions>,
     './styles.module.css?knighted-css',
-    '',
-    {},
+    undefined as unknown as string,
+    undefined as unknown as Record<string, unknown>,
   )
 
   const output = String(result ?? '')
@@ -148,8 +148,8 @@ test('pitch warns when types query is used', async () => {
   await pitch.call(
     ctx as LoaderContext<KnightedCssBridgeLoaderOptions>,
     './styles.module.css?knighted-css&types',
-    '',
-    {},
+    undefined as unknown as string,
+    undefined as unknown as Record<string, unknown>,
   )
 
   assert.equal(ctx.warnings.length, 1)
@@ -233,7 +233,12 @@ test('pitch handles combined js modules and collects css modules', async () => {
       }
       resolve(String(output ?? ''))
     }
-    pitch.call(ctx, './bridge-card.tsx?knighted-css&combined', '', {})
+    pitch.call(
+      ctx,
+      './bridge-card.tsx?knighted-css&combined',
+      undefined as unknown as string,
+      undefined as unknown as Record<string, unknown>,
+    )
   })
 
   assert.match(result, /export \* from/)
@@ -250,8 +255,8 @@ test('pitch combined js returns sync module when async callback is missing', asy
   const result = await pitch.call(
     ctx as LoaderContext<KnightedCssBridgeLoaderOptions>,
     './bridge-card.tsx?knighted-css&combined',
-    '',
-    {},
+    undefined as unknown as string,
+    undefined as unknown as Record<string, unknown>,
   )
   const output = String(result ?? '')
   assert.match(output, /export const knightedCss = /)
@@ -280,7 +285,12 @@ test('pitch combined js surfaces read errors', async () => {
       }
       resolve(err)
     }
-    pitch.call(ctx, './bridge-card.tsx?knighted-css&combined', '', {})
+    pitch.call(
+      ctx,
+      './bridge-card.tsx?knighted-css&combined',
+      undefined as unknown as string,
+      undefined as unknown as Record<string, unknown>,
+    )
   })
 
   assert.match(error.message, /read failed/)
@@ -308,7 +318,12 @@ test('pitch combined js errors when no data is returned', async () => {
       }
       resolve(err)
     }
-    pitch.call(ctx, './bridge-card.tsx?knighted-css&combined', '', {})
+    pitch.call(
+      ctx,
+      './bridge-card.tsx?knighted-css&combined',
+      undefined as unknown as string,
+      undefined as unknown as Record<string, unknown>,
+    )
   })
 
   assert.match(error.message, /Unable to read/)
