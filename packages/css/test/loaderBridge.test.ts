@@ -352,6 +352,18 @@ test('resolveCssModules falls back to named exports', () => {
   })
 })
 
+test('createBridgeModule prefers upstream locals when present', () => {
+  const output = __loaderBridgeInternals.createBridgeModule({
+    localsRequest: './styles.module.css?knighted-css',
+    upstreamRequest: '!!css-loader!./styles.module.css?knighted-css',
+    combined: false,
+    emitDefault: false,
+    emitCssModules: true,
+  })
+  assert.match(output, /__knightedResolveCssModules\(__knightedUpstream/)
+  assert.match(output, /__knightedUpstreamLocals \?\?/)
+})
+
 test('buildProxyRequest prefers raw requests', () => {
   const ctx = createMockContext({
     resourcePath: path.resolve(__dirname, 'fixtures/dialects/basic/styles.css'),

@@ -34,17 +34,19 @@ const loader: LoaderDefinitionFunction<KnightedCssBridgeLoaderOptions> = functio
 
 export const pitch: PitchLoaderDefinitionFunction<KnightedCssBridgeLoaderOptions> =
   function pitch(remainingRequest) {
+    const resolvedRemainingRequest = resolveRemainingRequest(this, remainingRequest)
+
     if (isJsLikeResource(this.resourcePath) && hasCombinedQuery(this.resourceQuery)) {
       const callback = this.async()
       if (!callback) {
-        return createCombinedJsBridgeModuleSync(this, remainingRequest)
+        return createCombinedJsBridgeModuleSync(this, resolvedRemainingRequest)
       }
       readResourceSource(this)
         .then(source => {
           const cssRequests = collectCssModuleRequests(source).map(request =>
             buildBridgeCssRequest(request),
           )
-          const upstreamRequest = buildUpstreamRequest(remainingRequest)
+          const upstreamRequest = buildUpstreamRequest(resolvedRemainingRequest)
           callback(
             null,
             createCombinedJsBridgeModule({
@@ -58,7 +60,7 @@ export const pitch: PitchLoaderDefinitionFunction<KnightedCssBridgeLoaderOptions
       return
     }
     const localsRequest = buildProxyRequest(this)
-    const upstreamRequest = buildUpstreamRequest(remainingRequest)
+    const upstreamRequest = buildUpstreamRequest(resolvedRemainingRequest)
     const { emitCssModules } = resolveLoaderOptions(this)
     const combined = hasCombinedQuery(this.resourceQuery)
     const skipSyntheticDefault = hasNamedOnlyQueryFlag(this.resourceQuery)
@@ -78,9 +80,12 @@ export const pitch: PitchLoaderDefinitionFunction<KnightedCssBridgeLoaderOptions
         })
       : false
 
+    const resolvedUpstream = upstreamRequest || localsRequest
+    const resolvedLocals = upstreamRequest || localsRequest
+
     return createBridgeModule({
-      localsRequest,
-      upstreamRequest: upstreamRequest || localsRequest,
+      localsRequest: resolvedLocals,
+      upstreamRequest: resolvedUpstream,
       combined,
       emitDefault,
       emitCssModules,
@@ -268,7 +273,8 @@ function createBridgeModule(options: BridgeModuleOptions): string {
     `const __knightedDefault =\ntypeof __knightedUpstream.default !== 'undefined'\n  ? __knightedUpstream.default\n  : __knightedUpstream;`,
     `const __knightedResolveCss = ${resolveCssText.toString()};`,
     `const __knightedResolveCssModules = ${resolveCssModules.toString()};`,
-    `const __knightedLocalsExport =\n  __knightedResolveCssModules(__knightedLocals, __knightedLocals) ??\n  __knightedLocals;`,
+    `const __knightedUpstreamLocals =\n  __knightedResolveCssModules(__knightedUpstream, __knightedUpstream);`,
+    `const __knightedLocalsExport =\n  __knightedUpstreamLocals ??\n  __knightedResolveCssModules(__knightedLocals, __knightedLocals) ??\n  __knightedLocals;`,
     `const __knightedCss = __knightedResolveCss(__knightedDefault, __knightedUpstream);`,
     `export const ${DEFAULT_EXPORT_NAME} = __knightedCss;`,
   ]
@@ -310,6 +316,40 @@ function buildProxyRequest(ctx: LoaderContext<KnightedCssBridgeLoaderOptions>): 
   }
   const request = `${ctx.resourcePath}${sanitizedQuery}`
   return contextifyRequest(ctx, request)
+}
+
+function resolveRemainingRequest(
+  ctx: LoaderContext<KnightedCssBridgeLoaderOptions>,
+  remainingRequest?: string,
+): string {
+  const resolved = remainingRequest || ctx.remainingRequest
+  if (resolved) return resolved
+  const loaders = Array.isArray(ctx.loaders) ? ctx.loaders.slice(ctx.loaderIndex + 1) : []
+  if (loaders.length > 0) {
+    const loaderRequests = loaders
+      .map(loader => {
+        if (loader && typeof loader.request === 'string' && loader.request) {
+          return loader.request
+        }
+        const path = loader && typeof loader.path === 'string' ? loader.path : ''
+        const query = loader && typeof loader.query === 'string' ? loader.query : ''
+        return path ? `${path}${query}` : ''
+      })
+      .filter(Boolean)
+    if (loaderRequests.length > 0) {
+      const resource = `${ctx.resourcePath}${ctx.resourceQuery ?? ''}`
+      return [...loaderRequests, resource].join('!')
+    }
+  }
+  if (typeof ctx.request === 'string' && typeof ctx.loaderIndex === 'number') {
+    const parts = ctx.request.split('!').filter(Boolean)
+    if (parts.length > 0) {
+      const start = Math.min(ctx.loaderIndex + 1, parts.length)
+      const next = parts.slice(start).join('!')
+      if (next) return next
+    }
+  }
+  return ''
 }
 
 function rebuildProxyRequestFromRaw(
