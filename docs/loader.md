@@ -63,6 +63,15 @@ When you want `knightedCss` to reflect the **hashed class names produced by your
 CSS Modules pipeline**, use the companion loader `@knighted/css/loader-bridge`. It runs
 after your Sass/CSS modules loaders and simply wraps their output (no reprocessing).
 
+The key distinction:
+
+- `@knighted/css/loader` works from **source styles** (pre-hash). It resolves imports,
+  compiles CSS dialects, and emits `knightedCss` before any downstream CSS Modules
+  hashing/compilation happens.
+- `@knighted/css/loader-bridge` works from **compiled output** (post-hash). It assumes your
+  CSS Modules pipeline already ran and therefore must be chained _after_ loaders like
+  `css-loader`, `sass-loader`, or `less-loader`.
+
 ```js
 // rspack.config.js or webpack.config.js
 export default {

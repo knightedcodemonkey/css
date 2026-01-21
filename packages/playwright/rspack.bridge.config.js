@@ -22,6 +22,41 @@ export default {
   module: {
     rules: [
       {
+        test: /\.css$/,
+        exclude: /\.module\.css$/,
+        oneOf: [
+          {
+            resourceQuery: /knighted-css/,
+            type: 'javascript/auto',
+            use: [
+              {
+                loader: '@knighted/css/loader-bridge',
+              },
+              {
+                loader: 'css-loader',
+                options: {
+                  exportType: 'string',
+                  modules: false,
+                },
+              },
+            ],
+          },
+          {
+            use: [
+              {
+                loader: CssExtractRspackPlugin.loader,
+              },
+              {
+                loader: 'css-loader',
+                options: {
+                  modules: false,
+                },
+              },
+            ],
+          },
+        ],
+      },
+      {
         test: /\.module\.css$/,
         oneOf: [
           {

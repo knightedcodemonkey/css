@@ -1,0 +1,6 @@
+@import './deep.css';
+
+:global(.bridge-transitive) {
+  --bridge-transitive-bg: rgb(15, 23, 42);
+  --bridge-transitive-color: rgb(226, 232, 240);
+}

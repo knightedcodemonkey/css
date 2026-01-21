@@ -14,6 +14,7 @@ import {
   shouldEmitCombinedDefault,
   TYPES_QUERY_FLAG,
 } from './loaderInternals.js'
+import { collectTransitiveStyleImports } from './styleGraph.js'
 
 export interface KnightedCssBridgeLoaderOptions {
   emitCssModules?: boolean
@@ -25,6 +26,7 @@ type BridgeModuleLike = {
 }
 
 const DEFAULT_EXPORT_NAME = 'knightedCss'
+const BRIDGE_STYLE_EXTENSIONS = ['.css', '.scss', '.sass', '.less', '.css.ts']
 
 const loader: LoaderDefinitionFunction<KnightedCssBridgeLoaderOptions> = function loader(
   source,
@@ -37,15 +39,13 @@ export const pitch: PitchLoaderDefinitionFunction<KnightedCssBridgeLoaderOptions
     const resolvedRemainingRequest = resolveRemainingRequest(this, remainingRequest)
 
     if (isJsLikeResource(this.resourcePath) && hasCombinedQuery(this.resourceQuery)) {
-      const callback = this.async()
+      const callback = getAsyncCallback(this)
       if (!callback) {
         return createCombinedJsBridgeModuleSync(resolvedRemainingRequest)
       }
       readResourceSource(this)
-        .then(source => {
-          const cssRequests = collectCssModuleRequests(source).map(request =>
-            buildBridgeCssRequest(request),
-          )
+        .then(async source => {
+          const cssRequests = await collectBridgeStyleRequests(this, source)
           const upstreamRequest = buildUpstreamRequest(resolvedRemainingRequest)
           callback(
             null,
@@ -59,6 +59,41 @@ export const pitch: PitchLoaderDefinitionFunction<KnightedCssBridgeLoaderOptions
         .catch(error => callback(error as Error))
       return
     }
+    const callback = getAsyncCallback(this)
+    if (!callback) {
+      const localsRequest = buildProxyRequest(this)
+      const upstreamRequest = buildUpstreamRequest(resolvedRemainingRequest)
+      const { emitCssModules } = resolveLoaderOptions(this)
+      const combined = hasCombinedQuery(this.resourceQuery)
+      const skipSyntheticDefault = hasNamedOnlyQueryFlag(this.resourceQuery)
+
+      if (hasQueryFlag(this.resourceQuery, TYPES_QUERY_FLAG)) {
+        emitKnightedWarning(
+          this,
+          'The bridge loader does not generate stableSelectors. Remove the "types" query flag.',
+        )
+      }
+
+      const emitDefault = combined
+        ? shouldEmitCombinedDefault({
+            detection: 'unknown',
+            request: localsRequest,
+            skipSyntheticDefault,
+          })
+        : false
+
+      const resolvedUpstream = upstreamRequest || localsRequest
+      const resolvedLocals = upstreamRequest || localsRequest
+
+      return createBridgeModule({
+        localsRequest: resolvedLocals,
+        upstreamRequest: resolvedUpstream,
+        combined,
+        emitDefault,
+        emitCssModules,
+      })
+    }
+
     const localsRequest = buildProxyRequest(this)
     const upstreamRequest = buildUpstreamRequest(resolvedRemainingRequest)
     const { emitCssModules } = resolveLoaderOptions(this)
@@ -83,13 +118,27 @@ export const pitch: PitchLoaderDefinitionFunction<KnightedCssBridgeLoaderOptions
     const resolvedUpstream = upstreamRequest || localsRequest
     const resolvedLocals = upstreamRequest || localsRequest
 
-    return createBridgeModule({
-      localsRequest: resolvedLocals,
-      upstreamRequest: resolvedUpstream,
-      combined,
-      emitDefault,
-      emitCssModules,
-    })
+    const collectSource = isJsLikeResource(this.resourcePath)
+      ? readResourceSource(this)
+      : Promise.resolve(undefined)
+
+    collectSource
+      .then(async source => {
+        const cssRequests = await collectBridgeStyleRequests(this, source)
+        callback(
+          null,
+          createBridgeModule({
+            localsRequest: resolvedLocals,
+            upstreamRequest: resolvedUpstream,
+            combined,
+            emitDefault,
+            emitCssModules,
+            cssRequests,
+          }),
+        )
+      })
+      .catch(error => callback(error as Error))
+    return
   }
 ;(loader as LoaderDefinitionFunction & { pitch?: typeof pitch }).pitch = pitch
 
@@ -104,6 +153,12 @@ function resolveLoaderOptions(
   return {
     emitCssModules: rawOptions.emitCssModules !== false,
   }
+}
+
+function getAsyncCallback(
+  ctx: LoaderContext<KnightedCssBridgeLoaderOptions>,
+): ((error: Error | null, result?: string) => void) | undefined {
+  return typeof ctx.async === 'function' ? ctx.async() : undefined
 }
 
 function readResourceSource(
@@ -124,10 +179,80 @@ function readResourceSource(
   })
 }
 
-function collectCssModuleRequests(source: string): string[] {
+async function collectBridgeStyleRequests(
+  ctx: LoaderContext<KnightedCssBridgeLoaderOptions>,
+  source?: string,
+): Promise<string[]> {
+  const graphImports = await collectStyleGraphImports(ctx)
+  const graphPaths = new Set(graphImports.map(filePath => path.resolve(filePath)))
+  const graphRequests = graphImports
+    .filter(filePath => path.resolve(filePath) !== path.resolve(ctx.resourcePath))
+    .map(filePath => buildBridgeCssRequest(filePath))
+
+  if (!source) {
+    return dedupeRequests(graphRequests)
+  }
+
+  const directSpecifiers = collectStyleImportSpecifiers(source)
+  const directRequests = directSpecifiers
+    .map(specifier => {
+      const [resource, query] = specifier.split('?')
+      if (query) {
+        return buildBridgeCssRequest(specifier)
+      }
+      const resolved = resolveStyleSpecifier(resource, ctx.resourcePath)
+      if (resolved && graphPaths.has(resolved)) {
+        return undefined
+      }
+      return buildBridgeCssRequest(specifier)
+    })
+    .filter((request): request is string => Boolean(request))
+
+  return dedupeRequests([...graphRequests, ...directRequests])
+}
+
+async function collectStyleGraphImports(
+  ctx: LoaderContext<KnightedCssBridgeLoaderOptions>,
+): Promise<string[]> {
+  const cwd = ctx.rootContext ?? path.dirname(ctx.resourcePath)
+  const filter = (filePath: string) => !filePath.includes('node_modules')
+  try {
+    return await collectTransitiveStyleImports(ctx.resourcePath, {
+      cwd,
+      styleExtensions: BRIDGE_STYLE_EXTENSIONS,
+      filter,
+    })
+  } catch {
+    return []
+  }
+}
+
+function resolveStyleSpecifier(specifier: string, importer: string): string | undefined {
+  if (!specifier) return undefined
+  if (specifier.startsWith('.')) {
+    return path.resolve(path.dirname(importer), specifier)
+  }
+  if (path.isAbsolute(specifier)) {
+    return path.resolve(specifier)
+  }
+  return undefined
+}
+
+function dedupeRequests(requests: string[]): string[] {
+  const seen = new Set<string>()
+  const output: string[] = []
+  for (const request of requests) {
+    if (seen.has(request)) continue
+    seen.add(request)
+    output.push(request)
+  }
+  return output
+}
+
+function collectStyleImportSpecifiers(source: string): string[] {
   const matches = new Set<string>()
   const importPattern =
-    /(?:import|export)\s+(?:[^'"\n]+\s+from\s+)?['"]([^'"\n]+?\.module\.(?:css|scss|sass|less)(?:\?[^'"\n]+)?)['"]/g
+    /(?:import|export)\s+(?:[^'"\n]+\s+from\s+)?['"]([^'"\n]+?\.(?:css|scss|sass|less|css\.ts)(?:\?[^'"\n]+)?)['"]/g
   let match: RegExpExecArray | null
   while ((match = importPattern.exec(source))) {
     if (match[1]) {
@@ -167,11 +292,15 @@ function createCombinedJsBridgeModule(options: CombinedJsBridgeOptions): string 
   const upstreamLiteral = JSON.stringify(options.upstreamRequest)
   const cssImports = options.cssRequests.map((request, index) => {
     const literal = JSON.stringify(request)
-    return `import { knightedCss as __knightedCss${index}, knightedCssModules as __knightedCssModules${index} } from ${literal};`
+    return `import * as __knightedStyle${index} from ${literal};`
   })
-  const cssValues = options.cssRequests.map((_, index) => `__knightedCss${index}`)
-  const cssModulesValues = options.cssRequests.map(
-    (_, index) => `__knightedCssModules${index}`,
+  const cssValues = options.cssRequests.map(
+    (_, index) => `__knightedStyle${index}.knightedCss`,
+  )
+  const cssModulesValues = options.cssRequests.map((request, index) =>
+    isCssModuleRequest(request)
+      ? `__knightedStyle${index}.knightedCssModules`
+      : 'undefined',
   )
   const lines = [
     `import * as __knightedUpstream from ${upstreamLiteral};`,
@@ -259,26 +388,42 @@ interface BridgeModuleOptions {
   combined: boolean
   emitDefault: boolean
   emitCssModules: boolean
+  cssRequests?: string[]
 }
 
 function createBridgeModule(options: BridgeModuleOptions): string {
   const localsLiteral = JSON.stringify(options.localsRequest)
   const upstreamLiteral = JSON.stringify(options.upstreamRequest)
+  const cssRequests = options.cssRequests ?? []
+  const cssImports = cssRequests.map((request, index) => {
+    const literal = JSON.stringify(request)
+    return `import * as __knightedStyle${index} from ${literal};`
+  })
+  const cssValues = cssRequests.map((_, index) => `__knightedStyle${index}.knightedCss`)
+  const cssModulesValues = cssRequests.map((request, index) =>
+    isCssModuleRequest(request)
+      ? `__knightedStyle${index}.knightedCssModules`
+      : 'undefined',
+  )
   const lines = [
     `import * as __knightedLocals from ${localsLiteral};`,
     `import * as __knightedUpstream from ${upstreamLiteral};`,
+    ...cssImports,
     `const __knightedDefault =\ntypeof __knightedUpstream.default !== 'undefined'\n  ? __knightedUpstream.default\n  : __knightedUpstream;`,
     `const __knightedResolveCss = ${resolveCssText.toString()};`,
     `const __knightedResolveCssModules = ${resolveCssModules.toString()};`,
     `const __knightedUpstreamLocals =\n  __knightedResolveCssModules(__knightedUpstream, __knightedUpstream);`,
     `const __knightedLocalsExport =\n  __knightedUpstreamLocals ??\n  __knightedResolveCssModules(__knightedLocals, __knightedLocals) ??\n  __knightedLocals;`,
-    `const __knightedCss = __knightedResolveCss(__knightedDefault, __knightedUpstream);`,
+    `const __knightedBaseCss = __knightedResolveCss(__knightedDefault, __knightedUpstream);`,
+    `const __knightedCss = [__knightedBaseCss, ${cssValues.join(', ')}].filter(Boolean).join('\\n');`,
     `export const ${DEFAULT_EXPORT_NAME} = __knightedCss;`,
   ]
 
   if (options.emitCssModules) {
     lines.push(
-      `const __knightedCssModules = __knightedLocalsExport ?? __knightedResolveCssModules(\n  __knightedDefault,\n  __knightedUpstream,\n);`,
+      `const __knightedCssModules = Object.assign({}, ...[__knightedLocalsExport ?? __knightedResolveCssModules(\n  __knightedDefault,\n  __knightedUpstream,\n), ${cssModulesValues.join(
+        ', ',
+      )}].filter(Boolean));`,
       'export const knightedCssModules = __knightedCssModules;',
     )
   }
@@ -303,6 +448,12 @@ function buildUpstreamRequest(remainingRequest?: string): string {
     ? remainingRequest
     : `!!${remainingRequest}`
   return request
+}
+
+function isCssModuleRequest(request: string): boolean {
+  const [resource] = request.split('?')
+  const lower = resource.toLowerCase()
+  return /\.module\.(css|scss|sass|less|css\.ts)$/.test(lower)
 }
 
 function buildProxyRequest(ctx: LoaderContext<KnightedCssBridgeLoaderOptions>): string {
@@ -449,7 +600,7 @@ function emitKnightedWarning(
 }
 
 export const __loaderBridgeInternals = {
-  collectCssModuleRequests,
+  collectStyleImportSpecifiers,
   buildBridgeCssRequest,
   createCombinedJsBridgeModule,
   isJsLikeResource,
