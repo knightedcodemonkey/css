@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
@@ -245,6 +246,34 @@ test('pitch handles combined js modules and collects css modules', async () => {
   assert.match(result, /export \* from/)
   assert.match(result, /card\.module\.css\?knighted-css/)
   assert.match(result, /other\.module\.scss\?inline&knighted-css/)
+})
+
+test('pitch combined js collects css modules from dependency graph', async () => {
+  const entryPath = path.resolve(__dirname, 'fixtures/bridge-graph/entry.tsx')
+  const ctx = createMockContext({
+    resourcePath: entryPath,
+    resourceQuery: '?knighted-css&combined',
+  }) as LoaderContext<KnightedCssBridgeLoaderOptions> & {
+    fs: LoaderContext<KnightedCssBridgeLoaderOptions>['fs']
+    async: () => (error: Error | null, result?: string) => void
+  }
+
+  const result = await new Promise<string>((resolve, reject) => {
+    ctx.fs = {
+      readFile: (filePath: string, cb: (err: Error | null, data?: Buffer) => void) =>
+        fs.readFile(filePath, cb),
+    } as unknown as LoaderContext<KnightedCssBridgeLoaderOptions>['fs']
+    ctx.async = () => (error, output) => {
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve(String(output ?? ''))
+    }
+    callPitch(ctx, './entry.tsx?knighted-css&combined')
+  })
+
+  assert.match(result, /button\.module\.scss\?knighted-css/)
 })
 
 test('pitch combined js returns sync module when async callback is missing', async () => {

@@ -14,6 +14,7 @@ import {
   shouldEmitCombinedDefault,
   TYPES_QUERY_FLAG,
 } from './loaderInternals.js'
+import { collectStyleImports } from './moduleGraph.js'
 
 export interface KnightedCssBridgeLoaderOptions {
   emitCssModules?: boolean
@@ -25,6 +26,12 @@ type BridgeModuleLike = {
 }
 
 const DEFAULT_EXPORT_NAME = 'knightedCss'
+const CSS_MODULE_EXTENSIONS = [
+  '.module.css',
+  '.module.scss',
+  '.module.sass',
+  '.module.less',
+]
 
 const loader: LoaderDefinitionFunction<KnightedCssBridgeLoaderOptions> = function loader(
   source,
@@ -42,10 +49,8 @@ export const pitch: PitchLoaderDefinitionFunction<KnightedCssBridgeLoaderOptions
         return createCombinedJsBridgeModuleSync(resolvedRemainingRequest)
       }
       readResourceSource(this)
-        .then(source => {
-          const cssRequests = collectCssModuleRequests(source).map(request =>
-            buildBridgeCssRequest(request),
-          )
+        .then(async source => {
+          const cssRequests = await collectCombinedCssRequests(this, source)
           const upstreamRequest = buildUpstreamRequest(resolvedRemainingRequest)
           callback(
             null,
@@ -122,6 +127,71 @@ function readResourceSource(
       resolve(data.toString('utf8'))
     })
   })
+}
+
+async function collectCombinedCssRequests(
+  ctx: LoaderContext<KnightedCssBridgeLoaderOptions>,
+  source: string,
+): Promise<string[]> {
+  const directSpecifiers = collectCssModuleRequests(source)
+  const graphImports = await collectCssModuleImports(ctx)
+  const graphRequests = graphImports.map(filePath => buildBridgeCssRequest(filePath))
+  const graphPaths = new Set(graphImports.map(filePath => path.resolve(filePath)))
+  const directRequests = directSpecifiers
+    .map(specifier => {
+      const [resource, query] = specifier.split('?')
+      if (query) {
+        return buildBridgeCssRequest(specifier)
+      }
+      const resolved = resolveCssModuleSpecifier(resource, ctx.resourcePath)
+      if (resolved && graphPaths.has(resolved)) {
+        return undefined
+      }
+      return buildBridgeCssRequest(specifier)
+    })
+    .filter((request): request is string => Boolean(request))
+  return dedupeRequests([...graphRequests, ...directRequests])
+}
+
+async function collectCssModuleImports(
+  ctx: LoaderContext<KnightedCssBridgeLoaderOptions>,
+): Promise<string[]> {
+  const cwd = ctx.rootContext ?? path.dirname(ctx.resourcePath)
+  const filter = (filePath: string) => !filePath.includes('node_modules')
+  try {
+    return await collectStyleImports(ctx.resourcePath, {
+      cwd,
+      styleExtensions: CSS_MODULE_EXTENSIONS,
+      filter,
+    })
+  } catch {
+    return []
+  }
+}
+
+function resolveCssModuleSpecifier(
+  specifier: string,
+  importer: string,
+): string | undefined {
+  if (!specifier) return undefined
+  if (specifier.startsWith('.')) {
+    return path.resolve(path.dirname(importer), specifier)
+  }
+  if (path.isAbsolute(specifier)) {
+    return path.resolve(specifier)
+  }
+  return undefined
+}
+
+function dedupeRequests(requests: string[]): string[] {
+  const seen = new Set<string>()
+  const output: string[] = []
+  for (const request of requests) {
+    if (seen.has(request)) continue
+    seen.add(request)
+    output.push(request)
+  }
+  return output
 }
 
 function collectCssModuleRequests(source: string): string[] {
