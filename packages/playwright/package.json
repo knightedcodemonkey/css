@@ -16,7 +16,7 @@
     "build:bridge:webpack": "webpack --config webpack.bridge.config.js",
     "precheck-types": "npm run types",
     "check-types": "tsc --noEmit",
-    "prebuild": " npm run build -w @knighted/css",
+    "prebuild": "npm run build -w @knighted/css",
     "preview": "npm run build && http-server . -p 4174",
     "preview:auto-stable": "npm run build:auto-stable && http-server . -p 4175",
     "preview:bridge": "npm run build:bridge:rspack && http-server . -p 4176 -o /bridge.html",

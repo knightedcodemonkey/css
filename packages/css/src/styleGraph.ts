@@ -133,12 +133,13 @@ function isStyleExtension(filePath: string, extensions: string[]): boolean {
   return extensions.some(ext => lower.endsWith(ext))
 }
 
-type StyleDialect = 'css' | 'sass' | 'less'
+type StyleDialect = 'css' | 'sass' | 'less' | 'css-ts'
 
 function getStyleDialect(filePath: string): StyleDialect | undefined {
   const lower = filePath.toLowerCase()
   if (lower.endsWith('.scss') || lower.endsWith('.sass')) return 'sass'
   if (lower.endsWith('.less')) return 'less'
+  if (lower.endsWith('.css.ts')) return 'css-ts'
   if (lower.endsWith('.css')) return 'css'
   return undefined
 }
@@ -149,6 +150,9 @@ function collectStyleSpecifiers(source: string, dialect: StyleDialect): string[]
   }
   if (dialect === 'less') {
     return collectLessSpecifiers(source)
+  }
+  if (dialect === 'css-ts') {
+    return []
   }
   return collectCssSpecifiers(source)
 }

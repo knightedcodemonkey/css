@@ -196,6 +196,31 @@ test('collectTransitiveStyleImports supports less imports', async () => {
   }
 })
 
+test('collectTransitiveStyleImports includes css.ts entries', async () => {
+  const project = await createProject('knighted-css-style-graph-vanilla-')
+  try {
+    await project.writeFile(
+      'styles/theme.css.ts',
+      `import { style } from '@vanilla-extract/css'
+
+export const theme = style({ color: 'red' })
+`,
+    )
+
+    const result = await collectTransitiveStyleImports(
+      project.file('styles/theme.css.ts'),
+      {
+        cwd: project.root,
+      },
+    )
+
+    const expected = [project.file('styles/theme.css.ts')]
+    assert.deepEqual(await realpathAll(result), await realpathAll(expected))
+  } finally {
+    await project.cleanup()
+  }
+})
+
 function pathToFileUrl(filePath: string): string {
   return pathToFileURL(filePath).toString()
 }
