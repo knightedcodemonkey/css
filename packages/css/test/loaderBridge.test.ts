@@ -163,15 +163,16 @@ test('pitch warns when types query is used', async () => {
   assert.match(ctx.warnings[0] ?? '', /does not generate stableSelectors/)
 })
 
-test('collectCssModuleRequests finds css module imports', () => {
+test('collectStyleImportSpecifiers finds style imports', () => {
   const source = `
     import styles from './card.module.css'
     import './other.module.scss?inline'
     export { tokens } from "./tokens.module.less"
     import './global.css'
   `
-  assert.deepEqual(__loaderBridgeInternals.collectCssModuleRequests(source).sort(), [
+  assert.deepEqual(__loaderBridgeInternals.collectStyleImportSpecifiers(source).sort(), [
     './card.module.css',
+    './global.css',
     './other.module.scss?inline',
     './tokens.module.less',
   ])

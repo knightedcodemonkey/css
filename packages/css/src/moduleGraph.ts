@@ -278,7 +278,7 @@ function extractModuleSpecifiers(
   return specifiers
 }
 
-function normalizeSpecifier(raw: string): string {
+export function normalizeSpecifier(raw: string): string {
   if (!raw) return ''
   const trimmed = raw.trim()
   if (!trimmed || trimmed.startsWith('\0')) {
