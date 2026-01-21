@@ -4,10 +4,15 @@ import { LitElement, css, html, unsafeCSS } from 'lit'
 import { asKnightedCssCombinedModule } from '@knighted/css/loader-helpers'
 
 import * as bridgeModule from './bridge-card.js?knighted-css&combined'
+import * as transitiveModule from './bridge-transitive-card.js?knighted-css&combined'
 import { BRIDGE_HOST_TAG, BRIDGE_MARKER_TEST_ID } from './constants.js'
 
 const { BridgeCard, knightedCss } =
   asKnightedCssCombinedModule<typeof import('./bridge-card.js')>(bridgeModule)
+const { BridgeTransitiveCard, knightedCss: transitiveCss } =
+  asKnightedCssCombinedModule<typeof import('./bridge-transitive-card.js')>(
+    transitiveModule,
+  )
 const hostShell = css`
   :host {
     display: block;
@@ -19,7 +24,7 @@ const hostShell = css`
 `
 
 export class BridgeHost extends LitElement {
-  static styles = [hostShell, unsafeCSS(knightedCss)]
+  static styles = [hostShell, unsafeCSS(knightedCss), unsafeCSS(transitiveCss)]
   #reactRoot?: Root
 
   firstUpdated(): void {
@@ -44,7 +49,12 @@ export class BridgeHost extends LitElement {
 
   #renderReactTree(): void {
     if (!this.#reactRoot) return
-    this.#reactRoot.render(reactJsx`<${BridgeCard} location="shadow" />`)
+    this.#reactRoot.render(reactJsx`
+      <section data-section="bridge-shadow-content">
+        <${BridgeCard} location="shadow" />
+        <${BridgeTransitiveCard} location="shadow" />
+      </section>
+    `)
   }
 
   render() {

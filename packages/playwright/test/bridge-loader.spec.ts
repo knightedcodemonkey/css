@@ -1,6 +1,10 @@
 import { expect, test } from '@playwright/test'
 
-import { BRIDGE_CARD_TEST_ID, BRIDGE_HOST_TEST_ID } from '../src/bridge/constants.js'
+import {
+  BRIDGE_CARD_TEST_ID,
+  BRIDGE_HOST_TEST_ID,
+  BRIDGE_TRANSITIVE_TEST_ID,
+} from '../src/bridge/constants.js'
 
 const pages = [
   { label: 'rspack', url: '/bridge.html' },
@@ -62,6 +66,38 @@ for (const target of pages) {
       await markerHandle.dispose()
 
       expect(cssLength).toBeGreaterThan(0)
+    })
+
+    test('shadow DOM includes transitive style imports', async ({ page }) => {
+      const host = page.getByTestId(BRIDGE_HOST_TEST_ID)
+      await expect(host).toBeVisible()
+
+      const cardHandle = await page.waitForFunction(
+        ({ hostId, cardId }) => {
+          const hostEl = document.querySelector(`[data-testid="${hostId}"]`)
+          return hostEl?.shadowRoot?.querySelector(`[data-testid="${cardId}"]`)
+        },
+        { hostId: BRIDGE_HOST_TEST_ID, cardId: BRIDGE_TRANSITIVE_TEST_ID },
+      )
+
+      const card = cardHandle.asElement()
+      if (!card) throw new Error('Transitive bridge card was not rendered')
+
+      const metrics = await card.evaluate(node => {
+        const el = node as HTMLElement
+        const style = getComputedStyle(el)
+        return {
+          background: style.getPropertyValue('background-color').trim(),
+          color: style.getPropertyValue('color').trim(),
+          borderColor: style.getPropertyValue('border-top-color').trim(),
+        }
+      })
+
+      await cardHandle.dispose()
+
+      expect(metrics.background).toBe('rgb(15, 23, 42)')
+      expect(metrics.color).toBe('rgb(226, 232, 240)')
+      expect(metrics.borderColor).toBe('rgb(14, 165, 233)')
     })
   })
 }
