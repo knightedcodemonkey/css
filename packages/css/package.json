@@ -22,6 +22,9 @@
       "generate-types": [
         "./dist/generateTypes.d.ts"
       ],
+      "plugin": [
+        "./dist/plugin.d.ts"
+      ],
       "*": [
         "./types.d.ts"
       ]
@@ -56,6 +59,11 @@
       "types": "./dist/generateTypes.d.ts",
       "import": "./dist/generateTypes.js",
       "default": "./dist/generateTypes.js"
+    },
+    "./plugin": {
+      "types": "./dist/plugin.d.ts",
+      "import": "./dist/plugin.js",
+      "require": "./dist/cjs/plugin.cjs"
     },
     "./stableSelectors": {
       "types": "./dist/stableSelectors.d.ts",

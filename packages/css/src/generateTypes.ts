@@ -38,6 +38,8 @@ interface SelectorModuleProxyInfo {
   includeDefault: boolean
 }
 
+export type GenerateTypesMode = 'module' | 'declaration'
+
 type CssWithMetaFn = typeof cssWithMeta
 
 let activeCssWithMeta: CssWithMetaFn = cssWithMeta
@@ -51,6 +53,7 @@ interface GenerateTypesInternalOptions {
   hashed?: boolean
   tsconfig?: TsconfigResolutionContext
   resolver?: CssResolver
+  mode: GenerateTypesMode
 }
 
 export interface GenerateTypesResult {
@@ -68,6 +71,7 @@ export interface GenerateTypesOptions {
   autoStable?: boolean
   hashed?: boolean
   resolver?: CssResolver
+  mode?: GenerateTypesMode
 }
 
 const DEFAULT_SKIP_DIRS = new Set([
@@ -122,6 +126,7 @@ function getImportMetaUrl(): string | undefined {
 
 const SELECTOR_REFERENCE = '.knighted-css'
 const SELECTOR_MODULE_SUFFIX = '.knighted-css.ts'
+const DECLARATION_SUFFIX = '.d.ts'
 const STYLE_EXTENSIONS = DEFAULT_EXTENSIONS.map(ext => ext.toLowerCase())
 const SCRIPT_EXTENSIONS = Array.from(SUPPORTED_EXTENSIONS)
 const RESOLUTION_EXTENSIONS = Array.from(
@@ -134,6 +139,9 @@ const EXTENSION_FALLBACKS: Record<string, string[]> = {
   '.jsx': ['.tsx', '.jsx'],
 }
 
+const DECLARATION_MODE_WARNING =
+  'Declaration mode requires a resolver plugin to append ?knighted-css (and &combined when applicable) so runtime exports match the generated types.'
+
 export async function generateTypes(
   options: GenerateTypesOptions = {},
 ): Promise<GenerateTypesResult> {
@@ -141,6 +149,7 @@ export async function generateTypes(
   const include = normalizeIncludeOptions(options.include, rootDir)
   const cacheDir = path.resolve(options.outDir ?? path.join(rootDir, '.knighted-css'))
   const tsconfig = loadTsconfigResolutionContext(rootDir)
+  const mode = options.mode ?? 'module'
 
   await fs.mkdir(cacheDir, { recursive: true })
 
@@ -153,6 +162,7 @@ export async function generateTypes(
     hashed: options.hashed,
     tsconfig,
     resolver: options.resolver,
+    mode,
   }
 
   return generateDeclarations(internalOptions)
@@ -185,95 +195,207 @@ async function generateDeclarations(
   const warnings: string[] = []
   let selectorModuleWrites = 0
 
-  for (const filePath of files) {
-    const matches = await findSpecifierImports(filePath)
-    for (const match of matches) {
-      const cleaned = match.specifier.trim()
-      const inlineFree = stripInlineLoader(cleaned)
-      const { resource } = splitResourceAndQuery(inlineFree)
-      const selectorSource = extractSelectorSourceSpecifier(resource)
-      if (!selectorSource) {
+  if (options.mode === 'declaration') {
+    warnings.push(DECLARATION_MODE_WARNING)
+  }
+
+  if (options.mode === 'declaration') {
+    for (const filePath of files) {
+      if (!isScriptResource(filePath)) {
         continue
       }
-      const resolvedNamespace = resolveStableNamespace(options.stableNamespace)
-      const resolvedPath = await resolveImportPath(
-        selectorSource,
-        match.importer,
-        options.rootDir,
-        options.tsconfig,
-        options.resolver,
-        resolverFactory,
-        RESOLUTION_EXTENSIONS,
-      )
-      if (!resolvedPath) {
+      if (!isWithinRoot(filePath, options.rootDir)) {
         warnings.push(
-          `Unable to resolve ${selectorSource} referenced by ${relativeToRoot(match.importer, options.rootDir)}.`,
+          `Skipping declaration output for ${relativeToRoot(filePath, options.rootDir)} because it is outside the project root.`,
         )
         continue
       }
+      const manifestKey = buildSelectorModuleManifestKey(filePath)
+      if (processedSelectors.has(manifestKey)) {
+        continue
+      }
 
-      const cacheKey = `${resolvedPath}::${resolvedNamespace}`
+      const hasStyles = await hasStyleImports(filePath, {
+        rootDir: options.rootDir,
+        tsconfig: options.tsconfig,
+        resolver: options.resolver,
+        resolverFactory,
+      })
+      if (!hasStyles) {
+        processedSelectors.add(manifestKey)
+        continue
+      }
+
+      const resolvedNamespace = resolveStableNamespace(options.stableNamespace)
+      const cacheKey = `${filePath}::${resolvedNamespace}::declaration`
       let selectorMap = selectorCache.get(cacheKey)
       if (!selectorMap) {
         try {
-          const shouldUseCssModules = resolvedPath.endsWith('.module.css')
-          const { css } = await activeCssWithMeta(resolvedPath, {
+          let cssResult = await activeCssWithMeta(filePath, {
             cwd: options.rootDir,
             peerResolver,
             autoStable: options.autoStable ? { namespace: resolvedNamespace } : undefined,
-            lightningcss:
-              options.autoStable && shouldUseCssModules
-                ? { cssModules: true }
-                : undefined,
             resolver: options.resolver,
           })
+
+          if (cssResult.files.length === 0 || cssResult.css.trim().length === 0) {
+            processedSelectors.add(manifestKey)
+            continue
+          }
+
+          if (
+            options.autoStable &&
+            cssResult.files.some(file => isCssModuleResource(file))
+          ) {
+            cssResult = await activeCssWithMeta(filePath, {
+              cwd: options.rootDir,
+              peerResolver,
+              autoStable: options.autoStable
+                ? { namespace: resolvedNamespace }
+                : undefined,
+              lightningcss: { cssModules: true },
+              resolver: options.resolver,
+            })
+          }
+
           selectorMap = options.hashed
-            ? collectSelectorTokensFromCss(css)
+            ? collectSelectorTokensFromCss(cssResult.css)
             : buildStableSelectorsLiteral({
-                css,
+                css: cssResult.css,
                 namespace: resolvedNamespace,
-                resourcePath: resolvedPath,
+                resourcePath: filePath,
                 emitWarning: message => warnings.push(message),
               }).selectorMap
         } catch (error) {
           warnings.push(
-            `Failed to extract CSS for ${relativeToRoot(resolvedPath, options.rootDir)}: ${formatErrorMessage(error)}`,
+            `Failed to extract CSS for ${relativeToRoot(filePath, options.rootDir)}: ${formatErrorMessage(error)}`,
           )
+          processedSelectors.add(manifestKey)
           continue
         }
         selectorCache.set(cacheKey, selectorMap)
       }
 
-      if (!isWithinRoot(resolvedPath, options.rootDir)) {
-        warnings.push(
-          `Skipping selector module for ${relativeToRoot(resolvedPath, options.rootDir)} because it is outside the project root.`,
-        )
+      if (!selectorMap || selectorMap.size === 0) {
+        processedSelectors.add(manifestKey)
         continue
       }
 
-      const manifestKey = buildSelectorModuleManifestKey(resolvedPath)
-      if (processedSelectors.has(manifestKey)) {
-        continue
-      }
-      const proxyInfo = await resolveProxyInfo(
+      const proxyInfo = await resolveDeclarationProxyInfo(
         manifestKey,
-        selectorSource,
-        resolvedPath,
+        filePath,
         proxyInfoCache,
       )
-      const moduleWrite = await ensureSelectorModule(
-        resolvedPath,
+      if (!proxyInfo) {
+        processedSelectors.add(manifestKey)
+        continue
+      }
+      const moduleWrite = await ensureDeclarationModule(
+        filePath,
         selectorMap,
         previousSelectorManifest,
         nextSelectorManifest,
-        selectorSource,
-        proxyInfo ?? undefined,
+        proxyInfo,
         options.hashed ?? false,
       )
       if (moduleWrite) {
         selectorModuleWrites += 1
       }
       processedSelectors.add(manifestKey)
+    }
+  } else {
+    for (const filePath of files) {
+      const matches = await findSpecifierImports(filePath)
+      for (const match of matches) {
+        const cleaned = match.specifier.trim()
+        const inlineFree = stripInlineLoader(cleaned)
+        const { resource } = splitResourceAndQuery(inlineFree)
+        const selectorSource = extractSelectorSourceSpecifier(resource)
+        if (!selectorSource) {
+          continue
+        }
+        const resolvedNamespace = resolveStableNamespace(options.stableNamespace)
+        const resolvedPath = await resolveImportPath(
+          selectorSource,
+          match.importer,
+          options.rootDir,
+          options.tsconfig,
+          options.resolver,
+          resolverFactory,
+          RESOLUTION_EXTENSIONS,
+        )
+        if (!resolvedPath) {
+          warnings.push(
+            `Unable to resolve ${selectorSource} referenced by ${relativeToRoot(match.importer, options.rootDir)}.`,
+          )
+          continue
+        }
+
+        const cacheKey = `${resolvedPath}::${resolvedNamespace}`
+        let selectorMap = selectorCache.get(cacheKey)
+        if (!selectorMap) {
+          try {
+            const shouldUseCssModules = resolvedPath.endsWith('.module.css')
+            const { css } = await activeCssWithMeta(resolvedPath, {
+              cwd: options.rootDir,
+              peerResolver,
+              autoStable: options.autoStable
+                ? { namespace: resolvedNamespace }
+                : undefined,
+              lightningcss:
+                options.autoStable && shouldUseCssModules
+                  ? { cssModules: true }
+                  : undefined,
+              resolver: options.resolver,
+            })
+            selectorMap = options.hashed
+              ? collectSelectorTokensFromCss(css)
+              : buildStableSelectorsLiteral({
+                  css,
+                  namespace: resolvedNamespace,
+                  resourcePath: resolvedPath,
+                  emitWarning: message => warnings.push(message),
+                }).selectorMap
+          } catch (error) {
+            warnings.push(
+              `Failed to extract CSS for ${relativeToRoot(resolvedPath, options.rootDir)}: ${formatErrorMessage(error)}`,
+            )
+            continue
+          }
+          selectorCache.set(cacheKey, selectorMap)
+        }
+
+        if (!isWithinRoot(resolvedPath, options.rootDir)) {
+          warnings.push(
+            `Skipping selector module for ${relativeToRoot(resolvedPath, options.rootDir)} because it is outside the project root.`,
+          )
+          continue
+        }
+
+        const manifestKey = buildSelectorModuleManifestKey(resolvedPath)
+        if (processedSelectors.has(manifestKey)) {
+          continue
+        }
+        const proxyInfo = await resolveProxyInfo(
+          manifestKey,
+          selectorSource,
+          resolvedPath,
+          proxyInfoCache,
+        )
+        const moduleWrite = await ensureSelectorModule(
+          resolvedPath,
+          selectorMap,
+          previousSelectorManifest,
+          nextSelectorManifest,
+          selectorSource,
+          proxyInfo ?? undefined,
+          options.hashed ?? false,
+        )
+        if (moduleWrite) {
+          selectorModuleWrites += 1
+        }
+        processedSelectors.add(manifestKey)
+      }
     }
   }
 
@@ -505,6 +627,61 @@ function buildSelectorModulePath(resolvedPath: string): string {
   return `${base}${SELECTOR_MODULE_SUFFIX}`
 }
 
+function buildDeclarationModuleSpecifier(resolvedPath: string): string {
+  const ext = path.extname(resolvedPath).toLowerCase()
+  const baseName = path.basename(resolvedPath, ext)
+  const mappedExt =
+    ext === '.mjs' || ext === '.mts'
+      ? '.mjs'
+      : ext === '.cjs' || ext === '.cts'
+        ? '.cjs'
+        : '.js'
+  return `./${baseName}${mappedExt}`
+}
+
+function buildDeclarationPath(resolvedPath: string): string {
+  if (resolvedPath.endsWith(DECLARATION_SUFFIX)) {
+    return resolvedPath
+  }
+  return `${resolvedPath}${DECLARATION_SUFFIX}`
+}
+
+function formatSelectorTypeLiteral(selectors: Map<string, string>): string {
+  const entries = Array.from(selectors.keys()).sort((a, b) => a.localeCompare(b))
+  const typeLines = entries.map(token => `    readonly ${JSON.stringify(token)}: string`)
+  return typeLines.length > 0
+    ? `{
+${typeLines.join('\n')}
+  }`
+    : 'Record<string, string>'
+}
+
+function formatDeclarationSource(
+  selectors: Map<string, string>,
+  proxyInfo: SelectorModuleProxyInfo,
+  options: {
+    hashed?: boolean
+  } = {},
+): string {
+  const header = '// Generated by @knighted/css/generate-types\n// Do not edit.'
+  const isHashed = options.hashed === true
+  const exportName = isHashed ? 'selectors' : 'stableSelectors'
+  const typeLiteral = formatSelectorTypeLiteral(selectors)
+  const lines = [
+    header,
+    `declare module '${proxyInfo.moduleSpecifier}' {`,
+    `  export * from '${proxyInfo.moduleSpecifier}'`,
+    proxyInfo.includeDefault
+      ? `  export { default } from '${proxyInfo.moduleSpecifier}'`
+      : '',
+    '  export const knightedCss: string',
+    `  export const ${exportName}: ${typeLiteral}`,
+    '}',
+    'export {}',
+  ].filter(Boolean)
+  return `${lines.join('\n')}\n`
+}
+
 function formatSelectorModuleSource(
   selectors: Map<string, string>,
   proxyInfo?: SelectorModuleProxyInfo,
@@ -660,6 +837,27 @@ async function ensureSelectorModule(
     selectorSource,
     resolvedPath,
   })
+  const hash = hashContent(source)
+  const previousEntry = previousManifest[manifestKey]
+  const needsWrite = previousEntry?.hash !== hash || !(await fileExists(targetPath))
+  if (needsWrite) {
+    await fs.writeFile(targetPath, source, 'utf8')
+  }
+  nextManifest[manifestKey] = { file: targetPath, hash }
+  return needsWrite
+}
+
+async function ensureDeclarationModule(
+  resolvedPath: string,
+  selectors: Map<string, string>,
+  previousManifest: SelectorModuleManifest,
+  nextManifest: SelectorModuleManifest,
+  proxyInfo: SelectorModuleProxyInfo,
+  hashed?: boolean,
+): Promise<boolean> {
+  const manifestKey = buildSelectorModuleManifestKey(resolvedPath)
+  const targetPath = buildDeclarationPath(resolvedPath)
+  const source = formatDeclarationSource(selectors, proxyInfo, { hashed })
   const hash = hashContent(source)
   const previousEntry = previousManifest[manifestKey]
   const needsWrite = previousEntry?.hash !== hash || !(await fileExists(targetPath))
@@ -836,6 +1034,81 @@ function isStyleResource(filePath: string): boolean {
   return STYLE_EXTENSIONS.some(ext => normalized.endsWith(ext))
 }
 
+function isCssModuleResource(filePath: string): boolean {
+  return /\.module\.(css|scss|sass|less)$/i.test(filePath)
+}
+
+function isScriptResource(filePath: string): boolean {
+  const normalized = filePath.toLowerCase()
+  if (normalized.endsWith('.d.ts')) {
+    return false
+  }
+  return SCRIPT_EXTENSIONS.some(ext => normalized.endsWith(ext))
+}
+
+async function hasStyleImports(
+  filePath: string,
+  options: {
+    rootDir: string
+    tsconfig?: TsconfigResolutionContext
+    resolver?: CssResolver
+    resolverFactory?: ReturnType<typeof createResolverFactory>
+  },
+): Promise<boolean> {
+  let source: string
+  try {
+    source = await fs.readFile(filePath, 'utf8')
+  } catch {
+    return false
+  }
+
+  const candidates = new Set<string>()
+  try {
+    const analysis = await analyzeModule(source, filePath)
+    for (const specifier of analysis.imports) {
+      if (specifier) {
+        candidates.add(specifier)
+      }
+    }
+  } catch {
+    // fall back to regex scanning below
+  }
+
+  const importRegex = /(import|require)\s*(?:\(|[^'"`]*)(['"])([^'"`]+)\2/g
+  let match: RegExpExecArray | null
+  while ((match = importRegex.exec(source)) !== null) {
+    const specifier = match[3]
+    if (specifier) {
+      candidates.add(specifier)
+    }
+  }
+
+  for (const specifier of candidates) {
+    const cleaned = stripInlineLoader(specifier.trim())
+    const { resource } = splitResourceAndQuery(cleaned)
+    if (!resource) {
+      continue
+    }
+    if (isStyleResource(resource)) {
+      return true
+    }
+    const resolved = await resolveImportPath(
+      resource,
+      filePath,
+      options.rootDir,
+      options.tsconfig,
+      options.resolver,
+      options.resolverFactory,
+      RESOLUTION_EXTENSIONS,
+    )
+    if (resolved && isStyleResource(resolved)) {
+      return true
+    }
+  }
+
+  return false
+}
+
 function collectSelectorTokensFromCss(css: string): Map<string, string> {
   const tokens = new Set<string>()
   const pattern = /\.([A-Za-z_-][A-Za-z0-9_-]*)\b/g
@@ -869,6 +1142,24 @@ async function resolveProxyInfo(
   const defaultSignal = await getDefaultExportSignal(resolvedPath)
   const proxyInfo = {
     moduleSpecifier: buildProxyModuleSpecifier(resolvedPath, selectorSource),
+    includeDefault: defaultSignal === 'has-default',
+  }
+  cache.set(manifestKey, proxyInfo)
+  return proxyInfo
+}
+
+async function resolveDeclarationProxyInfo(
+  manifestKey: string,
+  resolvedPath: string,
+  cache: Map<string, SelectorModuleProxyInfo | null>,
+): Promise<SelectorModuleProxyInfo | null> {
+  const cached = cache.get(manifestKey)
+  if (cached !== undefined) {
+    return cached
+  }
+  const defaultSignal = await getDefaultExportSignal(resolvedPath)
+  const proxyInfo = {
+    moduleSpecifier: buildDeclarationModuleSpecifier(resolvedPath),
     includeDefault: defaultSignal === 'has-default',
   }
   cache.set(manifestKey, proxyInfo)
@@ -973,6 +1264,7 @@ export async function runGenerateTypesCli(argv = process.argv.slice(2)): Promise
       autoStable: parsed.autoStable,
       hashed: parsed.hashed,
       resolver,
+      mode: parsed.mode,
     })
     reportCliResult(result)
   } catch (error) {
@@ -990,6 +1282,7 @@ export interface ParsedCliArgs {
   autoStable?: boolean
   hashed?: boolean
   resolver?: string
+  mode: GenerateTypesMode
   help?: boolean
 }
 
@@ -1001,11 +1294,20 @@ function parseCliArgs(argv: string[]): ParsedCliArgs {
   let autoStable = false
   let hashed = false
   let resolver: string | undefined
+  let mode: GenerateTypesMode = 'module'
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
     if (arg === '--help' || arg === '-h') {
-      return { rootDir, include, outDir, stableNamespace, autoStable, help: true }
+      return {
+        rootDir,
+        include,
+        outDir,
+        stableNamespace,
+        autoStable,
+        mode,
+        help: true,
+      }
     }
     if (arg === '--auto-stable') {
       autoStable = true
@@ -1055,6 +1357,17 @@ function parseCliArgs(argv: string[]): ParsedCliArgs {
       resolver = value
       continue
     }
+    if (arg === '--mode') {
+      const value = argv[++i]
+      if (!value) {
+        throw new Error('Missing value for --mode')
+      }
+      if (value !== 'module' && value !== 'declaration') {
+        throw new Error(`Unknown mode: ${value}`)
+      }
+      mode = value
+      continue
+    }
     if (arg.startsWith('-')) {
       throw new Error(`Unknown flag: ${arg}`)
     }
@@ -1065,21 +1378,31 @@ function parseCliArgs(argv: string[]): ParsedCliArgs {
     throw new Error('Cannot combine --auto-stable with --hashed')
   }
 
-  return { rootDir, include, outDir, stableNamespace, autoStable, hashed, resolver }
+  return {
+    rootDir,
+    include,
+    outDir,
+    stableNamespace,
+    autoStable,
+    hashed,
+    resolver,
+    mode,
+  }
 }
 
 function printHelp(): void {
   console.log(`Usage: knighted-css-generate-types [options]
 
 Options:
-  -r, --root <path>              Project root directory (default: cwd)
-  -i, --include <path>           Additional directories/files to scan (repeatable)
-      --out-dir <path>           Directory to store selector module manifest cache
-      --stable-namespace <name>  Stable namespace prefix for generated selector maps
-      --auto-stable              Enable autoStable when extracting CSS for selectors
-      --hashed                   Emit selectors backed by loader-bridge hashed modules
-      --resolver <path>          Path or package name exporting a CssResolver
-  -h, --help                     Show this help message
+  -r, --root <path>                Project root directory (default: cwd)
+  -i, --include <path>             Additional directories/files to scan (repeatable)
+      --out-dir <path>             Directory to store selector module manifest cache
+      --stable-namespace <name>    Stable namespace prefix for generated selector maps
+      --auto-stable                Enable autoStable when extracting CSS for selectors
+      --hashed                     Emit selectors backed by loader-bridge hashed modules
+      --resolver <path>            Path or package name exporting a CssResolver
+      --mode <module|declaration>  Emit selector modules (module) or declaration files (declaration)
+  -h, --help                       Show this help message
 `)
 }
 
@@ -1125,20 +1448,27 @@ export const __generateTypesInternals = {
   setImportMetaUrlProvider,
   isNonRelativeSpecifier,
   isStyleResource,
+  isCssModuleResource,
   resolveProxyInfo,
+  resolveDeclarationProxyInfo,
   resolveWithExtensionFallback,
   resolveIndexFallback,
   createProjectPeerResolver,
   getProjectRequire,
   loadTsconfigResolutionContext,
   resolveWithTsconfigPaths,
+  hasStyleImports,
   loadResolverModule,
   parseCliArgs,
   printHelp,
   reportCliResult,
   buildSelectorModuleManifestKey,
   buildSelectorModulePath,
+  buildDeclarationModuleSpecifier,
   formatSelectorModuleSource,
+  buildDeclarationPath,
+  formatDeclarationSource,
+  ensureDeclarationModule,
   ensureSelectorModule,
   removeStaleSelectorModules,
   readManifest,
