@@ -14,6 +14,7 @@ import {
   shouldEmitCombinedDefault,
   TYPES_QUERY_FLAG,
 } from './loaderInternals.js'
+import { analyzeModule } from './lexer.js'
 import { collectTransitiveStyleImports } from './styleGraph.js'
 
 export interface KnightedCssBridgeLoaderOptions {
@@ -125,6 +126,9 @@ export const pitch: PitchLoaderDefinitionFunction<KnightedCssBridgeLoaderOptions
     collectSource
       .then(async source => {
         const cssRequests = await collectBridgeStyleRequests(this, source)
+        const includeDefault = source
+          ? await resolveDefaultExportSignal(source, this.resourcePath)
+          : undefined
         callback(
           null,
           createBridgeModule({
@@ -134,6 +138,7 @@ export const pitch: PitchLoaderDefinitionFunction<KnightedCssBridgeLoaderOptions
             emitDefault,
             emitCssModules,
             cssRequests,
+            includeDefault,
           }),
         )
       })
@@ -260,6 +265,27 @@ function collectStyleImportSpecifiers(source: string): string[] {
     }
   }
   return Array.from(matches)
+}
+
+async function resolveDefaultExportSignal(
+  source: string,
+  resourcePath: string,
+): Promise<boolean | undefined> {
+  try {
+    const analysis = await analyzeModule(source, resourcePath)
+    if (analysis.defaultSignal === 'has-default') {
+      return true
+    }
+    if (analysis.defaultSignal === 'no-default') {
+      return false
+    }
+  } catch {
+    // fall through to regex checks
+  }
+  const hasDefaultExport =
+    /\bexport\s+default\b/.test(source) ||
+    /\bexport\s*\{[^}]*\bdefault\b[^}]*\}/.test(source)
+  return hasDefaultExport ? true : false
 }
 
 function buildBridgeCssRequest(specifier: string): string {
@@ -389,6 +415,7 @@ interface BridgeModuleOptions {
   emitDefault: boolean
   emitCssModules: boolean
   cssRequests?: string[]
+  includeDefault?: boolean
 }
 
 function createBridgeModule(options: BridgeModuleOptions): string {
@@ -405,11 +432,14 @@ function createBridgeModule(options: BridgeModuleOptions): string {
       ? `__knightedStyle${index}.knightedCssModules`
       : 'undefined',
   )
+  const shouldIncludeDefault = options.includeDefault !== false
   const lines = [
     `import * as __knightedLocals from ${localsLiteral};`,
     `import * as __knightedUpstream from ${upstreamLiteral};`,
     ...cssImports,
-    `const __knightedDefault =\ntypeof __knightedUpstream.default !== 'undefined'\n  ? __knightedUpstream.default\n  : __knightedUpstream;`,
+    shouldIncludeDefault
+      ? `const __knightedDefault =\n  Object.prototype.hasOwnProperty.call(__knightedUpstream, 'default')\n    ? __knightedUpstream['default']\n    : __knightedUpstream;`
+      : 'const __knightedDefault = __knightedUpstream;',
     `const __knightedResolveCss = ${resolveCssText.toString()};`,
     `const __knightedResolveCssModules = ${resolveCssModules.toString()};`,
     `const __knightedUpstreamLocals =\n  __knightedResolveCssModules(__knightedUpstream, __knightedUpstream);`,
