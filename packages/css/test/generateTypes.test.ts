@@ -283,6 +283,39 @@ test('generateTypes emits declarations and reuses cache', async () => {
   }
 })
 
+test('generateTypes hashed emits selector proxies for modules', async () => {
+  const project = await setupFixtureProject()
+  try {
+    const outDir = path.join(project.root, '.knighted-css-test')
+    const result = await generateTypes({
+      rootDir: project.root,
+      include: ['src'],
+      outDir,
+      hashed: true,
+    })
+    assert.ok(result.selectorModulesWritten >= 1)
+    assert.equal(result.warnings.length, 0)
+
+    const selectorModulePath = path.join(
+      project.root,
+      'src',
+      'fixture',
+      'entry.knighted-css.ts',
+    )
+    const selectorModule = await fs.readFile(selectorModulePath, 'utf8')
+    assert.ok(
+      selectorModule.includes(
+        "import { knightedCss as __knightedCss, knightedCssModules as __knightedCssModules } from './entry.js?knighted-css'",
+      ),
+    )
+    assert.ok(selectorModule.includes('export const selectors'))
+    assert.ok(selectorModule.includes('export const knightedCssModules'))
+    assert.ok(!selectorModule.includes('stableSelectors'))
+  } finally {
+    await project.cleanup()
+  }
+})
+
 test('generateTypes autoStable emits selectors for CSS Modules', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-auto-stable-'))
   try {
@@ -890,6 +923,21 @@ test('generateTypes internals cover edge cases', async () => {
     })
     assert.ok(populated.includes('"demo": ".knighted-demo"'))
 
+    const hashedSource = formatSelectorModuleSource(
+      new Map([['demo', '.knighted-demo']]),
+      {
+        moduleSpecifier: './entry.js',
+        includeDefault: true,
+      },
+      {
+        hashed: true,
+        selectorSource: './entry.js',
+        resolvedPath: path.join(tempRoot, 'entry.js'),
+      },
+    )
+    assert.ok(hashedSource.includes('export const selectors'))
+    assert.ok(hashedSource.includes('export const knightedCssModules'))
+
     const removed = await removeStaleSelectorModules(
       { demo: { file: path.join(tempRoot, 'missing.ts'), hash: 'missing' } },
       {},
@@ -1069,6 +1117,25 @@ test('generateTypes internals support selector module helpers', async () => {
   assert.match(proxySource, /export \{ knightedCss \} from '\.\/demo\.js\?knighted-css'/)
   assert.ok(!proxySource.includes('export default stableSelectors'))
 
+  const hashedProxySource = formatSelectorModuleSource(
+    selectorMap,
+    {
+      moduleSpecifier: './demo.js',
+      includeDefault: false,
+    },
+    {
+      hashed: true,
+      selectorSource: './demo.js',
+      resolvedPath: '/tmp/project/src/demo.js',
+    },
+  )
+  assert.match(hashedProxySource, /export \* from '\.\/demo\.js'/)
+  assert.match(
+    hashedProxySource,
+    /import \{ knightedCss as __knightedCss, knightedCssModules as __knightedCssModules \} from '\.\/demo\.js\?knighted-css'/,
+  )
+  assert.match(hashedProxySource, /export const selectors/)
+
   const manifestKey = buildSelectorModuleManifestKey(path.join('src', 'entry.js'))
   assert.ok(manifestKey.includes('entry.js'))
   const modulePath = buildSelectorModulePath('/tmp/project/src/entry.js')
@@ -1168,7 +1235,19 @@ test('generateTypes internals support selector module helpers', async () => {
   assert.deepEqual(parsed.include, ['src'])
   assert.equal(parsed.stableNamespace, 'storybook')
   assert.equal(parsed.autoStable, true)
+  assert.equal(parsed.hashed, false)
   assert.equal(parsed.resolver, './resolver.mjs')
+
+  const hashedParsed = parseCliArgs([
+    '--root',
+    '/tmp/project',
+    '--hashed',
+    'src',
+  ]) as ParsedCliArgs
+  assert.equal(hashedParsed.rootDir, path.resolve('/tmp/project'))
+  assert.deepEqual(hashedParsed.include, ['src'])
+  assert.equal(hashedParsed.autoStable, false)
+  assert.equal(hashedParsed.hashed, true)
 
   assert.throws(() => parseCliArgs(['--root']), /Missing value/)
   assert.throws(() => parseCliArgs(['--include']), /Missing value/)
@@ -1176,6 +1255,7 @@ test('generateTypes internals support selector module helpers', async () => {
   assert.throws(() => parseCliArgs(['--stable-namespace']), /Missing value/)
   assert.throws(() => parseCliArgs(['--resolver']), /Missing value/)
   assert.throws(() => parseCliArgs(['--wat']), /Unknown flag/)
+  assert.throws(() => parseCliArgs(['--auto-stable', '--hashed']), /Cannot combine/)
   const helpParsed = parseCliArgs(['--help'])
   assert.equal(helpParsed.help, true)
 

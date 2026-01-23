@@ -27,6 +27,7 @@ Wire it into `postinstall` or your build so new selectors land automatically.
 - `--out-dir` – directory for the selector module manifest cache (defaults to `<root>/.knighted-css`).
 - `--stable-namespace` – namespace prefix shared by the generated selector maps and loader runtime.
 - `--auto-stable` – enable auto-stable selector generation during extraction (mirrors the loader’s auto-stable behavior).
+- `--hashed` – emit proxy modules that export `selectors` backed by loader-bridge hashed class names (mutually exclusive with `--auto-stable`).
 - `--resolver` – path or package name exporting a `CssResolver` (default export or named `resolver`).
 
 ### Relationship to the loader
@@ -50,6 +51,32 @@ selectors.card // "knighted-card"
 import Button, { knightedCss, stableSelectors } from './button.knighted-css.js'
 
 stableSelectors.card // "knighted-card"
+knightedCss // compiled CSS string
+```
+
+## Hashed selector proxies
+
+Use `--hashed` when you want `.knighted-css` proxy modules to export `selectors` backed by
+CSS Modules hashing instead of stable selector strings. This keeps the module and selector
+types while preserving hashed class names at runtime.
+
+> [!IMPORTANT]
+> `--hashed` requires the bundler to route `?knighted-css` imports through
+> `@knighted/css/loader-bridge`, so the proxy can read `knightedCss` and
+> `knightedCssModules` from the bridge output.
+
+Example CLI:
+
+```sh
+knighted-css-generate-types --root . --include src --hashed
+```
+
+Example usage:
+
+```ts
+import Button, { knightedCss, selectors } from './button.knighted-css.js'
+
+selectors.card // hashed class name from CSS Modules
 knightedCss // compiled CSS string
 ```
 

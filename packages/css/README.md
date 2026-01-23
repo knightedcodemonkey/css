@@ -121,6 +121,22 @@ When the `.knighted-css` import targets a JavaScript/TypeScript module, the gene
 import Button, { knightedCss, stableSelectors } from './button.knighted-css.js'
 ```
 
+Need hashed class names instead of stable selectors? Run the CLI with `--hashed` to emit proxy modules that export `selectors` backed by `knightedCssModules` from the loader-bridge:
+
+```sh
+knighted-css-generate-types --root . --include src --hashed
+```
+
+```ts
+import Button, { knightedCss, selectors } from './button.knighted-css.js'
+
+selectors.card // hashed CSS Modules class name
+```
+
+> [!IMPORTANT]
+> `--hashed` requires wiring `@knighted/css/loader-bridge` to handle `?knighted-css` queries so
+> the generated proxies can read `knightedCss` and `knightedCssModules` at build time.
+
 Refer to [docs/type-generation.md](../../docs/type-generation.md) for CLI options and workflow tips.
 
 ### Combined + runtime selectors

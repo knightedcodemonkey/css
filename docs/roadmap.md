@@ -10,6 +10,7 @@
 
 - Remove the triple-slash references from `types.d.ts` for v2.0, replacing them with standard ESM import/export wiring.
 - Ensure the new pipeline preserves the current downstream behavior for 1.x users via a documented migration path.
+- Add a CLI `--exclude` option to skip directories/files during type generation scans.
 
 ## Lightning CSS Dependency Strategy
 

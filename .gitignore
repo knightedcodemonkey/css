@@ -3,6 +3,7 @@ node_modules/
 dist/
 dist-webpack/
 dist-auto-stable/
+dist-hashed/
 dist-bridge/
 dist-bridge-webpack/
 coverage/
@@ -15,4 +16,5 @@ test-results/
 blob-report/
 .knighted-css/
 .knighted-css-auto/
+.knighted-css-hashed/
 packages/playwright/src/**/*.knighted-css.ts
