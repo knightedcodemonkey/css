@@ -32,7 +32,7 @@
   },
   "dependencies": {
     "@knighted/css": "1.1.0-rc.8",
-    "@knighted/jsx": "^1.7.3",
+    "@knighted/jsx": "^1.7.5",
     "lit": "^3.2.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
