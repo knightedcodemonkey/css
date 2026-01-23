@@ -34,6 +34,35 @@ export default {
 }
 ```
 
+### Resolver plugin (declaration mode)
+
+When you use `knighted-css-generate-types --mode declaration`, TypeScript expects the
+augmented exports to be present on the original JS/TS module. Use the resolver plugin
+to automatically append `?knighted-css` for any module import that has a generated
+sidecar `.d.ts` file.
+
+```js
+// rspack.config.js
+import { knightedCssResolverPlugin } from '@knighted/css/plugin'
+
+export default {
+  resolve: {
+    plugins: [knightedCssResolverPlugin()],
+  },
+}
+```
+
+```js
+// webpack.config.js
+const { knightedCssResolverPlugin } = require('@knighted/css/plugin')
+
+module.exports = {
+  resolve: {
+    plugins: [knightedCssResolverPlugin()],
+  },
+}
+```
+
 > [!NOTE]
 > The loader shares the same auto-configured `oxc-resolver` as the standalone `css()` API, so hash-prefixed specifiers declared under `package.json#imports` (for example, `#ui/button`) resolve without additional options.
 

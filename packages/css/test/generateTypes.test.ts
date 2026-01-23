@@ -46,6 +46,28 @@ console.log(stableSelectors.demo)
   }
 }
 
+async function setupDeclarationFixture(): Promise<{
+  root: string
+  cleanup: () => Promise<void>
+}> {
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-declaration-'))
+  const root = await fs.realpath(tmpRoot)
+  const srcDir = path.join(root, 'src')
+  await fs.mkdir(srcDir, { recursive: true })
+  await fs.writeFile(
+    path.join(srcDir, 'button.css'),
+    '.knighted-button { color: rebeccapurple; }\n',
+  )
+  await fs.writeFile(
+    path.join(srcDir, 'button.tsx'),
+    "import './button.css'\nexport function Button() { return null }\n",
+  )
+  return {
+    root,
+    cleanup: () => fs.rm(root, { recursive: true, force: true }),
+  }
+}
+
 async function setupBaseUrlFixture(): Promise<{
   root: string
   cleanup: () => Promise<void>
@@ -283,6 +305,56 @@ test('generateTypes emits declarations and reuses cache', async () => {
   }
 })
 
+test('generateTypes declaration mode emits module augmentations', async () => {
+  const project = await setupDeclarationFixture()
+  try {
+    const outDir = path.join(project.root, '.knighted-css-declaration')
+    const result = await generateTypes({
+      rootDir: project.root,
+      include: ['src'],
+      outDir,
+      mode: 'declaration',
+    })
+    assert.ok(result.selectorModulesWritten >= 1)
+    assert.ok(result.warnings.length >= 1)
+
+    const declarationPath = path.join(project.root, 'src', 'button.tsx.d.ts')
+    const declaration = await fs.readFile(declarationPath, 'utf8')
+    assert.ok(declaration.includes("declare module './button.js'"))
+    assert.ok(declaration.includes("export * from './button.js'"))
+    assert.ok(declaration.includes('export const knightedCss: string'))
+    assert.ok(declaration.includes('export const stableSelectors'))
+    assert.ok(declaration.includes('"button": string'))
+    assert.ok(!declaration.includes("export { default } from './button.js'"))
+  } finally {
+    await project.cleanup()
+  }
+})
+
+test('generateTypes declaration mode skips files without style imports', async () => {
+  const project = await setupDeclarationFixture()
+  try {
+    await fs.writeFile(
+      path.join(project.root, 'src', 'no-styles.tsx'),
+      'export const noop = true\n',
+    )
+    const outDir = path.join(project.root, '.knighted-css-declaration')
+    const result = await generateTypes({
+      rootDir: project.root,
+      include: ['src'],
+      outDir,
+      mode: 'declaration',
+    })
+
+    const declPath = path.join(project.root, 'src', 'no-styles.tsx.d.ts')
+    const exists = await pathExists(declPath)
+    assert.equal(exists, false)
+    assert.ok(result.selectorModulesWritten >= 1)
+  } finally {
+    await project.cleanup()
+  }
+})
+
 test('generateTypes hashed emits selector proxies for modules', async () => {
   const project = await setupFixtureProject()
   try {
@@ -311,6 +383,27 @@ test('generateTypes hashed emits selector proxies for modules', async () => {
     assert.ok(selectorModule.includes('export const selectors'))
     assert.ok(selectorModule.includes('export const knightedCssModules'))
     assert.ok(!selectorModule.includes('stableSelectors'))
+  } finally {
+    await project.cleanup()
+  }
+})
+
+test('generateTypes declaration hashed emits selector exports', async () => {
+  const project = await setupDeclarationFixture()
+  try {
+    const outDir = path.join(project.root, '.knighted-css-declaration')
+    const result = await generateTypes({
+      rootDir: project.root,
+      include: ['src'],
+      outDir,
+      mode: 'declaration',
+      hashed: true,
+    })
+    assert.ok(result.selectorModulesWritten >= 1)
+    const declarationPath = path.join(project.root, 'src', 'button.tsx.d.ts')
+    const declaration = await fs.readFile(declarationPath, 'utf8')
+    assert.ok(declaration.includes('export const selectors'))
+    assert.ok(!declaration.includes('stableSelectors'))
   } finally {
     await project.cleanup()
   }
@@ -1016,6 +1109,7 @@ test('generateTypes internals cover edge cases', async () => {
 
     const parsed = parseCliArgs(['--root', tempRoot, 'src'])
     assert.deepEqual(parsed.include, ['src'])
+    assert.equal(parsed.mode, 'module')
   } finally {
     await fs.rm(tempRoot, { recursive: true, force: true })
   }
@@ -1227,6 +1321,8 @@ test('generateTypes internals support selector module helpers', async () => {
     'storybook',
     '--out-dir',
     '.knighted-css',
+    '--mode',
+    'declaration',
     '--auto-stable',
     '--resolver',
     './resolver.mjs',
@@ -1237,6 +1333,7 @@ test('generateTypes internals support selector module helpers', async () => {
   assert.equal(parsed.autoStable, true)
   assert.equal(parsed.hashed, false)
   assert.equal(parsed.resolver, './resolver.mjs')
+  assert.equal(parsed.mode, 'declaration')
 
   const hashedParsed = parseCliArgs([
     '--root',
@@ -1248,12 +1345,15 @@ test('generateTypes internals support selector module helpers', async () => {
   assert.deepEqual(hashedParsed.include, ['src'])
   assert.equal(hashedParsed.autoStable, false)
   assert.equal(hashedParsed.hashed, true)
+  assert.equal(hashedParsed.mode, 'module')
 
   assert.throws(() => parseCliArgs(['--root']), /Missing value/)
   assert.throws(() => parseCliArgs(['--include']), /Missing value/)
   assert.throws(() => parseCliArgs(['--out-dir']), /Missing value/)
   assert.throws(() => parseCliArgs(['--stable-namespace']), /Missing value/)
   assert.throws(() => parseCliArgs(['--resolver']), /Missing value/)
+  assert.throws(() => parseCliArgs(['--mode']), /Missing value/)
+  assert.throws(() => parseCliArgs(['--mode', 'wat']), /Unknown mode/)
   assert.throws(() => parseCliArgs(['--wat']), /Unknown flag/)
   assert.throws(() => parseCliArgs(['--auto-stable', '--hashed']), /Cannot combine/)
   const helpParsed = parseCliArgs(['--help'])

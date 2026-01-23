@@ -29,6 +29,7 @@ Wire it into `postinstall` or your build so new selectors land automatically.
 - `--auto-stable` – enable auto-stable selector generation during extraction (mirrors the loader’s auto-stable behavior).
 - `--hashed` – emit proxy modules that export `selectors` backed by loader-bridge hashed class names (mutually exclusive with `--auto-stable`).
 - `--resolver` – path or package name exporting a `CssResolver` (default export or named `resolver`).
+- `--mode` – `module` (default) emits `.knighted-css.ts` proxy modules. `declaration` emits `.d.ts` module augmentations next to the referenced JS/TS modules, so you can keep standard imports like `import { knightedCss } from './button.js'` while the generator still discovers them via `.knighted-css` specifiers.
 
 ### Relationship to the loader
 
@@ -53,6 +54,22 @@ import Button, { knightedCss, stableSelectors } from './button.knighted-css.js'
 stableSelectors.card // "knighted-card"
 knightedCss // compiled CSS string
 ```
+
+## Declaration mode (augment existing modules)
+
+Declaration mode emits `.d.ts` files instead of `.knighted-css.ts` proxies, so you can import directly from the module:
+
+```sh
+knighted-css-generate-types --root . --include src --mode declaration
+```
+
+```ts
+import Button, { knightedCss, stableSelectors } from './button.js'
+```
+
+> [!IMPORTANT]
+> Declaration mode requires a resolver plugin to append `?knighted-css` (and `&combined` when applicable)
+> at build time so runtime exports match the generated types.
 
 ## Hashed selector proxies
 

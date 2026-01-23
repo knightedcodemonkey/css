@@ -30,7 +30,7 @@ I needed a single source of truth for UI components that could drop into both li
 - Deterministic selector duplication via `autoStable`: duplicate matching class selectors with a stable namespace (default `knighted-`) in both plain CSS and CSS Modules exports.
 - Pluggable resolver/filter hooks for custom module resolution (e.g., Rspack/Vite/webpack aliases) or selective inclusion.
 - First-class loader (`@knighted/css/loader`) so bundlers can import compiled CSS alongside their modules via `?knighted-css`.
-- Built-in type generation CLI (`knighted-css-generate-types`) that emits `.knighted-css.*` selector manifests so TypeScript gets literal tokens in lockstep with the loader exports.
+- Built-in type generation CLI (`knighted-css-generate-types`) that emits `.knighted-css.*` selector manifests (module mode) or declaration augmentations (declaration mode) so TypeScript stays in lockstep with loader exports.
 
 ## Requirements
 
@@ -107,7 +107,7 @@ See [docs/loader.md](../../docs/loader.md) for the full configuration, combined 
 
 ### Type generation hook (`*.knighted-css*`)
 
-Run `knighted-css-generate-types` so every specifier that ends with `.knighted-css` produces a sibling manifest containing literal selector tokens:
+Run `knighted-css-generate-types` so every specifier that ends with `.knighted-css` produces a sibling manifest containing literal selector tokens (module mode, the default):
 
 ```ts
 import stableSelectors from './button.module.scss.knighted-css.js'
@@ -141,6 +141,33 @@ selectors.card // hashed CSS Modules class name
 > `--hashed` builds the selector list from compiled CSS. The generated sidecar can therefore
 > include class names that are not exported by the module (e.g. sprinkles output), while the
 > runtime `selectors` map only includes exported locals from the loader bridge.
+
+Prefer module-level imports without the double extension? Use declaration mode to emit `.d.ts` augmentations next to JS/TS modules that are referenced by `.knighted-css` specifiers:
+
+```sh
+knighted-css-generate-types --root . --include src --mode declaration
+```
+
+```ts
+import Button, { knightedCss, stableSelectors } from './button.js'
+```
+
+> [!IMPORTANT]
+> Declaration mode requires a resolver plugin to append `?knighted-css` (and `&combined` when applicable)
+> at build time so runtime exports match the generated types.
+
+Install the resolver plugin via `@knighted/css/plugin` and wire it into your bundler resolver:
+
+```js
+// rspack.config.js
+import { knightedCssResolverPlugin } from '@knighted/css/plugin'
+
+export default {
+  resolve: {
+    plugins: [knightedCssResolverPlugin()],
+  },
+}
+```
 
 Refer to [docs/type-generation.md](../../docs/type-generation.md) for CLI options and workflow tips.
 
