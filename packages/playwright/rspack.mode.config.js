@@ -217,7 +217,7 @@ export default async () => ({
   plugins: [
     knightedCssResolverPlugin({
       debug: debugResolver,
-      combinedPaths: ['src/mode/declaration-hashed'],
+      combinedPaths: [/[/\\]src[/\\]mode[/\\]declaration-hashed([/\\]|$)/],
       strictSidecar: true,
       manifestPath: strictManifestPath,
     }),
