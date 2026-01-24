@@ -1,4 +1,4 @@
-# Loader hook (`?knighted-css`)
+# Loader hook
 
 `@knighted/css/loader` lets bundlers attach compiled CSS strings to any module by appending the `?knighted-css` query when importing. The loader mirrors the module graph, compiles every CSS dialect it discovers (CSS, Sass, Less, vanilla-extract, etc.), and exposes the concatenated result as `knightedCss`.
 
@@ -36,15 +36,15 @@ export default {
 
 ### Choosing a type generation mode
 
-`knighted-css-generate-types` supports two modes, each with a different tradeoff:
+`knighted-css-generate-types` supports two modes. Both are fully supported and tested; the right choice depends on how explicit you want the imports to be versus how much resolver automation you want to lean on:
 
 - `--mode module` (double-extension imports): use `.knighted-css` sidecar modules such as
   `import stableSelectors from './button.css.knighted-css.js'`. This keeps resolution explicit and tends to be the most stable under large, complex builds.
 - `--mode declaration` (idiomatic imports): emit `.d.ts` sidecars next to the original JS/TS module
-  and keep clean imports like `import { knightedCss } from './button.js'`. This is cleaner, but it adds resolver work at build time and depends on the resolver plugin to stay in sync.
+  and keep clean imports like `import { knightedCss } from './button.js'`. This is cleaner at call sites, but it adds resolver work at build time and depends on the resolver plugin to stay in sync.
 
-If your priority is maximum build transparency and minimal resolver overhead, prefer `--mode module`.
-If your priority is cleaner imports and you accept the resolver overhead, choose `--mode declaration` and enable strict sidecars + a manifest for safety.
+If you want the simplest, most transparent build behavior, start with `--mode module`.
+If you want cleaner imports and are comfortable with resolver automation, choose `--mode declaration` and enable strict sidecars + a manifest for safety.
 
 ### Resolver plugin (declaration mode)
 

@@ -142,7 +142,7 @@ selectors.card // hashed CSS Modules class name
 > include class names that are not exported by the module (e.g. sprinkles output), while the
 > runtime `selectors` map only includes exported locals from the loader bridge.
 
-Prefer module-level imports without the double extension? Use declaration mode to emit `.d.ts` augmentations next to JS/TS modules that are referenced by `.knighted-css` specifiers:
+Prefer module-level imports without the double extension? Use declaration mode to emit `.d.ts` augmentations next to JS/TS modules that import styles:
 
 ```sh
 knighted-css-generate-types --root . --include src --mode declaration
