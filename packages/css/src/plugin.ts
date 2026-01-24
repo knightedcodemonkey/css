@@ -577,11 +577,16 @@ export class KnightedCssResolverPlugin {
 
     this.logWithoutContext(`knighted-css: sidecar ${sidecarInfo.path}`)
 
+    const normalizedResolved = resolved.split(path.sep).join('/')
     const shouldAppendCombined =
       this.combinedPaths.length > 0 &&
-      this.combinedPaths.some(entry =>
-        typeof entry === 'string' ? resolved.includes(entry) : entry.test(resolved),
-      )
+      this.combinedPaths.some(entry => {
+        if (typeof entry === 'string') {
+          const normalizedEntry = entry.split(path.sep).join('/')
+          return resolved.includes(entry) || normalizedResolved.includes(normalizedEntry)
+        }
+        return entry.test(resolved) || entry.test(normalizedResolved)
+      })
 
     const nextQuery =
       shouldAppendCombined && !hasCombinedQuery(query)
@@ -665,11 +670,16 @@ export class KnightedCssResolverPlugin {
 
     this.log(resolveContext, `knighted-css: sidecar ${sidecarInfo.path}`)
 
+    const normalizedResolved = resolved.split(path.sep).join('/')
     const shouldAppendCombined =
       this.combinedPaths.length > 0 &&
-      this.combinedPaths.some(entry =>
-        typeof entry === 'string' ? resolved.includes(entry) : entry.test(resolved),
-      )
+      this.combinedPaths.some(entry => {
+        if (typeof entry === 'string') {
+          const normalizedEntry = entry.split(path.sep).join('/')
+          return resolved.includes(entry) || normalizedResolved.includes(normalizedEntry)
+        }
+        return entry.test(resolved) || entry.test(normalizedResolved)
+      })
 
     const nextQuery =
       shouldAppendCombined && !hasCombinedQuery(query)

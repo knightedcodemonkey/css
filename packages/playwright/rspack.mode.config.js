@@ -9,6 +9,7 @@ const debugResolver = process.env.KNIGHTED_CSS_DEBUG_MODE === '1'
 
 const typesCacheDir = path.resolve(__dirname, '.knighted-css-mode')
 const strictManifestPath = path.join(typesCacheDir, 'knighted-manifest.json')
+const combinedHashedPath = path.join('src', 'mode', 'declaration-hashed')
 
 export default async () => ({
   mode: 'development',
@@ -217,7 +218,7 @@ export default async () => ({
   plugins: [
     knightedCssResolverPlugin({
       debug: debugResolver,
-      combinedPaths: [/[/\\]src[/\\]mode[/\\]declaration-hashed([/\\]|$)/],
+      combinedPaths: [combinedHashedPath],
       strictSidecar: true,
       manifestPath: strictManifestPath,
     }),
