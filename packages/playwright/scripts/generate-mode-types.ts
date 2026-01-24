@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { generateTypes } from '@knighted/css/generate-types'
+import { generateTypes, type GenerateTypesOptions } from '../../css/src/generateTypes.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -53,19 +53,28 @@ const modeConfigs: ModeConfig[] = [
   },
 ]
 
-const manifestPaths = modeConfigs
-  .map(config => config.manifestPath)
-  .filter((value): value is string => typeof value === 'string')
-  .map(manifestPath => path.resolve(rootDir, manifestPath))
+const manifestPaths: string[] = []
 
-type ManifestEntry = { file: string }
+type ManifestEntry = { file: string; hash?: string }
 type Manifest = Record<string, ManifestEntry>
+
+type ModeAwareGenerateTypesOptions = GenerateTypesOptions & {
+  mode?: ModeConfig['mode']
+  manifestPath?: string
+}
 
 function readManifest(filePath: string): Manifest {
   if (!fs.existsSync(filePath)) {
     throw new Error(`Missing manifest at ${filePath}.`)
   }
-  return JSON.parse(fs.readFileSync(filePath, 'utf8')) as Manifest
+  const raw = JSON.parse(fs.readFileSync(filePath, 'utf8')) as Manifest
+  const normalized: Manifest = {}
+  for (const [key, value] of Object.entries(raw)) {
+    if (value && typeof value.file === 'string') {
+      normalized[key] = { file: value.file }
+    }
+  }
+  return normalized
 }
 
 function withAliasEntries(manifest: Manifest): Manifest {
@@ -104,18 +113,37 @@ for (const config of modeConfigs) {
   const include = Array.isArray(config.include)
     ? config.include.map(entry => path.resolve(rootDir, entry))
     : [path.resolve(rootDir, config.include)]
+  const outDir = path.resolve(rootDir, config.outDir)
+  const explicitManifestPath = config.manifestPath
+    ? path.resolve(rootDir, config.manifestPath)
+    : undefined
 
-  await generateTypes({
+  const options: ModeAwareGenerateTypesOptions = {
     rootDir,
     include,
-    outDir: path.resolve(rootDir, config.outDir),
+    outDir,
     mode: config.mode,
     autoStable: config.autoStable,
     hashed: config.hashed,
-    manifestPath: config.manifestPath
-      ? path.resolve(rootDir, config.manifestPath)
-      : undefined,
-  })
+    manifestPath: explicitManifestPath,
+  }
+
+  const result = await generateTypes(options)
+
+  if (config.mode === 'declaration') {
+    const fallbackManifestPath =
+      result.manifestPath ?? path.join(outDir, 'selector-modules.json')
+    const candidates = [
+      'sidecarManifestPath' in result ? result.sidecarManifestPath : undefined,
+      explicitManifestPath,
+      fallbackManifestPath,
+    ].filter((value): value is string => typeof value === 'string')
+
+    const resolved = candidates.find(candidate => fs.existsSync(candidate))
+    if (resolved) {
+      manifestPaths.push(resolved)
+    }
+  }
 }
 
 const mergedManifest = withAliasEntries(
