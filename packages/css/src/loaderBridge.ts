@@ -383,14 +383,18 @@ function resolveCssModules(
     if (!locals || typeof locals !== 'object') continue
     return locals as Record<string, string>
   }
-  const isStringMapLocal = (value: object): value is Record<string, string> => {
-    const entries = Object.entries(value)
-    if (entries.length === 0) return false
-    return entries.every(([, entry]) => typeof entry === 'string')
+  const normalizeStringMapLocal = (value: object): Record<string, string> | undefined => {
+    const entries = Object.entries(value).filter(
+      ([key]) => key !== 'default' && key !== '__esModule',
+    )
+    if (entries.length === 0) return undefined
+    if (!entries.every(([, entry]) => typeof entry === 'string')) return undefined
+    return Object.fromEntries(entries) as Record<string, string>
   }
   for (const candidate of candidates) {
     if (!candidate || typeof candidate !== 'object') continue
-    if (isStringMapLocal(candidate)) return candidate
+    const normalized = normalizeStringMapLocal(candidate)
+    if (normalized) return normalized
   }
   const collectNamedExportsLocal = (
     value: unknown,
@@ -443,7 +447,7 @@ function createBridgeModule(options: BridgeModuleOptions): string {
     `const __knightedResolveCss = ${resolveCssText.toString()};`,
     `const __knightedResolveCssModules = ${resolveCssModules.toString()};`,
     `const __knightedUpstreamLocals =\n  __knightedResolveCssModules(__knightedUpstream, __knightedUpstream);`,
-    `const __knightedLocalsExport =\n  __knightedUpstreamLocals ??\n  __knightedResolveCssModules(__knightedLocals, __knightedLocals) ??\n  __knightedLocals;`,
+    `const __knightedLocalsExport =\n  __knightedUpstreamLocals ??\n  __knightedResolveCssModules(__knightedLocals, __knightedLocals);`,
     `const __knightedBaseCss = __knightedResolveCss(__knightedDefault, __knightedUpstream);`,
     `const __knightedCss = [__knightedBaseCss, ${cssValues.join(', ')}].filter(Boolean).join('\\n');`,
     `export const ${DEFAULT_EXPORT_NAME} = __knightedCss;`,

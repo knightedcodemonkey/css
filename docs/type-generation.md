@@ -60,6 +60,11 @@ Use `--hashed` when you want `.knighted-css` proxy modules to export `selectors`
 CSS Modules hashing instead of stable selector strings. This keeps the module and selector
 types while preserving hashed class names at runtime.
 
+> [!NOTE]
+> `--hashed` derives the selector list from the compiled CSS, so the generated sidecar can
+> include class names that are not exported by the module (for example, sprinkles output from
+> vanilla-extract). At runtime, `selectors` reflects only exported locals from the loader bridge, so the runtime map can be a subset of the generated sidecar.
+
 > [!IMPORTANT]
 > `--hashed` requires the bundler to route `?knighted-css` imports through
 > `@knighted/css/loader-bridge`, so the proxy can read `knightedCss` and

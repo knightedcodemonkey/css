@@ -137,6 +137,11 @@ selectors.card // hashed CSS Modules class name
 > `--hashed` requires wiring `@knighted/css/loader-bridge` to handle `?knighted-css` queries so
 > the generated proxies can read `knightedCss` and `knightedCssModules` at build time.
 
+> [!NOTE]
+> `--hashed` builds the selector list from compiled CSS. The generated sidecar can therefore
+> include class names that are not exported by the module (e.g. sprinkles output), while the
+> runtime `selectors` map only includes exported locals from the loader bridge.
+
 Refer to [docs/type-generation.md](../../docs/type-generation.md) for CLI options and workflow tips.
 
 ### Combined + runtime selectors
