@@ -10,6 +10,8 @@ const debugResolver = process.env.KNIGHTED_CSS_DEBUG_MODE === '1'
 const typesCacheDir = path.resolve(__dirname, '.knighted-css-mode')
 const strictManifestPath = path.join(typesCacheDir, 'knighted-manifest.json')
 const combinedHashedPath = path.join('src', 'mode', 'declaration-hashed')
+const declarationHashedDir = /src[\\/]mode[\\/]declaration-hashed/
+const declarationStableDir = /src[\\/]mode[\\/]declaration-stable/
 
 export default async () => ({
   mode: 'development',
@@ -33,7 +35,7 @@ export default async () => ({
     rules: [
       {
         test: /\.module\.css$/,
-        include: /src\/mode\/declaration-hashed/,
+        include: declarationHashedDir,
         oneOf: [
           {
             resourceQuery: /knighted-css/,
@@ -74,7 +76,7 @@ export default async () => ({
       {
         test: /\.[jt]sx?$/,
         resourceQuery: /knighted-css/,
-        include: /src\/mode\/declaration-hashed/,
+        include: declarationHashedDir,
         use: [
           {
             loader: '@knighted/css/loader-bridge',
@@ -102,7 +104,7 @@ export default async () => ({
       {
         test: /\.[jt]sx?$/,
         resourceQuery: /knighted-css/,
-        include: /src\/mode\/declaration-stable/,
+        include: declarationStableDir,
         use: [
           {
             loader: '@knighted/css/loader',
@@ -128,7 +130,7 @@ export default async () => ({
       {
         test: /\.[jt]sx?$/,
         resourceQuery: /knighted-css/,
-        exclude: /src\/mode\/(declaration-stable|declaration-hashed)/,
+        exclude: /src[\\/]mode[\\/](declaration-stable|declaration-hashed)/,
         use: [
           {
             loader: '@knighted/css/loader',
@@ -175,7 +177,7 @@ export default async () => ({
       },
       {
         test: /\.module\.css$/,
-        exclude: /src\/mode\/declaration-hashed/,
+        exclude: declarationHashedDir,
         use: [
           {
             loader: CssExtractRspackPlugin.loader,
