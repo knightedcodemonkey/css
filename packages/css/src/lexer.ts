@@ -21,6 +21,7 @@ interface AnalyzeOptions {
 interface ModuleAnalysis {
   imports: string[]
   defaultSignal: DefaultExportSignal
+  exports: string[]
 }
 
 const JSX_EXTENSIONS = new Set(['.jsx', '.tsx'])
@@ -44,6 +45,7 @@ export async function analyzeModule(
     return {
       imports: normalizeEsImports(imports, sourceText),
       defaultSignal: classifyDefault(exports),
+      exports: normalizeEsExports(exports),
     }
   } catch {
     // fall through to oxc fallback
@@ -81,6 +83,13 @@ function classifyDefault(
   return 'no-default'
 }
 
+function normalizeEsExports(exports: readonly { n: string | undefined }[]): string[] {
+  const names = exports
+    .map(entry => entry.n)
+    .filter((name): name is string => Boolean(name) && name !== 'default')
+  return Array.from(new Set(names)).sort()
+}
+
 function parseWithOxc(sourceText: string, filePath: string): ModuleAnalysis {
   const ext = path.extname(filePath).toLowerCase()
   const attempts: Array<{ path: string; sourceType: 'module' | 'unambiguous' }> = [
@@ -104,10 +113,11 @@ function parseWithOxc(sourceText: string, filePath: string): ModuleAnalysis {
   }
 
   if (!program) {
-    return { imports: [], defaultSignal: 'unknown' }
+    return { imports: [], defaultSignal: 'unknown', exports: [] }
   }
 
   const imports: string[] = []
+  const exportedNames = new Set<string>()
   let defaultSignal: DefaultExportSignal = 'unknown'
   const addSpecifier = (raw?: string | null) => {
     if (!raw) {
@@ -124,8 +134,24 @@ function parseWithOxc(sourceText: string, filePath: string): ModuleAnalysis {
       addSpecifier(node.source?.value)
     },
     ExportNamedDeclaration(node: ExportNamedDeclaration) {
+      if (node.exportKind === 'type') {
+        return
+      }
       if (node.source) {
         addSpecifier(node.source.value)
+      }
+      if (node.declaration) {
+        addExportedDeclarationNames(node.declaration, name => {
+          exportedNames.add(name)
+        })
+      }
+      if (node.specifiers) {
+        for (const specifier of node.specifiers) {
+          const exportedName = getExportedName(specifier)
+          if (exportedName && exportedName !== 'default') {
+            exportedNames.add(exportedName)
+          }
+        }
       }
       if (hasDefaultSpecifier(node)) {
         defaultSignal = 'has-default'
@@ -135,6 +161,10 @@ function parseWithOxc(sourceText: string, filePath: string): ModuleAnalysis {
     },
     ExportAllDeclaration(node: ExportAllDeclaration) {
       addSpecifier(node.source?.value)
+      const exportedName = getExportedName(node.exported)
+      if (exportedName && exportedName !== 'default') {
+        exportedNames.add(exportedName)
+      }
       if (node.exported && isExportedAsDefault(node.exported)) {
         defaultSignal = 'has-default'
       }
@@ -172,7 +202,52 @@ function parseWithOxc(sourceText: string, filePath: string): ModuleAnalysis {
 
   visitor.visit(program)
 
-  return { imports, defaultSignal }
+  return { imports, defaultSignal, exports: Array.from(exportedNames).sort() }
+}
+
+function addExportedDeclarationNames(
+  declaration: ExportNamedDeclaration['declaration'],
+  add: (name: string) => void,
+): void {
+  if (!declaration) {
+    return
+  }
+  switch (declaration.type) {
+    case 'VariableDeclaration':
+      for (const declarator of declaration.declarations ?? []) {
+        if (declarator.id?.type === 'Identifier' && declarator.id.name) {
+          add(declarator.id.name)
+        }
+      }
+      break
+    case 'FunctionDeclaration':
+    case 'ClassDeclaration':
+      if (declaration.id?.name) {
+        add(declaration.id.name)
+      }
+      break
+    default:
+      break
+  }
+}
+
+function getExportedName(
+  exported:
+    | { name?: string; value?: string }
+    | { type?: string; name?: string; value?: string }
+    | null
+    | undefined,
+): string | undefined {
+  if (!exported) {
+    return undefined
+  }
+  if (typeof exported.name === 'string') {
+    return exported.name
+  }
+  if (typeof exported.value === 'string') {
+    return exported.value
+  }
+  return undefined
 }
 
 function normalizeSpecifier(raw: string): string {

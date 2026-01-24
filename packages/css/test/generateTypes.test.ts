@@ -321,11 +321,11 @@ test('generateTypes declaration mode emits module augmentations', async () => {
     const declarationPath = path.join(project.root, 'src', 'button.tsx.d.ts')
     const declaration = await fs.readFile(declarationPath, 'utf8')
     assert.ok(declaration.includes("declare module './button.js'"))
-    assert.ok(declaration.includes("export * from './button.js'"))
     assert.ok(declaration.includes('export const knightedCss: string'))
     assert.ok(declaration.includes('export const stableSelectors'))
     assert.ok(declaration.includes('"button": string'))
     assert.ok(!declaration.includes("export { default } from './button.js'"))
+    assert.ok(!declaration.includes("export * from './button.js'"))
   } finally {
     await project.cleanup()
   }

@@ -18,7 +18,9 @@ blob-report/
 .knighted-css/
 .knighted-css-auto/
 .knighted-css-hashed/
+.knighted-css-mode-declaration-hashed/
+.knighted-css-mode-declaration-stable/
 .knighted-css-mode-declaration/
 .knighted-css-mode-module/
 packages/playwright/src/**/*.knighted-css.ts
-packages/playwright/src/mode/declaration/**/*.d.ts
+packages/playwright/src/mode/**/*.d.ts
