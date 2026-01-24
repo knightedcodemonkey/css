@@ -264,14 +264,22 @@ test('resolver plugin internals parse and append queries', () => {
 })
 
 test('resolver plugin internals identify script paths and sidecars', () => {
-  assert.equal(isScriptResource('/tmp/button.tsx'), true)
-  assert.equal(isScriptResource('/tmp/button.js'), true)
-  assert.equal(isScriptResource('/tmp/button.d.ts'), false)
-  assert.equal(isScriptResource('/tmp/styles.css'), false)
-  assert.equal(isNodeModulesPath('/tmp/node_modules/pkg/index.js'), true)
-  assert.equal(isNodeModulesPath('/tmp/src/button.tsx'), false)
+  const tmpDir = path.join(path.sep, 'tmp')
+  const buttonTsx = path.join(tmpDir, 'button.tsx')
+  const buttonJs = path.join(tmpDir, 'button.js')
+  const buttonDts = path.join(tmpDir, 'button.d.ts')
+  const stylesCss = path.join(tmpDir, 'styles.css')
+  const nodeModulesFile = path.join(tmpDir, 'node_modules', 'pkg', 'index.js')
+  const srcButton = path.join(tmpDir, 'src', 'button.tsx')
 
-  assert.equal(buildSidecarPath('/tmp/button.tsx'), '/tmp/button.tsx.d.ts')
+  assert.equal(isScriptResource(buttonTsx), true)
+  assert.equal(isScriptResource(buttonJs), true)
+  assert.equal(isScriptResource(buttonDts), false)
+  assert.equal(isScriptResource(stylesCss), false)
+  assert.equal(isNodeModulesPath(nodeModulesFile), true)
+  assert.equal(isNodeModulesPath(srcButton), false)
+
+  assert.equal(buildSidecarPath(buttonTsx), `${buttonTsx}.d.ts`)
 })
 
 test('resolver plugin requires marker when strictSidecar is enabled', async () => {
