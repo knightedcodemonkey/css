@@ -11,6 +11,8 @@ import {
   MODE_DECL_STABLE_HOST_TEST_ID,
   MODE_DECL_STABLE_SHADOW_TEST_ID,
   MODE_DECL_STABLE_LIGHT_TEST_ID,
+  MODE_DECL_STRICT_OK_PROBE_TEST_ID,
+  MODE_DECL_STRICT_SKIP_PROBE_TEST_ID,
   MODE_DECL_SHADOW_TEST_ID,
   MODE_MODULE_HOST_TEST_ID,
   MODE_MODULE_LIGHT_TEST_ID,
@@ -157,5 +159,13 @@ test.describe('mode resolver fixture', () => {
     expect(shadowMetrics.background).toBe(lightMetrics.background)
     expect(shadowMetrics.color).toBe(lightMetrics.color)
     expect(shadowMetrics.borderRadius).toBe(lightMetrics.borderRadius)
+  })
+
+  test('declaration strict manifest rewrites only matched modules', async ({ page }) => {
+    const okProbe = page.getByTestId(MODE_DECL_STRICT_OK_PROBE_TEST_ID)
+    const skipProbe = page.getByTestId(MODE_DECL_STRICT_SKIP_PROBE_TEST_ID)
+
+    await expect(okProbe).toHaveAttribute('data-has-knighted-css', 'true')
+    await expect(skipProbe).toHaveAttribute('data-has-knighted-css', 'false')
   })
 })

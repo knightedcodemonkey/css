@@ -1,12 +1,6 @@
 *.tgz
 node_modules/
-dist/
-dist-webpack/
-dist-auto-stable/
-dist-mode/
-dist-hashed/
-dist-bridge/
-dist-bridge-webpack/
+dist*/
 coverage/
 .c8/
 .duel-cache/
@@ -15,12 +9,6 @@ coverage/
 playwright-report/
 test-results/
 blob-report/
-.knighted-css/
-.knighted-css-auto/
-.knighted-css-hashed/
-.knighted-css-mode-declaration-hashed/
-.knighted-css-mode-declaration-stable/
-.knighted-css-mode-declaration/
-.knighted-css-mode-module/
+.knighted-css*/
 packages/playwright/src/**/*.knighted-css.ts
 packages/playwright/src/mode/**/*.d.ts
