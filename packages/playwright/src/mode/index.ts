@@ -12,6 +12,8 @@ import {
   DeclarationStableCard,
   stableSelectors as declarationStableSelectors,
 } from './declaration-stable/declaration-stable-card.js'
+import { StrictOkCard } from './declaration-strict/strict-ok-card.js'
+import { StrictSkipCard } from './declaration-strict/strict-skip-card.js'
 import {
   MODE_DECL_HOST_TAG,
   MODE_DECL_HOST_TEST_ID,
@@ -27,6 +29,10 @@ import {
   MODE_DECL_HASHED_SELECTOR_TEST_ID,
   MODE_DECL_STABLE_LIGHT_TEST_ID,
   MODE_DECL_STABLE_SELECTOR_TEST_ID,
+  MODE_DECL_STRICT_OK_PROBE_TEST_ID,
+  MODE_DECL_STRICT_OK_TEST_ID,
+  MODE_DECL_STRICT_SKIP_PROBE_TEST_ID,
+  MODE_DECL_STRICT_SKIP_TEST_ID,
 } from './constants.js'
 import { ensureModeModuleHostDefined } from './module/host.js'
 import { ensureModeDeclarationHostDefined } from './declaration/host.js'
@@ -66,6 +72,16 @@ export function renderModeDemo(): HTMLElement {
     MODE_DECL_STABLE_LIGHT_TEST_ID,
   )
 
+  const strictSection = document.createElement('section')
+  strictSection.setAttribute('data-mode', 'declaration-strict')
+  root.appendChild(strictSection)
+  createRoot(strictSection).render(
+    reactJsx`<>
+      <${StrictOkCard} label="Strict OK" testId=${MODE_DECL_STRICT_OK_TEST_ID} />
+      <${StrictSkipCard} label="Strict skip" testId=${MODE_DECL_STRICT_SKIP_TEST_ID} />
+    </>`,
+  )
+
   const hashedProbe = document.createElement('span')
   hashedProbe.setAttribute('data-testid', MODE_DECL_HASHED_SELECTOR_TEST_ID)
   hashedProbe.setAttribute('data-selector', declarationHashedSelectors.card ?? '')
@@ -75,6 +91,32 @@ export function renderModeDemo(): HTMLElement {
   stableProbe.setAttribute('data-testid', MODE_DECL_STABLE_SELECTOR_TEST_ID)
   stableProbe.setAttribute('data-stable-selector', declarationStableSelectors.card ?? '')
   root.appendChild(stableProbe)
+
+  const strictOkProbe = document.createElement('span')
+  strictOkProbe.setAttribute('data-testid', MODE_DECL_STRICT_OK_PROBE_TEST_ID)
+  strictOkProbe.setAttribute('data-has-knighted-css', 'false')
+  root.appendChild(strictOkProbe)
+
+  const strictSkipProbe = document.createElement('span')
+  strictSkipProbe.setAttribute('data-testid', MODE_DECL_STRICT_SKIP_PROBE_TEST_ID)
+  strictSkipProbe.setAttribute('data-has-knighted-css', 'false')
+  root.appendChild(strictSkipProbe)
+
+  void Promise.all([
+    import('./declaration-strict/strict-ok-card.js'),
+    import('./declaration-strict/strict-skip-card.js'),
+  ]).then(([okModule, skipModule]) => {
+    const hasKnightedCss = (value: unknown): value is { knightedCss: string } =>
+      typeof value === 'object' &&
+      value !== null &&
+      'knightedCss' in value &&
+      typeof value.knightedCss === 'string'
+    strictOkProbe.setAttribute('data-has-knighted-css', String(hasKnightedCss(okModule)))
+    strictSkipProbe.setAttribute(
+      'data-has-knighted-css',
+      String(hasKnightedCss(skipModule)),
+    )
+  })
 
   ensureModeModuleHostDefined()
   const moduleHost = document.createElement(MODE_MODULE_HOST_TAG)

@@ -3,6 +3,11 @@ export const MODE_DECL_HOST_TAG = 'knighted-mode-declaration-host'
 export const MODE_DECL_HASHED_HOST_TAG = 'knighted-mode-declaration-hashed-host'
 export const MODE_DECL_STABLE_HOST_TAG = 'knighted-mode-declaration-stable-host'
 
+export const MODE_DECL_STRICT_OK_TEST_ID = 'mode-declaration-strict-ok'
+export const MODE_DECL_STRICT_SKIP_TEST_ID = 'mode-declaration-strict-skip'
+export const MODE_DECL_STRICT_OK_PROBE_TEST_ID = 'mode-declaration-strict-ok-probe'
+export const MODE_DECL_STRICT_SKIP_PROBE_TEST_ID = 'mode-declaration-strict-skip-probe'
+
 export const MODE_MODULE_HOST_TEST_ID = 'mode-module-host'
 export const MODE_DECL_HOST_TEST_ID = 'mode-declaration-host'
 export const MODE_DECL_HASHED_HOST_TEST_ID = 'mode-declaration-hashed-host'
