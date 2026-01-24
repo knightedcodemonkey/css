@@ -21,6 +21,7 @@
     "precheck-types": "npm run types",
     "check-types": "tsc --noEmit",
     "prebuild": "npm run build -w @knighted/css",
+    "prebuild:mode": "npm run types:mode",
     "preview": "npm run build && http-server . -p 4174",
     "preview:mode": "npm run build:mode && http-server . -p 4179 -o /mode.html",
     "preview:hashed": "npm run build:hashed && http-server . -p 4178 -o /hashed.html",

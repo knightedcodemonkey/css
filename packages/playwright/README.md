@@ -20,8 +20,8 @@ The mode demo (`/mode.html`) is built via `rspack.mode.config.js`. It depends on
 Key pieces:
 
 - `npm run types:mode` generates declaration sidecars for the mode fixtures, including a strict-only path for `strict-ok-card.tsx`.
-- `rspack.mode.config.js` runs the generator and writes the merged manifest to
-  `.knighted-css-mode/knighted-manifest.json`.
+- `npm run types:mode` also writes the merged strict manifest to
+  `.knighted-css-mode/knighted-manifest.json` via `scripts/generate-mode-types.ts`.
 - The resolver plugin is configured with `strictSidecar: true` and `manifestPath` so single-specifier imports like `./declaration-card.js` rewrite to `?knighted-css` at build time without warnings.
 
 If you are debugging the mode fixture, use `KNIGHTED_CSS_DEBUG_MODE=1 npm run build:mode` to see rewrite decisions in the terminal.
