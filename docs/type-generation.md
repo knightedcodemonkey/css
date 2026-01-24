@@ -30,6 +30,7 @@ Wire it into `postinstall` or your build so new selectors land automatically.
 - `--hashed` – emit proxy modules that export `selectors` backed by loader-bridge hashed class names (mutually exclusive with `--auto-stable`).
 - `--resolver` – path or package name exporting a `CssResolver` (default export or named `resolver`).
 - `--mode` – `module` (default) emits `.knighted-css.ts` proxy modules. `declaration` emits `.d.ts` module augmentations next to the referenced JS/TS modules, so you can keep standard imports like `import { knightedCss } from './button.js'` while the generator still discovers them via `.knighted-css` specifiers.
+- `--manifest` – optional path to write a sidecar manifest for declaration mode (recommended when you want strict resolver behavior).
 
 ### Relationship to the loader
 
@@ -70,6 +71,37 @@ import Button, { knightedCss, stableSelectors } from './button.js'
 > [!IMPORTANT]
 > Declaration mode requires a resolver plugin to append `?knighted-css` (and `&combined` when applicable)
 > at build time so runtime exports match the generated types.
+
+### Sidecar manifests + strict resolver mode
+
+Declaration mode emits `.d.ts` files with a `// @knighted-css` marker. If you want the resolver plugin
+to only opt into those explicit sidecars (and avoid accidentally matching unrelated `.d.ts` files),
+enable strict mode and pass a manifest created by the CLI:
+
+```sh
+knighted-css-generate-types --root . --include src --mode declaration \
+  --manifest .knighted-css/knighted-manifest.json
+```
+
+```js
+import path from 'node:path'
+import { knightedCssResolverPlugin } from '@knighted/css/plugin'
+
+export default {
+  resolve: {
+    plugins: [
+      knightedCssResolverPlugin({
+        strictSidecar: true,
+        manifestPath: path.resolve('.knighted-css/knighted-manifest.json'),
+      }),
+    ],
+  },
+}
+```
+
+The manifest maps each source module to its generated `.d.ts` path. When `strictSidecar` is enabled,
+the plugin only rewrites imports if the sidecar exists **and** includes the marker. That keeps
+resolution deterministic even when other tooling generates `.d.ts` files alongside your modules.
 
 ## Hashed selector proxies
 
