@@ -114,6 +114,23 @@ test('resolveCssModules finds locals on module export', () => {
   })
 })
 
+test('resolveCssModules ignores default string export', () => {
+  const module = { default: '.card{color:red}' }
+  assert.equal(__loaderBridgeInternals.resolveCssModules(module, module), undefined)
+})
+
+test('resolveCssModules omits default from named exports', () => {
+  const module = {
+    default: '.card{color:red}',
+    card: 'card_hash',
+    title: 'title_hash',
+  }
+  assert.deepEqual(__loaderBridgeInternals.resolveCssModules(module, module), {
+    card: 'card_hash',
+    title: 'title_hash',
+  })
+})
+
 test('pitch returns combined module wrapper when combined flag is present', async () => {
   const ctx = createMockContext({
     resourceQuery: '?knighted-css&combined',
