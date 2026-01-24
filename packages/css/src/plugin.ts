@@ -14,6 +14,8 @@ export interface KnightedCssResolverPluginOptions {
   extensions?: string[]
   debug?: boolean
   combinedPaths?: Array<string | RegExp>
+  strictSidecar?: boolean
+  manifestPath?: string
 }
 
 interface ResolveRequest {
@@ -24,6 +26,7 @@ interface ResolveRequest {
     path?: string
   }
   __knightedCssAugmented?: boolean
+  __knightedCssResolve?: boolean
 }
 
 interface ResolveContext {
@@ -67,8 +70,12 @@ interface ResolverFactoryLike {
 interface CompilerLike {
   resolverFactory?: ResolverFactoryLike
   getResolver?: (type: string) => unknown
+  inputFileSystem?: FileSystemLike
   hooks?: {
     normalModuleFactory?: NormalModuleFactoryHook
+    invalid?: { tap(name: string, callback: (fileName?: string) => void): void }
+    watchRun?: { tap(name: string, callback: () => void): void }
+    done?: { tap(name: string, callback: () => void): void }
   }
 }
 
@@ -100,6 +107,14 @@ interface NormalModuleResolveData {
   }
 }
 
+type FileSystemLike = {
+  readFile?: (
+    path: string,
+    callback: (error: NodeJS.ErrnoException | null, data?: Buffer) => void,
+  ) => void
+  stat?: (path: string, callback: (error?: NodeJS.ErrnoException | null) => void) => void
+}
+
 function splitResourceAndQuery(specifier: string): { resource: string; query: string } {
   const hashOffset = specifier.startsWith('#') ? 1 : 0
   const hashIndex = specifier.indexOf('#', hashOffset)
@@ -126,6 +141,16 @@ function appendQueryFlag(query: string, flag: string): string {
   return `${query}&${flag}`
 }
 
+function stripExtension(filePath: string): string {
+  const ext = path.extname(filePath)
+  return ext ? filePath.slice(0, -ext.length) : filePath
+}
+
+function isWithinRoot(filePath: string, rootDir: string): boolean {
+  const relative = path.relative(rootDir, filePath)
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
+}
+
 function isScriptResource(filePath: string): boolean {
   const normalized = filePath.toLowerCase()
   if (normalized.endsWith('.d.ts')) {
@@ -146,28 +171,39 @@ function isNodeModulesPath(filePath: string): boolean {
   return filePath.split(path.sep).includes('node_modules')
 }
 
-async function fileExists(target: string): Promise<boolean> {
-  try {
-    await fs.access(target)
-    return true
-  } catch {
-    return false
-  }
-}
-
 export class KnightedCssResolverPlugin {
   private readonly rootDir: string
   private readonly resolverFactory
   private readonly extensions: string[]
   private readonly debug: boolean
   private readonly combinedPaths: Array<string | RegExp>
-  private readonly sidecarCache = new Map<string, boolean>()
+  private readonly strictSidecar: boolean
+  private readonly manifestPath?: string
+  private readonly sidecarCache = new Map<
+    string,
+    { path: string; hasMarker: boolean } | null
+  >()
+  private readonly diagnostics = {
+    rewrites: 0,
+    cacheHits: 0,
+    markerMisses: 0,
+    manifestMisses: 0,
+  }
+  private fileSystem?: FileSystemLike
+  private inputFileSystem?: FileSystemLike
+  private manifestCache?: Map<string, string>
+  private compilerResolver?: ResolverLike
 
   constructor(options: KnightedCssResolverPluginOptions = {}) {
     this.rootDir = path.resolve(options.rootDir ?? process.cwd())
     this.extensions = options.extensions ?? SCRIPT_EXTENSIONS
     this.debug = Boolean(options.debug)
     this.combinedPaths = options.combinedPaths ?? []
+    this.strictSidecar =
+      options.strictSidecar === undefined
+        ? Boolean(options.manifestPath)
+        : options.strictSidecar
+    this.manifestPath = options.manifestPath
     this.resolverFactory = createResolverFactory(
       this.rootDir,
       this.extensions,
@@ -193,6 +229,12 @@ export class KnightedCssResolverPlugin {
   }
 
   private applyToResolver(resolver: ResolverLike) {
+    if ('fileSystem' in resolver) {
+      this.fileSystem = (
+        resolver as ResolverLike & { fileSystem?: FileSystemLike }
+      ).fileSystem
+    }
+    this.compilerResolver = resolver
     if (this.debug) {
       // eslint-disable-next-line no-console
       console.log('knighted-css: resolver plugin enabled')
@@ -209,8 +251,23 @@ export class KnightedCssResolverPlugin {
   }
 
   private applyToCompiler(compiler: CompilerLike) {
+    this.inputFileSystem = compiler.inputFileSystem
+    compiler.hooks?.invalid?.tap('KnightedCssResolverPlugin', () => {
+      this.sidecarCache.clear()
+      this.manifestCache = undefined
+      this.resetDiagnostics()
+    })
+    compiler.hooks?.watchRun?.tap('KnightedCssResolverPlugin', () => {
+      this.sidecarCache.clear()
+      this.manifestCache = undefined
+      this.resetDiagnostics()
+    })
+    compiler.hooks?.done?.tap('KnightedCssResolverPlugin', () => {
+      this.flushDiagnostics()
+    })
     const resolver = compiler.getResolver?.('normal')
     if (resolver && this.isResolver(resolver as ResolverLike)) {
+      this.compilerResolver = resolver as ResolverLike
       this.applyToResolver(resolver as ResolverLike)
       return
     }
@@ -267,6 +324,200 @@ export class KnightedCssResolverPlugin {
     console.log(message)
   }
 
+  private resetDiagnostics(): void {
+    this.diagnostics.rewrites = 0
+    this.diagnostics.cacheHits = 0
+    this.diagnostics.markerMisses = 0
+    this.diagnostics.manifestMisses = 0
+  }
+
+  private flushDiagnostics(): void {
+    if (!this.debug) {
+      return
+    }
+    const { rewrites, cacheHits, markerMisses, manifestMisses } = this.diagnostics
+    if (rewrites + cacheHits + markerMisses + manifestMisses === 0) {
+      return
+    }
+    // eslint-disable-next-line no-console
+    console.log(
+      `knighted-css: summary rewrites=${rewrites} cacheHits=${cacheHits} manifestMisses=${manifestMisses} markerMisses=${markerMisses}`,
+    )
+    this.resetDiagnostics()
+  }
+
+  private async readFileFromFs(filePath: string): Promise<Buffer | null> {
+    const fsHandle = this.fileSystem ?? this.inputFileSystem
+    if (fsHandle?.readFile) {
+      return new Promise(resolve => {
+        fsHandle.readFile?.(filePath, (error, data) => {
+          if (error || !data) {
+            resolve(null)
+            return
+          }
+          resolve(data)
+        })
+      })
+    }
+
+    try {
+      const data = await fs.readFile(filePath)
+      return data
+    } catch {
+      return null
+    }
+  }
+
+  private async fileExistsFromFs(filePath: string): Promise<boolean> {
+    const fsHandle = this.fileSystem ?? this.inputFileSystem
+    if (fsHandle?.stat) {
+      return new Promise(resolve => {
+        fsHandle.stat?.(filePath, error => resolve(!error))
+      })
+    }
+
+    try {
+      await fs.access(filePath)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  private buildSidecarCandidates(resolvedPath: string): string[] {
+    if (resolvedPath.endsWith('.d.ts')) {
+      return [resolvedPath]
+    }
+    const candidates = new Set<string>()
+    candidates.add(`${resolvedPath}.d.ts`)
+    candidates.add(`${stripExtension(resolvedPath)}.d.ts`)
+    return Array.from(candidates)
+  }
+
+  private async loadManifest(): Promise<Map<string, string> | null> {
+    if (!this.manifestPath) {
+      return null
+    }
+    if (this.manifestCache) {
+      return this.manifestCache
+    }
+    const data = await this.readFileFromFs(this.manifestPath)
+    if (!data) {
+      return null
+    }
+    try {
+      const parsed = JSON.parse(data.toString('utf8')) as Record<
+        string,
+        { file?: string }
+      >
+      const map = new Map<string, string>()
+      for (const [key, entry] of Object.entries(parsed)) {
+        if (entry?.file) {
+          map.set(key, entry.file)
+        }
+      }
+      this.manifestCache = map
+      return map
+    } catch {
+      return null
+    }
+  }
+
+  private async resolveSidecarInfo(
+    resolvedPath: string,
+    logger?: (message: string) => void,
+  ): Promise<{ path: string; hasMarker: boolean } | null> {
+    const cached = this.sidecarCache.get(resolvedPath)
+    if (cached !== undefined) {
+      this.diagnostics.cacheHits += 1
+      return cached
+    }
+
+    const manifest = await this.loadManifest()
+    const manifestKey = resolvedPath.split(path.sep).join('/')
+    const manifestPath = manifest?.get(manifestKey)
+    if (this.strictSidecar && this.manifestPath && !manifestPath) {
+      this.diagnostics.manifestMisses += 1
+      logger?.(`knighted-css: skip ${resolvedPath} (manifest miss)`)
+      this.sidecarCache.set(resolvedPath, null)
+      return null
+    }
+    const candidates = manifestPath
+      ? [manifestPath]
+      : this.buildSidecarCandidates(resolvedPath)
+
+    for (const candidate of candidates) {
+      if (!(await this.fileExistsFromFs(candidate))) {
+        continue
+      }
+      if (!this.strictSidecar) {
+        const info = { path: candidate, hasMarker: true }
+        this.sidecarCache.set(resolvedPath, info)
+        return info
+      }
+      const head = await this.readFileFromFs(candidate)
+      const snippet = head ? head.toString('utf8', 0, 128) : ''
+      const hasMarker = snippet.includes('@knighted-css')
+      if (hasMarker) {
+        const info = { path: candidate, hasMarker: true }
+        this.sidecarCache.set(resolvedPath, info)
+        return info
+      }
+      this.diagnostics.markerMisses += 1
+      logger?.(
+        `knighted-css: skip ${resolvedPath} (sidecar missing marker at ${candidate})`,
+      )
+    }
+
+    this.sidecarCache.set(resolvedPath, null)
+    return null
+  }
+
+  private async resolveWithCompiler(
+    resolver: ResolverLike,
+    specifier: string,
+    importer: string,
+  ): Promise<string | undefined> {
+    return new Promise(resolve => {
+      const request: ResolveRequest = {
+        request: specifier,
+        path: importer,
+        context: { issuer: importer },
+        __knightedCssResolve: true,
+      }
+      resolver.doResolve(
+        resolver.getHook('resolve'),
+        request,
+        'knighted-css: resolve candidate',
+        {},
+        (error, result) => {
+          if (error || !result || typeof result !== 'object') {
+            resolve(undefined)
+            return
+          }
+          const resolved = (result as { path?: string }).path
+          if (typeof resolved === 'string') {
+            resolve(resolved)
+            return
+          }
+          const resource = (result as { resource?: string }).resource
+          resolve(typeof resource === 'string' ? resource : undefined)
+        },
+      )
+    })
+  }
+
+  private async resolveResource(
+    resolver: ResolverLike | undefined,
+    resource: string,
+    importer: string,
+  ): Promise<string | undefined> {
+    if (resolver) {
+      return this.resolveWithCompiler(resolver, resource, importer)
+    }
+    return resolveWithFactory(this.resolverFactory, resource, importer, this.extensions)
+  }
+
   private async handleModuleFactoryResolve(
     data: NormalModuleResolveData,
     callback: (error?: Error | null, result?: unknown) => void,
@@ -279,18 +530,27 @@ export class KnightedCssResolverPlugin {
     this.logWithoutContext(`knighted-css: inspect ${data.request}`)
 
     const { resource, query } = splitResourceAndQuery(data.request)
-    if (!resource || hasKnightedCssQuery(query)) {
+    if (
+      !resource ||
+      hasKnightedCssQuery(query) ||
+      hasCombinedQuery(query) ||
+      (data.contextInfo?.issuer &&
+        hasKnightedCssQuery(splitResourceAndQuery(data.contextInfo.issuer).query)) ||
+      (data.contextInfo?.issuer &&
+        hasCombinedQuery(splitResourceAndQuery(data.contextInfo.issuer).query))
+    ) {
+      this.logWithoutContext(`knighted-css: skip ${data.request} (already tagged)`)
       callback(null, true)
       return
     }
 
     const importer = data.contextInfo?.issuer || data.context || this.rootDir
-    const resolved = resolveWithFactory(
-      this.resolverFactory,
-      resource,
-      importer,
-      this.extensions,
-    )
+    if (!isWithinRoot(importer, this.rootDir)) {
+      this.logWithoutContext(`knighted-css: skip ${importer} (outside root)`)
+      callback(null, true)
+      return
+    }
+    const resolved = await this.resolveResource(this.compilerResolver, resource, importer)
 
     if (!resolved || !isScriptResource(resolved)) {
       this.logWithoutContext(`knighted-css: skip ${resource} (unresolved or non-script)`)
@@ -306,18 +566,16 @@ export class KnightedCssResolverPlugin {
       return
     }
 
-    const cached = this.sidecarCache.get(resolved)
-    const hasSidecar =
-      cached !== undefined ? cached : await fileExists(buildSidecarPath(resolved))
-    if (cached === undefined) {
-      this.sidecarCache.set(resolved, hasSidecar)
-    }
-
-    if (!hasSidecar) {
+    const sidecarInfo = await this.resolveSidecarInfo(resolved, message =>
+      this.logWithoutContext(message),
+    )
+    if (!sidecarInfo) {
       this.logWithoutContext(`knighted-css: skip ${resolved} (no sidecar)`)
       callback(null, true)
       return
     }
+
+    this.logWithoutContext(`knighted-css: sidecar ${sidecarInfo.path}`)
 
     const shouldAppendCombined =
       this.combinedPaths.length > 0 &&
@@ -334,6 +592,7 @@ export class KnightedCssResolverPlugin {
       : appendQueryFlag(nextQuery, KNIGHTED_CSS_QUERY)
     data.request = `${resource}${finalQuery}`
     this.logWithoutContext(`knighted-css: append ?${KNIGHTED_CSS_QUERY} to ${resource}`)
+    this.diagnostics.rewrites += 1
     callback(null, true)
   }
 
@@ -350,24 +609,33 @@ export class KnightedCssResolverPlugin {
 
     this.log(resolveContext, `knighted-css: inspect ${request.request}`)
 
-    if (request.__knightedCssAugmented) {
+    if (request.__knightedCssAugmented || request.__knightedCssResolve) {
       callback()
       return
     }
 
     const { resource, query } = splitResourceAndQuery(request.request)
-    if (!resource || hasKnightedCssQuery(query)) {
+    if (
+      !resource ||
+      hasKnightedCssQuery(query) ||
+      hasCombinedQuery(query) ||
+      (request.context?.issuer &&
+        hasKnightedCssQuery(splitResourceAndQuery(request.context.issuer).query)) ||
+      (request.context?.issuer &&
+        hasCombinedQuery(splitResourceAndQuery(request.context.issuer).query))
+    ) {
+      this.log(resolveContext, `knighted-css: skip ${request.request} (already tagged)`)
       callback()
       return
     }
 
     const importer = getImporterPath(request, this.rootDir)
-    const resolved = resolveWithFactory(
-      this.resolverFactory,
-      resource,
-      importer,
-      this.extensions,
-    )
+    if (!isWithinRoot(importer, this.rootDir)) {
+      this.log(resolveContext, `knighted-css: skip ${importer} (outside root)`)
+      callback()
+      return
+    }
+    const resolved = await this.resolveResource(resolver, resource, importer)
 
     if (!resolved || !isScriptResource(resolved)) {
       this.log(
@@ -386,18 +654,16 @@ export class KnightedCssResolverPlugin {
       return
     }
 
-    const cached = this.sidecarCache.get(resolved)
-    const hasSidecar =
-      cached !== undefined ? cached : await fileExists(buildSidecarPath(resolved))
-    if (cached === undefined) {
-      this.sidecarCache.set(resolved, hasSidecar)
-    }
-
-    if (!hasSidecar) {
+    const sidecarInfo = await this.resolveSidecarInfo(resolved, message =>
+      this.log(resolveContext, message),
+    )
+    if (!sidecarInfo) {
       this.log(resolveContext, `knighted-css: skip ${resolved} (no sidecar)`)
       callback()
       return
     }
+
+    this.log(resolveContext, `knighted-css: sidecar ${sidecarInfo.path}`)
 
     const shouldAppendCombined =
       this.combinedPaths.length > 0 &&
@@ -420,6 +686,7 @@ export class KnightedCssResolverPlugin {
     }
 
     this.log(resolveContext, `knighted-css: append ?${KNIGHTED_CSS_QUERY} to ${resource}`)
+    this.diagnostics.rewrites += 1
 
     resolver.doResolve(
       resolver.getHook('resolve'),
@@ -445,4 +712,5 @@ export const __knightedCssPluginInternals = {
   buildSidecarPath,
   isScriptResource,
   isNodeModulesPath,
+  isWithinRoot,
 }

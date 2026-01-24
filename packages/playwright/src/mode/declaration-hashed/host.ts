@@ -20,7 +20,7 @@ const hostShell = css`
     box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.2);
   }
 `
-console.log('declarationHashedCss', declarationHashedCss)
+
 export class ModeDeclarationHashedHost extends LitElement {
   static styles = [hostShell, unsafeCSS(declarationHashedCss)]
   #reactRoot?: Root

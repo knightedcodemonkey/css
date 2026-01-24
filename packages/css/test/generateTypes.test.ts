@@ -326,6 +326,32 @@ test('generateTypes declaration mode emits module augmentations', async () => {
     assert.ok(declaration.includes('"button": string'))
     assert.ok(!declaration.includes("export { default } from './button.js'"))
     assert.ok(!declaration.includes("export * from './button.js'"))
+    assert.ok(declaration.includes('// @knighted-css'))
+  } finally {
+    await project.cleanup()
+  }
+})
+
+test('generateTypes declaration mode writes sidecar manifest when requested', async () => {
+  const project = await setupDeclarationFixture()
+  try {
+    const outDir = path.join(project.root, '.knighted-css-declaration')
+    const manifestPath = path.join(outDir, 'knighted-manifest.json')
+    const result = await generateTypes({
+      rootDir: project.root,
+      include: ['src'],
+      outDir,
+      mode: 'declaration',
+      manifestPath,
+    })
+
+    assert.equal(result.sidecarManifestPath, manifestPath)
+    const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as Record<
+      string,
+      { file?: string }
+    >
+    const key = path.join(project.root, 'src', 'button.tsx').split(path.sep).join('/')
+    assert.equal(manifest[key]?.file, path.join(project.root, 'src', 'button.tsx.d.ts'))
   } finally {
     await project.cleanup()
   }
@@ -1321,6 +1347,8 @@ test('generateTypes internals support selector module helpers', async () => {
     'storybook',
     '--out-dir',
     '.knighted-css',
+    '--manifest',
+    '.knighted-css/knighted-manifest.json',
     '--mode',
     'declaration',
     '--auto-stable',
@@ -1334,6 +1362,7 @@ test('generateTypes internals support selector module helpers', async () => {
   assert.equal(parsed.hashed, false)
   assert.equal(parsed.resolver, './resolver.mjs')
   assert.equal(parsed.mode, 'declaration')
+  assert.equal(parsed.manifestPath, '.knighted-css/knighted-manifest.json')
 
   const hashedParsed = parseCliArgs([
     '--root',
@@ -1353,6 +1382,7 @@ test('generateTypes internals support selector module helpers', async () => {
   assert.throws(() => parseCliArgs(['--stable-namespace']), /Missing value/)
   assert.throws(() => parseCliArgs(['--resolver']), /Missing value/)
   assert.throws(() => parseCliArgs(['--mode']), /Missing value/)
+  assert.throws(() => parseCliArgs(['--manifest']), /Missing value/)
   assert.throws(() => parseCliArgs(['--mode', 'wat']), /Unknown mode/)
   assert.throws(() => parseCliArgs(['--wat']), /Unknown flag/)
   assert.throws(() => parseCliArgs(['--auto-stable', '--hashed']), /Cannot combine/)
