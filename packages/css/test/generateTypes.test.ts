@@ -20,6 +20,15 @@ const CLI_SNAPSHOT_FILE = path.join(SNAPSHOT_DIR, 'generateTypes.snap.json')
 const UPDATE_SNAPSHOTS =
   process.env.UPDATE_SNAPSHOTS === '1' || process.env.UPDATE_SNAPSHOTS === 'true'
 
+const {
+  parseCliArgs,
+  loadResolverModule,
+  resolveWithExtensionFallback,
+  resolveIndexFallback,
+  readManifest,
+  writeSidecarManifest,
+} = __generateTypesInternals
+
 let cachedCliSnapshots: Record<string, string> | null = null
 
 async function setupFixtureProject(): Promise<{
@@ -40,6 +49,28 @@ async function setupFixtureProject(): Promise<{
 console.log(stableSelectors.demo)
 `
   await fs.writeFile(path.join(srcDir, 'entry.ts'), entrySource)
+  return {
+    root,
+    cleanup: () => fs.rm(root, { recursive: true, force: true }),
+  }
+}
+
+async function setupDeclarationFixture(): Promise<{
+  root: string
+  cleanup: () => Promise<void>
+}> {
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-declaration-'))
+  const root = await fs.realpath(tmpRoot)
+  const srcDir = path.join(root, 'src')
+  await fs.mkdir(srcDir, { recursive: true })
+  await fs.writeFile(
+    path.join(srcDir, 'button.css'),
+    '.knighted-button { color: rebeccapurple; }\n',
+  )
+  await fs.writeFile(
+    path.join(srcDir, 'button.tsx'),
+    "import './button.css'\nexport function Button() { return null }\n",
+  )
   return {
     root,
     cleanup: () => fs.rm(root, { recursive: true, force: true }),
@@ -283,6 +314,82 @@ test('generateTypes emits declarations and reuses cache', async () => {
   }
 })
 
+test('generateTypes declaration mode emits module augmentations', async () => {
+  const project = await setupDeclarationFixture()
+  try {
+    const outDir = path.join(project.root, '.knighted-css-declaration')
+    const result = await generateTypes({
+      rootDir: project.root,
+      include: ['src'],
+      outDir,
+      mode: 'declaration',
+    })
+    assert.ok(result.selectorModulesWritten >= 1)
+    assert.ok(result.warnings.length >= 1)
+
+    const declarationPath = path.join(project.root, 'src', 'button.tsx.d.ts')
+    const declaration = await fs.readFile(declarationPath, 'utf8')
+    assert.ok(declaration.includes("declare module './button.js'"))
+    assert.ok(declaration.includes('export const knightedCss: string'))
+    assert.ok(declaration.includes('export const stableSelectors'))
+    assert.ok(declaration.includes('"button": string'))
+    assert.ok(!declaration.includes("export { default } from './button.js'"))
+    assert.ok(!declaration.includes("export * from './button.js'"))
+    assert.ok(declaration.includes('// @knighted-css'))
+  } finally {
+    await project.cleanup()
+  }
+})
+
+test('generateTypes declaration mode writes sidecar manifest when requested', async () => {
+  const project = await setupDeclarationFixture()
+  try {
+    const outDir = path.join(project.root, '.knighted-css-declaration')
+    const manifestPath = path.join(outDir, 'knighted-manifest.json')
+    const result = await generateTypes({
+      rootDir: project.root,
+      include: ['src'],
+      outDir,
+      mode: 'declaration',
+      manifestPath,
+    })
+
+    assert.equal(result.sidecarManifestPath, manifestPath)
+    const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as Record<
+      string,
+      { file?: string }
+    >
+    const key = path.join(project.root, 'src', 'button.tsx').split(path.sep).join('/')
+    assert.equal(manifest[key]?.file, path.join(project.root, 'src', 'button.tsx.d.ts'))
+  } finally {
+    await project.cleanup()
+  }
+})
+
+test('generateTypes declaration mode skips files without style imports', async () => {
+  const project = await setupDeclarationFixture()
+  try {
+    await fs.writeFile(
+      path.join(project.root, 'src', 'no-styles.tsx'),
+      'export const noop = true\n',
+    )
+    const outDir = path.join(project.root, '.knighted-css-declaration')
+    const result = await generateTypes({
+      rootDir: project.root,
+      include: ['src'],
+      outDir,
+      mode: 'declaration',
+    })
+
+    const declPath = path.join(project.root, 'src', 'no-styles.tsx.d.ts')
+    const exists = await pathExists(declPath)
+    assert.equal(exists, false)
+    assert.ok(result.selectorModulesWritten >= 1)
+  } finally {
+    await project.cleanup()
+  }
+})
+
 test('generateTypes hashed emits selector proxies for modules', async () => {
   const project = await setupFixtureProject()
   try {
@@ -313,6 +420,113 @@ test('generateTypes hashed emits selector proxies for modules', async () => {
     assert.ok(!selectorModule.includes('stableSelectors'))
   } finally {
     await project.cleanup()
+  }
+})
+
+test('generateTypes declaration hashed emits selector exports', async () => {
+  const project = await setupDeclarationFixture()
+  try {
+    const outDir = path.join(project.root, '.knighted-css-declaration')
+    const result = await generateTypes({
+      rootDir: project.root,
+      include: ['src'],
+      outDir,
+      mode: 'declaration',
+      hashed: true,
+    })
+    assert.ok(result.selectorModulesWritten >= 1)
+    const declarationPath = path.join(project.root, 'src', 'button.tsx.d.ts')
+    const declaration = await fs.readFile(declarationPath, 'utf8')
+    assert.ok(declaration.includes('export const selectors'))
+    assert.ok(!declaration.includes('stableSelectors'))
+  } finally {
+    await project.cleanup()
+  }
+})
+
+test('parseCliArgs validates flags and combinations', () => {
+  assert.throws(() => parseCliArgs(['--root']), /Missing value for --root/)
+  assert.throws(() => parseCliArgs(['--include']), /Missing value for --include/)
+  assert.throws(() => parseCliArgs(['--out-dir']), /Missing value for --out-dir/)
+  assert.throws(() => parseCliArgs(['--manifest']), /Missing value for --manifest/)
+  assert.throws(() => parseCliArgs(['--mode', 'unknown']), /Unknown mode: unknown/)
+  assert.throws(() => parseCliArgs(['--unknown']), /Unknown flag: --unknown/)
+  assert.throws(
+    () => parseCliArgs(['--auto-stable', '--hashed']),
+    /Cannot combine --auto-stable with --hashed/,
+  )
+})
+
+test('loadResolverModule resolves default, named, and file URL exports', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-resolver-'))
+  try {
+    const defaultPath = path.join(root, 'default-resolver.mjs')
+    const namedPath = path.join(root, 'named-resolver.mjs')
+    const badPath = path.join(root, 'bad-resolver.mjs')
+
+    await fs.writeFile(defaultPath, 'export default function resolver() { return [] }\n')
+    await fs.writeFile(namedPath, 'export const resolver = () => []\n')
+    await fs.writeFile(badPath, 'export const nope = 1\n')
+
+    const defaultResolver = await loadResolverModule('./default-resolver.mjs', root)
+    assert.equal(typeof defaultResolver, 'function')
+
+    const namedResolver = await loadResolverModule('./named-resolver.mjs', root)
+    assert.equal(typeof namedResolver, 'function')
+
+    const fileResolver = await loadResolverModule(pathToFileURL(defaultPath).href, root)
+    assert.equal(typeof fileResolver, 'function')
+
+    await assert.rejects(
+      () => loadResolverModule('./bad-resolver.mjs', root),
+      /Resolver module must export a function/,
+    )
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('resolveWithExtensionFallback and resolveIndexFallback handle fallbacks', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-resolve-'))
+  try {
+    const dir = path.join(root, 'lib')
+    await fs.mkdir(dir, { recursive: true })
+    const indexPath = path.join(dir, 'index.ts')
+    await fs.writeFile(indexPath, 'export const value = 1\n')
+
+    const resolvedIndex = await resolveIndexFallback(dir)
+    assert.equal(resolvedIndex, indexPath)
+
+    const resolvedViaFallback = await resolveWithExtensionFallback(dir)
+    assert.equal(resolvedViaFallback, indexPath)
+
+    const missing = path.join(root, 'missing')
+    const missingResolved = await resolveWithExtensionFallback(missing)
+    assert.equal(missingResolved, missing)
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('readManifest handles invalid JSON and writeSidecarManifest writes output', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-manifest-'))
+  try {
+    const manifestPath = path.join(root, 'selector-modules.json')
+    await fs.writeFile(manifestPath, 'not-json')
+    const manifest = await readManifest(manifestPath)
+    assert.deepEqual(manifest, {})
+
+    const sidecarPath = path.join(root, 'sidecar', 'manifest.json')
+    await writeSidecarManifest(sidecarPath, {
+      '/abs/path/file.ts': { file: '/abs/path/file.ts.d.ts' },
+    })
+    const sidecar = JSON.parse(await fs.readFile(sidecarPath, 'utf8')) as Record<
+      string,
+      { file: string }
+    >
+    assert.equal(sidecar['/abs/path/file.ts']?.file, '/abs/path/file.ts.d.ts')
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
   }
 })
 
@@ -1016,6 +1230,7 @@ test('generateTypes internals cover edge cases', async () => {
 
     const parsed = parseCliArgs(['--root', tempRoot, 'src'])
     assert.deepEqual(parsed.include, ['src'])
+    assert.equal(parsed.mode, 'module')
   } finally {
     await fs.rm(tempRoot, { recursive: true, force: true })
   }
@@ -1227,6 +1442,10 @@ test('generateTypes internals support selector module helpers', async () => {
     'storybook',
     '--out-dir',
     '.knighted-css',
+    '--manifest',
+    '.knighted-css/knighted-manifest.json',
+    '--mode',
+    'declaration',
     '--auto-stable',
     '--resolver',
     './resolver.mjs',
@@ -1237,6 +1456,8 @@ test('generateTypes internals support selector module helpers', async () => {
   assert.equal(parsed.autoStable, true)
   assert.equal(parsed.hashed, false)
   assert.equal(parsed.resolver, './resolver.mjs')
+  assert.equal(parsed.mode, 'declaration')
+  assert.equal(parsed.manifestPath, '.knighted-css/knighted-manifest.json')
 
   const hashedParsed = parseCliArgs([
     '--root',
@@ -1248,12 +1469,16 @@ test('generateTypes internals support selector module helpers', async () => {
   assert.deepEqual(hashedParsed.include, ['src'])
   assert.equal(hashedParsed.autoStable, false)
   assert.equal(hashedParsed.hashed, true)
+  assert.equal(hashedParsed.mode, 'module')
 
   assert.throws(() => parseCliArgs(['--root']), /Missing value/)
   assert.throws(() => parseCliArgs(['--include']), /Missing value/)
   assert.throws(() => parseCliArgs(['--out-dir']), /Missing value/)
   assert.throws(() => parseCliArgs(['--stable-namespace']), /Missing value/)
   assert.throws(() => parseCliArgs(['--resolver']), /Missing value/)
+  assert.throws(() => parseCliArgs(['--mode']), /Missing value/)
+  assert.throws(() => parseCliArgs(['--manifest']), /Missing value/)
+  assert.throws(() => parseCliArgs(['--mode', 'wat']), /Unknown mode/)
   assert.throws(() => parseCliArgs(['--wat']), /Unknown flag/)
   assert.throws(() => parseCliArgs(['--auto-stable', '--hashed']), /Cannot combine/)
   const helpParsed = parseCliArgs(['--help'])

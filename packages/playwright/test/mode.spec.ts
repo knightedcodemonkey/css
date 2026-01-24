@@ -1,0 +1,172 @@
+import { expect, test } from '@playwright/test'
+
+import {
+  MODE_DECL_HOST_TEST_ID,
+  MODE_DECL_HASHED_SELECTOR_TEST_ID,
+  MODE_DECL_HASHED_HOST_TEST_ID,
+  MODE_DECL_HASHED_SHADOW_TEST_ID,
+  MODE_DECL_HASHED_LIGHT_TEST_ID,
+  MODE_DECL_LIGHT_TEST_ID,
+  MODE_DECL_STABLE_SELECTOR_TEST_ID,
+  MODE_DECL_STABLE_HOST_TEST_ID,
+  MODE_DECL_STABLE_SHADOW_TEST_ID,
+  MODE_DECL_STABLE_LIGHT_TEST_ID,
+  MODE_DECL_STRICT_OK_PROBE_TEST_ID,
+  MODE_DECL_STRICT_SKIP_PROBE_TEST_ID,
+  MODE_DECL_SHADOW_TEST_ID,
+  MODE_MODULE_HOST_TEST_ID,
+  MODE_MODULE_LIGHT_TEST_ID,
+  MODE_MODULE_SHADOW_TEST_ID,
+} from '../src/mode/constants.js'
+
+type CardMetrics = {
+  background: string
+  color: string
+  borderRadius: string
+}
+
+async function readMetrics(
+  handle: import('@playwright/test').Locator,
+): Promise<CardMetrics> {
+  return handle.evaluate(node => {
+    const el = node as HTMLElement
+    const style = getComputedStyle(el)
+    return {
+      background: style.getPropertyValue('background-color').trim(),
+      color: style.getPropertyValue('color').trim(),
+      borderRadius: style.getPropertyValue('border-top-left-radius').trim(),
+    }
+  })
+}
+
+async function readShadowMetrics(
+  page: import('@playwright/test').Page,
+  hostId: string,
+  cardId: string,
+): Promise<CardMetrics> {
+  const handle = await page.waitForFunction(
+    ({ hostId, cardId }) => {
+      const hostEl = document.querySelector(`[data-testid="${hostId}"]`)
+      return hostEl?.shadowRoot?.querySelector(`[data-testid="${cardId}"]`)
+    },
+    { hostId, cardId },
+  )
+  await handle.dispose()
+
+  return page.evaluate(
+    ({ hostId, cardId }) => {
+      const hostEl = document.querySelector(`[data-testid="${hostId}"]`)
+      const card = hostEl?.shadowRoot?.querySelector(`[data-testid="${cardId}"]`)
+      if (!card) {
+        throw new Error('Shadow DOM card was not rendered')
+      }
+      const style = getComputedStyle(card as HTMLElement)
+      return {
+        background: style.getPropertyValue('background-color').trim(),
+        color: style.getPropertyValue('color').trim(),
+        borderRadius: style.getPropertyValue('border-top-left-radius').trim(),
+      }
+    },
+    { hostId, cardId },
+  )
+}
+
+test.describe('mode resolver fixture', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/mode.html')
+  })
+
+  test('module mode light and shadow styles match', async ({ page }) => {
+    const lightCard = page.getByTestId(MODE_MODULE_LIGHT_TEST_ID)
+    await expect(lightCard).toBeVisible()
+    const lightMetrics = await readMetrics(lightCard)
+
+    const host = page.getByTestId(MODE_MODULE_HOST_TEST_ID)
+    await expect(host).toBeVisible()
+
+    const shadowMetrics = await readShadowMetrics(
+      page,
+      MODE_MODULE_HOST_TEST_ID,
+      MODE_MODULE_SHADOW_TEST_ID,
+    )
+
+    expect(shadowMetrics.background).toBe(lightMetrics.background)
+    expect(shadowMetrics.color).toBe(lightMetrics.color)
+    expect(shadowMetrics.borderRadius).toBe(lightMetrics.borderRadius)
+  })
+
+  test('declaration mode light and shadow styles match', async ({ page }) => {
+    const lightCard = page.getByTestId(MODE_DECL_LIGHT_TEST_ID)
+    await expect(lightCard).toBeVisible()
+    const lightMetrics = await readMetrics(lightCard)
+
+    const host = page.getByTestId(MODE_DECL_HOST_TEST_ID)
+    await expect(host).toBeVisible()
+
+    const shadowMetrics = await readShadowMetrics(
+      page,
+      MODE_DECL_HOST_TEST_ID,
+      MODE_DECL_SHADOW_TEST_ID,
+    )
+
+    expect(shadowMetrics.background).toBe(lightMetrics.background)
+    expect(shadowMetrics.color).toBe(lightMetrics.color)
+    expect(shadowMetrics.borderRadius).toBe(lightMetrics.borderRadius)
+  })
+
+  test('declaration hashed selectors are hashed', async ({ page }) => {
+    const probe = page.getByTestId(MODE_DECL_HASHED_SELECTOR_TEST_ID)
+    await expect(probe).toHaveAttribute('data-selector', /.+/)
+    const selector = await probe.getAttribute('data-selector')
+    expect(selector).toBeTruthy()
+    expect(selector).not.toBe('card')
+    expect(selector).not.toBe('knighted-card')
+  })
+
+  test('declaration stable selectors are stable', async ({ page }) => {
+    const probe = page.getByTestId(MODE_DECL_STABLE_SELECTOR_TEST_ID)
+    await expect(probe).toHaveAttribute('data-stable-selector', /.+/)
+    const selector = await probe.getAttribute('data-stable-selector')
+    expect(selector).toBe('knighted-card')
+  })
+
+  test('declaration hashed light and shadow styles match', async ({ page }) => {
+    const lightCard = page.getByTestId(MODE_DECL_HASHED_LIGHT_TEST_ID)
+    await expect(lightCard).toBeVisible()
+    const lightMetrics = await readMetrics(lightCard)
+
+    const shadowMetrics = await readShadowMetrics(
+      page,
+      MODE_DECL_HASHED_HOST_TEST_ID,
+      MODE_DECL_HASHED_SHADOW_TEST_ID,
+    )
+
+    expect(shadowMetrics.background).toBe(lightMetrics.background)
+    expect(shadowMetrics.color).toBe(lightMetrics.color)
+    expect(shadowMetrics.borderRadius).toBe(lightMetrics.borderRadius)
+  })
+
+  test('declaration stable light and shadow styles match', async ({ page }) => {
+    const lightCard = page.getByTestId(MODE_DECL_STABLE_LIGHT_TEST_ID)
+    await expect(lightCard).toBeVisible()
+    const lightMetrics = await readMetrics(lightCard)
+
+    const shadowMetrics = await readShadowMetrics(
+      page,
+      MODE_DECL_STABLE_HOST_TEST_ID,
+      MODE_DECL_STABLE_SHADOW_TEST_ID,
+    )
+
+    expect(shadowMetrics.background).toBe(lightMetrics.background)
+    expect(shadowMetrics.color).toBe(lightMetrics.color)
+    expect(shadowMetrics.borderRadius).toBe(lightMetrics.borderRadius)
+  })
+
+  test('declaration strict manifest rewrites only matched modules', async ({ page }) => {
+    const okProbe = page.getByTestId(MODE_DECL_STRICT_OK_PROBE_TEST_ID)
+    const skipProbe = page.getByTestId(MODE_DECL_STRICT_SKIP_PROBE_TEST_ID)
+
+    await expect(okProbe).toHaveAttribute('data-has-knighted-css', 'true')
+    await expect(skipProbe).toHaveAttribute('data-has-knighted-css', 'false')
+  })
+})

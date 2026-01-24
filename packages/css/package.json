@@ -1,6 +1,6 @@
 {
   "name": "@knighted/css",
-  "version": "1.1.1",
+  "version": "1.2.0-rc.0",
   "description": "A build-time utility that traverses JavaScript/TypeScript module dependency graphs to extract, compile, and optimize all imported CSS into a single, in-memory string.",
   "type": "module",
   "main": "./dist/css.js",
@@ -21,6 +21,9 @@
       ],
       "generate-types": [
         "./dist/generateTypes.d.ts"
+      ],
+      "plugin": [
+        "./dist/plugin.d.ts"
       ],
       "*": [
         "./types.d.ts"
@@ -57,6 +60,11 @@
       "import": "./dist/generateTypes.js",
       "default": "./dist/generateTypes.js"
     },
+    "./plugin": {
+      "types": "./dist/plugin.d.ts",
+      "import": "./dist/plugin.js",
+      "require": "./dist/cjs/plugin.cjs"
+    },
     "./stableSelectors": {
       "types": "./dist/stableSelectors.d.ts",
       "import": "./dist/stableSelectors.js",
@@ -87,7 +95,6 @@
   },
   "scripts": {
     "build": "duel && node ./scripts/copy-types-stub.js",
-    "pretest": "npm run build",
     "check-types": "tsc --noEmit --project tsconfig.json && tsc --noEmit --project tsconfig.tests.json",
     "test": "c8 --reporter=text --reporter=text-summary --reporter=lcov --include \"src/**/*.ts\" tsx --test test/**/*.test.ts",
     "prepack": "npm run build"
