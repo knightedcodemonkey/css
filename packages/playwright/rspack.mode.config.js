@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { ProvidePlugin } from '@rspack/core'
+import { CssExtractRspackPlugin, ProvidePlugin } from '@rspack/core'
 import { knightedCssResolverPlugin } from '@knighted/css/plugin'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -22,13 +22,108 @@ export default {
     },
   },
   experiments: {
-    css: true,
+    css: false,
   },
   module: {
     rules: [
       {
+        test: /\.module\.css$/,
+        include: /src\/mode\/declaration-hashed/,
+        oneOf: [
+          {
+            resourceQuery: /knighted-css/,
+            type: 'javascript/auto',
+            use: [
+              {
+                loader: '@knighted/css/loader-bridge',
+              },
+              {
+                loader: 'css-loader',
+                options: {
+                  exportType: 'string',
+                  modules: {
+                    namedExport: true,
+                  },
+                },
+              },
+            ],
+          },
+          {
+            type: 'javascript/auto',
+            use: [
+              {
+                loader: CssExtractRspackPlugin.loader,
+              },
+              {
+                loader: 'css-loader',
+                options: {
+                  modules: {
+                    namedExport: false,
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+      {
         test: /\.[jt]sx?$/,
         resourceQuery: /knighted-css/,
+        include: /src\/mode\/declaration-hashed/,
+        use: [
+          {
+            loader: '@knighted/css/loader-bridge',
+          },
+          {
+            loader: '@knighted/jsx/loader',
+            options: {
+              mode: 'react',
+            },
+          },
+          {
+            loader: 'builtin:swc-loader',
+            options: {
+              jsc: {
+                target: 'es2022',
+                parser: {
+                  syntax: 'typescript',
+                  tsx: true,
+                },
+              },
+            },
+          },
+        ],
+      },
+      {
+        test: /\.[jt]sx?$/,
+        resourceQuery: /knighted-css/,
+        include: /src\/mode\/declaration-stable/,
+        use: [
+          {
+            loader: '@knighted/css/loader',
+            options: {
+              lightningcss: { minify: true, cssModules: true },
+              autoStable: true,
+            },
+          },
+          {
+            loader: 'builtin:swc-loader',
+            options: {
+              jsc: {
+                target: 'es2022',
+                parser: {
+                  syntax: 'typescript',
+                  tsx: true,
+                },
+              },
+            },
+          },
+        ],
+      },
+      {
+        test: /\.[jt]sx?$/,
+        resourceQuery: /knighted-css/,
+        exclude: /src\/mode\/(declaration-stable|declaration-hashed)/,
         use: [
           {
             loader: '@knighted/css/loader',
@@ -75,12 +170,35 @@ export default {
       },
       {
         test: /\.module\.css$/,
-        type: 'css/module',
+        exclude: /src\/mode\/declaration-hashed/,
+        use: [
+          {
+            loader: CssExtractRspackPlugin.loader,
+          },
+          {
+            loader: 'css-loader',
+            options: {
+              modules: {
+                namedExport: false,
+              },
+            },
+          },
+        ],
       },
       {
         test: /\.css$/,
         exclude: /\.module\.css$/,
-        type: 'css',
+        use: [
+          {
+            loader: CssExtractRspackPlugin.loader,
+          },
+          {
+            loader: 'css-loader',
+            options: {
+              modules: false,
+            },
+          },
+        ],
       },
       {
         test: /\.s[ac]ss$/,
@@ -93,7 +211,13 @@ export default {
     ],
   },
   plugins: [
-    knightedCssResolverPlugin({ debug: false }),
+    knightedCssResolverPlugin({
+      debug: false,
+      combinedPaths: ['src/mode/declaration-hashed'],
+    }),
+    new CssExtractRspackPlugin({
+      filename: 'mode.css',
+    }),
     new ProvidePlugin({
       React: 'react',
     }),

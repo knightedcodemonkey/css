@@ -6,7 +6,7 @@ import { __knightedCssPluginInternals } from '../src/plugin.ts'
 const {
   splitResourceAndQuery,
   hasKnightedCssQuery,
-  appendKnightedCssQuery,
+  appendQueryFlag,
   buildSidecarPath,
   isScriptResource,
   isNodeModulesPath,
@@ -26,9 +26,12 @@ test('resolver plugin internals parse and append queries', () => {
   assert.equal(hasKnightedCssQuery('?raw=1&knighted-css'), true)
   assert.equal(hasKnightedCssQuery('?raw=1'), false)
 
-  assert.equal(appendKnightedCssQuery('./button.js', ''), './button.js?knighted-css')
   assert.equal(
-    appendKnightedCssQuery('./button.js', '?raw=1'),
+    `./button.js${appendQueryFlag('', 'knighted-css')}`,
+    './button.js?knighted-css',
+  )
+  assert.equal(
+    `./button.js${appendQueryFlag('?raw=1', 'knighted-css')}`,
     './button.js?raw=1&knighted-css',
   )
 })

@@ -36,6 +36,7 @@ interface TsconfigResolutionContext {
 interface SelectorModuleProxyInfo {
   moduleSpecifier: string
   includeDefault: boolean
+  exportedNames?: Set<string>
 }
 
 export type GenerateTypesMode = 'module' | 'declaration'
@@ -667,15 +668,12 @@ function formatDeclarationSource(
   const isHashed = options.hashed === true
   const exportName = isHashed ? 'selectors' : 'stableSelectors'
   const typeLiteral = formatSelectorTypeLiteral(selectors)
+  const shouldEmit = (name: string) => !proxyInfo.exportedNames?.has(name)
   const lines = [
     header,
     `declare module '${proxyInfo.moduleSpecifier}' {`,
-    `  export * from '${proxyInfo.moduleSpecifier}'`,
-    proxyInfo.includeDefault
-      ? `  export { default } from '${proxyInfo.moduleSpecifier}'`
-      : '',
-    '  export const knightedCss: string',
-    `  export const ${exportName}: ${typeLiteral}`,
+    shouldEmit('knightedCss') ? '  export const knightedCss: string' : '',
+    shouldEmit(exportName) ? `  export const ${exportName}: ${typeLiteral}` : '',
     '}',
     'export {}',
   ].filter(Boolean)
@@ -1158,9 +1156,11 @@ async function resolveDeclarationProxyInfo(
     return cached
   }
   const defaultSignal = await getDefaultExportSignal(resolvedPath)
+  const exportedNames = await getNamedExports(resolvedPath)
   const proxyInfo = {
     moduleSpecifier: buildDeclarationModuleSpecifier(resolvedPath),
     includeDefault: defaultSignal === 'has-default',
+    exportedNames,
   }
   cache.set(manifestKey, proxyInfo)
   return proxyInfo
@@ -1181,6 +1181,16 @@ async function getDefaultExportSignal(filePath: string): Promise<DefaultExportSi
     return analysis.defaultSignal
   } catch {
     return 'unknown'
+  }
+}
+
+async function getNamedExports(filePath: string): Promise<Set<string>> {
+  try {
+    const source = await fs.readFile(filePath, 'utf8')
+    const analysis = await analyzeModule(source, filePath)
+    return new Set(analysis.exports ?? [])
+  } catch {
+    return new Set()
   }
 }
 

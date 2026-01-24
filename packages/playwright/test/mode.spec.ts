@@ -2,7 +2,15 @@ import { expect, test } from '@playwright/test'
 
 import {
   MODE_DECL_HOST_TEST_ID,
+  MODE_DECL_HASHED_SELECTOR_TEST_ID,
+  MODE_DECL_HASHED_HOST_TEST_ID,
+  MODE_DECL_HASHED_SHADOW_TEST_ID,
+  MODE_DECL_HASHED_LIGHT_TEST_ID,
   MODE_DECL_LIGHT_TEST_ID,
+  MODE_DECL_STABLE_SELECTOR_TEST_ID,
+  MODE_DECL_STABLE_HOST_TEST_ID,
+  MODE_DECL_STABLE_SHADOW_TEST_ID,
+  MODE_DECL_STABLE_LIGHT_TEST_ID,
   MODE_DECL_SHADOW_TEST_ID,
   MODE_MODULE_HOST_TEST_ID,
   MODE_MODULE_LIGHT_TEST_ID,
@@ -96,6 +104,54 @@ test.describe('mode resolver fixture', () => {
       page,
       MODE_DECL_HOST_TEST_ID,
       MODE_DECL_SHADOW_TEST_ID,
+    )
+
+    expect(shadowMetrics.background).toBe(lightMetrics.background)
+    expect(shadowMetrics.color).toBe(lightMetrics.color)
+    expect(shadowMetrics.borderRadius).toBe(lightMetrics.borderRadius)
+  })
+
+  test('declaration hashed selectors are hashed', async ({ page }) => {
+    const probe = page.getByTestId(MODE_DECL_HASHED_SELECTOR_TEST_ID)
+    await expect(probe).toHaveAttribute('data-selector', /.+/)
+    const selector = await probe.getAttribute('data-selector')
+    expect(selector).toBeTruthy()
+    expect(selector).not.toBe('card')
+    expect(selector).not.toBe('knighted-card')
+  })
+
+  test('declaration stable selectors are stable', async ({ page }) => {
+    const probe = page.getByTestId(MODE_DECL_STABLE_SELECTOR_TEST_ID)
+    await expect(probe).toHaveAttribute('data-stable-selector', /.+/)
+    const selector = await probe.getAttribute('data-stable-selector')
+    expect(selector).toBe('knighted-card')
+  })
+
+  test('declaration hashed light and shadow styles match', async ({ page }) => {
+    const lightCard = page.getByTestId(MODE_DECL_HASHED_LIGHT_TEST_ID)
+    await expect(lightCard).toBeVisible()
+    const lightMetrics = await readMetrics(lightCard)
+
+    const shadowMetrics = await readShadowMetrics(
+      page,
+      MODE_DECL_HASHED_HOST_TEST_ID,
+      MODE_DECL_HASHED_SHADOW_TEST_ID,
+    )
+
+    expect(shadowMetrics.background).toBe(lightMetrics.background)
+    expect(shadowMetrics.color).toBe(lightMetrics.color)
+    expect(shadowMetrics.borderRadius).toBe(lightMetrics.borderRadius)
+  })
+
+  test('declaration stable light and shadow styles match', async ({ page }) => {
+    const lightCard = page.getByTestId(MODE_DECL_STABLE_LIGHT_TEST_ID)
+    await expect(lightCard).toBeVisible()
+    const lightMetrics = await readMetrics(lightCard)
+
+    const shadowMetrics = await readShadowMetrics(
+      page,
+      MODE_DECL_STABLE_HOST_TEST_ID,
+      MODE_DECL_STABLE_SHADOW_TEST_ID,
     )
 
     expect(shadowMetrics.background).toBe(lightMetrics.background)

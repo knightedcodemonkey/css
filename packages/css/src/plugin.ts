@@ -13,6 +13,7 @@ export interface KnightedCssResolverPluginOptions {
   conditions?: string[]
   extensions?: string[]
   debug?: boolean
+  combinedPaths?: Array<string | RegExp>
 }
 
 interface ResolveRequest {
@@ -114,11 +115,15 @@ function hasKnightedCssQuery(query: string): boolean {
   return /(?:^|[&?])knighted-css(?:=|&|$)/.test(query)
 }
 
-function appendKnightedCssQuery(resource: string, query: string): string {
+function hasCombinedQuery(query: string): boolean {
+  return /(?:^|[&?])combined(?:=|&|$)/.test(query)
+}
+
+function appendQueryFlag(query: string, flag: string): string {
   if (!query) {
-    return `${resource}?${KNIGHTED_CSS_QUERY}`
+    return `?${flag}`
   }
-  return `${resource}${query}&${KNIGHTED_CSS_QUERY}`
+  return `${query}&${flag}`
 }
 
 function isScriptResource(filePath: string): boolean {
@@ -155,12 +160,14 @@ export class KnightedCssResolverPlugin {
   private readonly resolverFactory
   private readonly extensions: string[]
   private readonly debug: boolean
+  private readonly combinedPaths: Array<string | RegExp>
   private readonly sidecarCache = new Map<string, boolean>()
 
   constructor(options: KnightedCssResolverPluginOptions = {}) {
     this.rootDir = path.resolve(options.rootDir ?? process.cwd())
     this.extensions = options.extensions ?? SCRIPT_EXTENSIONS
     this.debug = Boolean(options.debug)
+    this.combinedPaths = options.combinedPaths ?? []
     this.resolverFactory = createResolverFactory(
       this.rootDir,
       this.extensions,
@@ -312,7 +319,20 @@ export class KnightedCssResolverPlugin {
       return
     }
 
-    data.request = appendKnightedCssQuery(resource, query)
+    const shouldAppendCombined =
+      this.combinedPaths.length > 0 &&
+      this.combinedPaths.some(entry =>
+        typeof entry === 'string' ? resolved.includes(entry) : entry.test(resolved),
+      )
+
+    const nextQuery =
+      shouldAppendCombined && !hasCombinedQuery(query)
+        ? appendQueryFlag(query, 'combined')
+        : query
+    const finalQuery = hasKnightedCssQuery(nextQuery)
+      ? nextQuery
+      : appendQueryFlag(nextQuery, KNIGHTED_CSS_QUERY)
+    data.request = `${resource}${finalQuery}`
     this.logWithoutContext(`knighted-css: append ?${KNIGHTED_CSS_QUERY} to ${resource}`)
     callback(null, true)
   }
@@ -379,7 +399,20 @@ export class KnightedCssResolverPlugin {
       return
     }
 
-    const nextRequest = appendKnightedCssQuery(resource, query)
+    const shouldAppendCombined =
+      this.combinedPaths.length > 0 &&
+      this.combinedPaths.some(entry =>
+        typeof entry === 'string' ? resolved.includes(entry) : entry.test(resolved),
+      )
+
+    const nextQuery =
+      shouldAppendCombined && !hasCombinedQuery(query)
+        ? appendQueryFlag(query, 'combined')
+        : query
+    const finalQuery = hasKnightedCssQuery(nextQuery)
+      ? nextQuery
+      : appendQueryFlag(nextQuery, KNIGHTED_CSS_QUERY)
+    const nextRequest = `${resource}${finalQuery}`
     const augmented: ResolveRequest = {
       ...request,
       request: nextRequest,
@@ -407,7 +440,8 @@ export function knightedCssResolverPlugin(
 export const __knightedCssPluginInternals = {
   splitResourceAndQuery,
   hasKnightedCssQuery,
-  appendKnightedCssQuery,
+  hasCombinedQuery,
+  appendQueryFlag,
   buildSidecarPath,
   isScriptResource,
   isNodeModulesPath,
