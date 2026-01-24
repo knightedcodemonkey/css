@@ -58,7 +58,8 @@ const manifestPaths = modeConfigs
   .filter((value): value is string => typeof value === 'string')
   .map(manifestPath => path.resolve(rootDir, manifestPath))
 
-type Manifest = Record<string, string>
+type ManifestEntry = { file: string }
+type Manifest = Record<string, ManifestEntry>
 
 function readManifest(filePath: string): Manifest {
   if (!fs.existsSync(filePath)) {
