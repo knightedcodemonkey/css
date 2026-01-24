@@ -20,6 +20,15 @@ const CLI_SNAPSHOT_FILE = path.join(SNAPSHOT_DIR, 'generateTypes.snap.json')
 const UPDATE_SNAPSHOTS =
   process.env.UPDATE_SNAPSHOTS === '1' || process.env.UPDATE_SNAPSHOTS === 'true'
 
+const {
+  parseCliArgs,
+  loadResolverModule,
+  resolveWithExtensionFallback,
+  resolveIndexFallback,
+  readManifest,
+  writeSidecarManifest,
+} = __generateTypesInternals
+
 let cachedCliSnapshots: Record<string, string> | null = null
 
 async function setupFixtureProject(): Promise<{
@@ -432,6 +441,92 @@ test('generateTypes declaration hashed emits selector exports', async () => {
     assert.ok(!declaration.includes('stableSelectors'))
   } finally {
     await project.cleanup()
+  }
+})
+
+test('parseCliArgs validates flags and combinations', () => {
+  assert.throws(() => parseCliArgs(['--root']), /Missing value for --root/)
+  assert.throws(() => parseCliArgs(['--include']), /Missing value for --include/)
+  assert.throws(() => parseCliArgs(['--out-dir']), /Missing value for --out-dir/)
+  assert.throws(() => parseCliArgs(['--manifest']), /Missing value for --manifest/)
+  assert.throws(() => parseCliArgs(['--mode', 'unknown']), /Unknown mode: unknown/)
+  assert.throws(() => parseCliArgs(['--unknown']), /Unknown flag: --unknown/)
+  assert.throws(
+    () => parseCliArgs(['--auto-stable', '--hashed']),
+    /Cannot combine --auto-stable with --hashed/,
+  )
+})
+
+test('loadResolverModule resolves default, named, and file URL exports', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-resolver-'))
+  try {
+    const defaultPath = path.join(root, 'default-resolver.mjs')
+    const namedPath = path.join(root, 'named-resolver.mjs')
+    const badPath = path.join(root, 'bad-resolver.mjs')
+
+    await fs.writeFile(defaultPath, 'export default function resolver() { return [] }\n')
+    await fs.writeFile(namedPath, 'export const resolver = () => []\n')
+    await fs.writeFile(badPath, 'export const nope = 1\n')
+
+    const defaultResolver = await loadResolverModule('./default-resolver.mjs', root)
+    assert.equal(typeof defaultResolver, 'function')
+
+    const namedResolver = await loadResolverModule('./named-resolver.mjs', root)
+    assert.equal(typeof namedResolver, 'function')
+
+    const fileResolver = await loadResolverModule(pathToFileURL(defaultPath).href, root)
+    assert.equal(typeof fileResolver, 'function')
+
+    await assert.rejects(
+      () => loadResolverModule('./bad-resolver.mjs', root),
+      /Resolver module must export a function/,
+    )
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('resolveWithExtensionFallback and resolveIndexFallback handle fallbacks', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-resolve-'))
+  try {
+    const dir = path.join(root, 'lib')
+    await fs.mkdir(dir, { recursive: true })
+    const indexPath = path.join(dir, 'index.ts')
+    await fs.writeFile(indexPath, 'export const value = 1\n')
+
+    const resolvedIndex = await resolveIndexFallback(dir)
+    assert.equal(resolvedIndex, indexPath)
+
+    const resolvedViaFallback = await resolveWithExtensionFallback(dir)
+    assert.equal(resolvedViaFallback, indexPath)
+
+    const missing = path.join(root, 'missing')
+    const missingResolved = await resolveWithExtensionFallback(missing)
+    assert.equal(missingResolved, missing)
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('readManifest handles invalid JSON and writeSidecarManifest writes output', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-manifest-'))
+  try {
+    const manifestPath = path.join(root, 'selector-modules.json')
+    await fs.writeFile(manifestPath, 'not-json')
+    const manifest = await readManifest(manifestPath)
+    assert.deepEqual(manifest, {})
+
+    const sidecarPath = path.join(root, 'sidecar', 'manifest.json')
+    await writeSidecarManifest(sidecarPath, {
+      '/abs/path/file.ts': { file: '/abs/path/file.ts.d.ts' },
+    })
+    const sidecar = JSON.parse(await fs.readFile(sidecarPath, 'utf8')) as Record<
+      string,
+      { file: string }
+    >
+    assert.equal(sidecar['/abs/path/file.ts']?.file, '/abs/path/file.ts.d.ts')
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
   }
 })
 

@@ -1427,6 +1427,9 @@ function parseCliArgs(argv: string[]): ParsedCliArgs {
   if (autoStable && hashed) {
     throw new Error('Cannot combine --auto-stable with --hashed')
   }
+  if (manifestPath && mode !== 'declaration') {
+    throw new Error('Cannot use --manifest unless --mode is declaration')
+  }
 
   return {
     rootDir,

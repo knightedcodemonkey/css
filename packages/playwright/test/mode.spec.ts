@@ -44,13 +44,14 @@ async function readShadowMetrics(
   hostId: string,
   cardId: string,
 ): Promise<CardMetrics> {
-  await page.waitForFunction(
+  const handle = await page.waitForFunction(
     ({ hostId, cardId }) => {
       const hostEl = document.querySelector(`[data-testid="${hostId}"]`)
       return hostEl?.shadowRoot?.querySelector(`[data-testid="${cardId}"]`)
     },
     { hostId, cardId },
   )
+  await handle.dispose()
 
   return page.evaluate(
     ({ hostId, cardId }) => {
