@@ -152,6 +152,8 @@ knighted-css-generate-types --root . --include src --mode declaration
 import Button, { knightedCss, stableSelectors } from './button.js'
 ```
 
+See [docs/type-generation.md](../../docs/type-generation.md#mode-quick-reference) for a quick comparison of module vs declaration mode tradeoffs.
+
 > [!IMPORTANT]
 > Declaration mode requires a resolver plugin to append `?knighted-css` (and `&combined` when applicable)
 > at build time so runtime exports match the generated types.
