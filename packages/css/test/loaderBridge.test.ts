@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
-import {
+import loaderBridge, {
   __loaderBridgeInternals,
   pitch,
   type KnightedCssBridgeLoaderOptions,
@@ -94,6 +95,22 @@ test('resolveCssText ignores object string coercions', () => {
   assert.equal(__loaderBridgeInternals.resolveCssText(module.default, module), '')
 })
 
+test('loader passthrough returns original source', () => {
+  const result = (loaderBridge as unknown as (this: unknown, source: string) => string)(
+    'body {}',
+  )
+  assert.equal(result, 'body {}')
+})
+
+test('resolveCssText falls back to module string when primary is not string', () => {
+  const module = '.chip{display:inline-flex}'
+  const bridgeModule = module as unknown as {
+    default?: unknown
+    locals?: Record<string, string>
+  }
+  assert.equal(__loaderBridgeInternals.resolveCssText(undefined, bridgeModule), module)
+})
+
 test('resolveCssModules finds locals on default export', () => {
   const module = {
     default: {
@@ -112,6 +129,44 @@ test('resolveCssModules finds locals on module export', () => {
   assert.deepEqual(__loaderBridgeInternals.resolveCssModules(module, module), {
     card: 'card_hash',
   })
+})
+
+test('resolveCssModules returns string map locals', () => {
+  const module = {
+    button: 'button_hash',
+    pill: 'pill_hash',
+  }
+  const bridgeModule = module as unknown as {
+    default?: unknown
+    locals?: Record<string, string>
+  }
+  assert.deepEqual(
+    __loaderBridgeInternals.resolveCssModules(bridgeModule, bridgeModule),
+    {
+      button: 'button_hash',
+      pill: 'pill_hash',
+    },
+  )
+})
+
+test('resolveCssModules collects named exports locals', () => {
+  const module = {
+    default: '.ignored{}',
+    __esModule: true,
+    card: 'card_hash',
+  }
+  assert.deepEqual(__loaderBridgeInternals.resolveCssModules(undefined, module), {
+    card: 'card_hash',
+  })
+})
+
+test('resolveCssModules returns undefined when locals are invalid', () => {
+  const module = {
+    default: '.ignored{}',
+    __esModule: true,
+    card: 123,
+  }
+  assert.equal(__loaderBridgeInternals.resolveCssModules(undefined, module), undefined)
 })
 
 test('pitch returns combined module wrapper when combined flag is present', async () => {
@@ -218,6 +273,85 @@ test('createCombinedJsBridgeModule omits default when disabled', () => {
   assert.ok(!/export default __knightedDefault/.test(output))
 })
 
+test('buildProxyRequest uses raw request and strips query flags', () => {
+  const ctx = createMockContext({
+    resourcePath: path.resolve(__dirname, 'fixtures/dialects/basic/styles.css'),
+    resourceQuery: '?knighted-css&combined&types&foo=1',
+    _module: {
+      rawRequest: 'babel-loader!./styles.css?knighted-css&combined&types&foo=1',
+    } as unknown as LoaderContext<KnightedCssBridgeLoaderOptions>['_module'],
+  })
+
+  const request = __loaderBridgeInternals.buildProxyRequest(
+    ctx as LoaderContext<KnightedCssBridgeLoaderOptions>,
+  )
+  assert.match(request, /babel-loader!/)
+  assert.match(request, /\?foo=1$/)
+})
+
+test('buildProxyRequest falls back to utils.contextify', () => {
+  const ctx = createMockContext({
+    resourcePath: path.resolve(__dirname, 'fixtures/dialects/basic/styles.css'),
+    resourceQuery: '?knighted-css&foo=1',
+    utils: {
+      contextify: (_context: string, req: string) =>
+        req.replace(/.*styles/, './ctx/styles'),
+    } as LoaderContext<KnightedCssBridgeLoaderOptions>['utils'],
+  })
+
+  const request = __loaderBridgeInternals.buildProxyRequest(
+    ctx as LoaderContext<KnightedCssBridgeLoaderOptions>,
+  )
+  assert.equal(request, './ctx/styles.css?foo=1')
+})
+
+test('buildProxyRequest falls back to relative request when contextify is missing', () => {
+  const context = path.resolve(__dirname, 'fixtures/dialects/basic')
+  const resourcePath = path.resolve(context, 'styles.css')
+  const ctx = createMockContext({
+    resourcePath,
+    context,
+    resourceQuery: '?knighted-css',
+  })
+
+  const request = __loaderBridgeInternals.buildProxyRequest(
+    ctx as LoaderContext<KnightedCssBridgeLoaderOptions>,
+  )
+  assert.equal(request, './styles.css')
+})
+
+test('buildProxyRequest rebuilds raw request with contextified resource', () => {
+  const ctx = createMockContext({
+    resourcePath: path.resolve(__dirname, 'fixtures/dialects/basic/styles.css'),
+    resourceQuery: '?knighted-css&foo=1',
+    _module: {
+      rawRequest: '!!sass-loader!./styles.css?knighted-css&foo=1',
+    } as unknown as LoaderContext<KnightedCssBridgeLoaderOptions>['_module'],
+    utils: {
+      contextify: (_context: string, req: string) =>
+        req.replace(/.*styles/, './ctx/styles'),
+    } as LoaderContext<KnightedCssBridgeLoaderOptions>['utils'],
+  })
+
+  const request = __loaderBridgeInternals.buildProxyRequest(
+    ctx as LoaderContext<KnightedCssBridgeLoaderOptions>,
+  )
+  assert.match(request, /sass-loader!\.\/ctx\/styles\.css\?foo=1$/)
+})
+
+test('createBridgeModule omits default export when includeDefault is false', () => {
+  const output = __loaderBridgeInternals.createBridgeModule({
+    localsRequest: './card.module.css?knighted-css',
+    upstreamRequest: './card.module.css?knighted-css',
+    combined: true,
+    emitDefault: true,
+    emitCssModules: true,
+    includeDefault: false,
+  })
+
+  assert.match(output, /const __knightedDefault = __knightedUpstream;/)
+})
+
 test('pitch handles combined js modules and collects css modules', async () => {
   const source = `import styles from './card.module.css'\nimport './other.module.scss?inline'`
   const ctx = createMockContext({
@@ -275,6 +409,78 @@ test('pitch combined js collects css modules from dependency graph', async () =>
   })
 
   assert.match(result, /button\.module\.scss\?knighted-css/)
+})
+
+test('pitch combined js dedupes direct requests already in graph', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'knighted-bridge-'))
+  try {
+    const entryPath = path.join(root, 'entry.tsx')
+    const sharedPath = path.join(root, 'shared.css')
+    fs.writeFileSync(sharedPath, '.shared {}')
+    fs.writeFileSync(entryPath, `import './shared.css'\n`)
+
+    const ctx = createMockContext({
+      resourcePath: entryPath,
+      resourceQuery: '?knighted-css&combined',
+    }) as LoaderContext<KnightedCssBridgeLoaderOptions> & {
+      fs: LoaderContext<KnightedCssBridgeLoaderOptions>['fs']
+      async: () => (error: Error | null, result?: string) => void
+    }
+
+    const result = await new Promise<string>((resolve, reject) => {
+      ctx.fs = {
+        readFile: (filePath: string, cb: (err: Error | null, data?: Buffer) => void) =>
+          fs.readFile(filePath, cb),
+      } as unknown as LoaderContext<KnightedCssBridgeLoaderOptions>['fs']
+      ctx.async = () => (error, output) => {
+        if (error) {
+          reject(error)
+          return
+        }
+        resolve(String(output ?? ''))
+      }
+      callPitch(ctx, './entry.tsx?knighted-css&combined')
+    })
+
+    const matches = result.match(/shared\.css\?knighted-css/g) ?? []
+    assert.ok(matches.length >= 1)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('pitch combined js resolves upstream from loader list', async () => {
+  const ctx = createMockContext({
+    resourcePath: path.resolve(__dirname, 'fixtures/bridge/bridge-card.tsx'),
+    resourceQuery: '?knighted-css&combined',
+  }) as LoaderContext<KnightedCssBridgeLoaderOptions> & {
+    fs: LoaderContext<KnightedCssBridgeLoaderOptions>['fs']
+    async: () => (error: Error | null, result?: string) => void
+    loaders: Array<{ request?: string; path?: string; query?: string }>
+    loaderIndex: number
+  }
+
+  const result = await new Promise<string>((resolve, reject) => {
+    ctx.fs = {
+      readFile: (_filePath: string, cb: (err: Error | null, data?: Buffer) => void) =>
+        cb(null, Buffer.from('import "./card.css"')),
+    } as unknown as LoaderContext<KnightedCssBridgeLoaderOptions>['fs']
+    ctx.loaders = [
+      { request: 'first-loader' },
+      { request: 'second-loader' },
+    ] as LoaderContext<KnightedCssBridgeLoaderOptions>['loaders']
+    ctx.loaderIndex = 0
+    ctx.async = () => (error, output) => {
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve(String(output ?? ''))
+    }
+    callPitch(ctx, '')
+  })
+
+  assert.match(result, /import \* as __knightedUpstream from "!!second-loader!/)
 })
 
 test('pitch combined js returns sync module when async callback is missing', async () => {
@@ -346,6 +552,126 @@ test('pitch combined js errors when no data is returned', async () => {
   })
 
   assert.match(error.message, /Unable to read/)
+})
+
+test('pitch non-combined sync warns without emitWarning handler', () => {
+  const ctx = createMockContext({
+    resourcePath: path.resolve(__dirname, 'fixtures/bridge/bridge-card.tsx'),
+    resourceQuery: '?knighted-css&types',
+    emitWarning: undefined,
+  }) as unknown as LoaderContext<KnightedCssBridgeLoaderOptions>
+  ;(ctx as unknown as { async?: () => undefined }).async = () => undefined
+
+  const result = callPitch(ctx, './bridge-card.tsx?knighted-css&types')
+  assert.match(String(result ?? ''), /export default __knightedCss/)
+})
+
+test('pitch combined sync respects named-only query', () => {
+  const ctx = createMockContext({
+    resourcePath: path.resolve(__dirname, 'fixtures/bridge/bridge-card.tsx'),
+    resourceQuery: '?knighted-css&combined&no-default',
+  }) as unknown as LoaderContext<KnightedCssBridgeLoaderOptions>
+  ;(ctx as unknown as { async?: () => undefined }).async = () => undefined
+
+  const result = callPitch(ctx, './bridge-card.tsx?knighted-css&combined&no-default')
+  const output = String(result ?? '')
+  assert.ok(!/export default __knightedLocalsExport/.test(output))
+})
+
+test('pitch combined sync resolves request from ctx.request', () => {
+  const ctx = createMockContext({
+    resourcePath: path.resolve(__dirname, 'fixtures/bridge/bridge-card.tsx'),
+    resourceQuery: '?knighted-css&combined',
+  }) as unknown as LoaderContext<KnightedCssBridgeLoaderOptions>
+  ;(ctx as unknown as { async?: () => undefined }).async = () => undefined
+  ;(ctx as { request?: string }).request =
+    'first-loader!second-loader!./bridge-card.tsx?knighted-css&combined'
+  ;(ctx as { loaderIndex?: number }).loaderIndex = 0
+
+  const result = callPitch(ctx, '')
+  assert.match(String(result ?? ''), /"!!second-loader!/)
+})
+
+test('pitch non-js resource falls back when graph collection fails', async () => {
+  const missingPath = path.join(os.tmpdir(), 'missing-style.css')
+  const ctx = createMockContext({
+    resourcePath: missingPath,
+    resourceQuery: '?knighted-css',
+  }) as LoaderContext<KnightedCssBridgeLoaderOptions> & {
+    async: () => (error: Error | null, result?: string) => void
+  }
+
+  const result = await new Promise<string>((resolve, reject) => {
+    ctx.async = () => (error, output) => {
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve(String(output ?? ''))
+    }
+    callPitch(ctx, './missing-style.css?knighted-css')
+  })
+
+  assert.match(result, /export default __knightedCss/)
+})
+
+test('pitch non-combined js uses no-default detection for upstream', async () => {
+  const source = `export const value = 1\nimport './card.module.css'`
+  const ctx = createMockContext({
+    resourcePath: path.resolve(__dirname, 'fixtures/bridge/bridge-card.tsx'),
+    resourceQuery: '?knighted-css',
+  }) as LoaderContext<KnightedCssBridgeLoaderOptions> & {
+    fs: LoaderContext<KnightedCssBridgeLoaderOptions>['fs']
+    async: () => (error: Error | null, result?: string) => void
+  }
+
+  const result = await new Promise<string>((resolve, reject) => {
+    ctx.fs = {
+      readFile: (_filePath: string, cb: (err: Error | null, data?: Buffer) => void) =>
+        cb(null, Buffer.from(source)),
+    } as unknown as LoaderContext<KnightedCssBridgeLoaderOptions>['fs']
+    ctx.async = () => (error, output) => {
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve(String(output ?? ''))
+    }
+    callPitch(ctx, './bridge-card.tsx?knighted-css')
+  })
+
+  assert.match(result, /const __knightedDefault = __knightedUpstream;/)
+})
+
+test('pitch non-combined js detects default export', async () => {
+  const source = `export default function Card() {}\nimport './card.css'`
+  const ctx = createMockContext({
+    resourcePath: path.resolve(__dirname, 'fixtures/bridge/bridge-card.tsx'),
+    resourceQuery: '?knighted-css',
+  }) as LoaderContext<KnightedCssBridgeLoaderOptions> & {
+    fs: LoaderContext<KnightedCssBridgeLoaderOptions>['fs']
+    async: () => (error: Error | null, result?: string) => void
+  }
+
+  const result = await new Promise<string>((resolve, reject) => {
+    ctx.fs = {
+      readFile: (_filePath: string, cb: (err: Error | null, data?: Buffer) => void) =>
+        cb(null, Buffer.from(source)),
+    } as unknown as LoaderContext<KnightedCssBridgeLoaderOptions>['fs']
+    ctx.async = () => (error, output) => {
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve(String(output ?? ''))
+    }
+    callPitch(ctx, './bridge-card.tsx?knighted-css')
+  })
+
+  assert.match(
+    result,
+    /Object\.prototype\.hasOwnProperty\.call\(__knightedUpstream, 'default'\)/,
+  )
 })
 
 test('resolveCssModules returns string maps', () => {

@@ -464,6 +464,53 @@ test('resolver plugin prefers compiler resolver output when available', async ()
   }
 })
 
+test('resolver plugin uses resolver fileSystem for sidecar reads', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-plugin-'))
+  try {
+    const srcDir = path.join(root, 'src')
+    await fs.mkdir(srcDir, { recursive: true })
+    const importer = path.join(srcDir, 'entry.ts')
+    const target = path.join(srcDir, 'fs-card.tsx')
+    await fs.writeFile(importer, "import './fs-card'\n")
+    await fs.writeFile(target, 'export function FsCard() {}\n')
+    await fs.writeFile(
+      `${target}.d.ts`,
+      '// @knighted-css\n\ndeclare module "./fs-card.js" {}\n',
+    )
+
+    const resolveMap = new Map<string, string>()
+    setResolveEntry(resolveMap, './fs-card', importer, target)
+    const resolver = createMockResolver(resolveMap)
+    ;(resolver as unknown as { fileSystem: object }).fileSystem = {
+      readFile: (
+        filePath: string,
+        callback: (err: Error | null, data?: Buffer) => void,
+      ) => {
+        fsSync.readFile(filePath, callback)
+      },
+      stat: (filePath: string, callback: (err?: Error | null) => void) => {
+        fsSync.stat(filePath, error => callback(error ?? undefined))
+      },
+    }
+
+    const plugin = knightedCssResolverPlugin({ rootDir: root, strictSidecar: true })
+    plugin.apply(resolver)
+
+    await resolver.invoke('resolve', {
+      request: './fs-card',
+      context: { issuer: importer },
+    })
+    await resolver.invoke('resolve', {
+      request: './fs-card',
+      context: { issuer: importer },
+    })
+
+    assert.ok(resolver.lastRequest?.request?.includes('knighted-css'))
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
 test('resolver plugin appends combined flag via normalModuleFactory', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-plugin-'))
   try {
