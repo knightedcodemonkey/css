@@ -32,6 +32,15 @@ Wire it into `postinstall` or your build so new selectors land automatically.
 - `--mode` – `module` (default) emits `.knighted-css.ts` proxy modules. `declaration` emits `.d.ts` module augmentations next to the referenced JS/TS modules, so you can keep standard imports like `import { knightedCss } from './button.js'` while the generator still discovers them via `.knighted-css` specifiers.
 - `--manifest` – optional path to write a sidecar manifest for declaration mode (recommended when you want strict resolver behavior).
 
+### Mode quick reference
+
+| Mode               | Import style                       | Generated files                       | Bundler resolver plugin           | Best for                                           |
+| ------------------ | ---------------------------------- | ------------------------------------- | --------------------------------- | -------------------------------------------------- |
+| `module` (default) | Double-extension (`.knighted-css`) | `.knighted-css.*` proxy modules       | Not required                      | Maximum transparency and stability in large builds |
+| `declaration`      | Plain JS/TS imports                | `.d.ts` augmentations next to modules | Required (append `?knighted-css`) | Cleaner imports when you accept resolver overhead  |
+
+If you use declaration mode, prefer enabling strict sidecars + a manifest so the resolver only rewrites imports that the CLI generated.
+
 ### Relationship to the loader
 
 - `.knighted-css*` imports include the generated selector map and, for module specifiers, re-exports plus `knightedCss`.
