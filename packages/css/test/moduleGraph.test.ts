@@ -5,7 +5,7 @@ import path from 'node:path'
 import test from 'node:test'
 import { pathToFileURL } from 'node:url'
 
-import { collectStyleImports } from '../src/moduleGraph.ts'
+import { collectStyleImports, normalizeSpecifier } from '../src/moduleGraph.ts'
 import type { CssResolver } from '../src/types.js'
 
 interface Project {
@@ -276,6 +276,91 @@ void styles
     assert.deepEqual(
       await realpathAll(styles),
       await realpathAll([project.file('styles/assert.css')]),
+    )
+  } finally {
+    await project.cleanup()
+  }
+})
+
+test('normalizeSpecifier strips queries, preserves file URLs, and rejects http', () => {
+  assert.equal(
+    normalizeSpecifier('  ./styles/card.css?inline#hash  '),
+    './styles/card.css',
+  )
+  assert.equal(normalizeSpecifier('file:///tmp/styles.css?raw'), 'file:///tmp/styles.css')
+  assert.equal(normalizeSpecifier('https://example.com/style.css'), '')
+  assert.equal(normalizeSpecifier('\0virtual'), '')
+  assert.equal(normalizeSpecifier('#alias/path.css?query'), '#alias/path.css')
+})
+
+test('collectStyleImports handles dynamic import assertions', async () => {
+  const project = await createProject('knighted-module-graph-dynamic-assert-')
+  try {
+    await project.writeFile('styles/with.css', '.with { color: pink; }')
+    await project.writeFile('styles/assert.css', '.assert { color: blue; }')
+    await project.writeFile(
+      'entry.ts',
+      `await import('./styles/with.css', { with: { type: 'css' } })
+await import('./styles/assert.css', { assert: { type: 'css' } })
+`,
+    )
+
+    const styles = await collectStyleImports(project.file('entry.ts'), {
+      cwd: project.root,
+      styleExtensions: ['.css'],
+      filter: () => true,
+    })
+
+    assert.deepEqual(
+      await realpathAll(styles),
+      await realpathAll([
+        project.file('styles/with.css'),
+        project.file('styles/assert.css'),
+      ]),
+    )
+  } finally {
+    await project.cleanup()
+  }
+})
+
+test('collectStyleImports resolves path mappings from tsconfig file', async () => {
+  const project = await createProject('knighted-module-graph-tsconfig-file-')
+  try {
+    await project.writeFile('styles/mapped.css', '.mapped { color: red; }')
+    await project.writeFile(
+      'tsconfig.json',
+      JSON.stringify(
+        {
+          compilerOptions: {
+            baseUrl: '.',
+            paths: {
+              '@mapped': ['styles/mapped.css'],
+            },
+          },
+        },
+        null,
+        2,
+      ),
+    )
+    await project.writeFile(
+      'entry.ts',
+      `import css from '@mapped' with { type: 'css' }
+void css
+`,
+    )
+
+    const styles = await collectStyleImports(project.file('entry.ts'), {
+      cwd: project.root,
+      styleExtensions: ['.css'],
+      filter: () => true,
+      graphOptions: {
+        tsConfig: project.file('tsconfig.json'),
+      },
+    })
+
+    assert.deepEqual(
+      await realpathAll(styles),
+      await realpathAll([project.file('styles/mapped.css')]),
     )
   } finally {
     await project.cleanup()
