@@ -40,6 +40,7 @@ Wire it into `postinstall` or your build so new selectors land automatically.
 | `declaration`      | Plain JS/TS imports                | `.d.ts` augmentations next to modules | Required (append `?knighted-css`) | Cleaner imports when you accept resolver overhead  |
 
 If you use declaration mode, prefer enabling strict sidecars + a manifest so the resolver only rewrites imports that the CLI generated.
+See [docs/plugin.md](./plugin.md) for resolver plugin details and configuration options.
 
 ### Relationship to the loader
 
@@ -80,6 +81,7 @@ import Button, { knightedCss, stableSelectors } from './button.js'
 > [!IMPORTANT]
 > Declaration mode requires a resolver plugin to append `?knighted-css` (and `&combined` when applicable)
 > at build time so runtime exports match the generated types.
+> See [docs/plugin.md](./plugin.md) for resolver plugin configuration.
 
 ### Sidecar manifests + strict resolver mode
 

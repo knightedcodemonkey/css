@@ -53,6 +53,8 @@ augmented exports to be present on the original JS/TS module. Use the resolver p
 to automatically append `?knighted-css` for any module import that has a generated
 sidecar `.d.ts` file.
 
+See [docs/plugin.md](./plugin.md) for full resolver plugin documentation.
+
 ```js
 // rspack.config.js
 import { knightedCssResolverPlugin } from '@knighted/css/plugin'
