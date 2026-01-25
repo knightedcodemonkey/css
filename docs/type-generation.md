@@ -40,6 +40,7 @@ Wire it into `postinstall` or your build so new selectors land automatically.
 | `declaration`      | Plain JS/TS imports                | `.d.ts` augmentations next to modules | Required (append `?knighted-css`) | Cleaner imports when you accept resolver overhead  |
 
 If you use declaration mode, prefer enabling strict sidecars + a manifest so the resolver only rewrites imports that the CLI generated.
+See [docs/plugin.md](./plugin.md) for resolver plugin details and configuration options.
 
 ### Relationship to the loader
 
@@ -80,6 +81,25 @@ import Button, { knightedCss, stableSelectors } from './button.js'
 > [!IMPORTANT]
 > Declaration mode requires a resolver plugin to append `?knighted-css` (and `&combined` when applicable)
 > at build time so runtime exports match the generated types.
+> See [docs/plugin.md](./plugin.md) for resolver plugin configuration.
+
+### How declaration sidecars are chosen
+
+The CLI only emits `.d.ts` sidecars for files that pass all of the following checks:
+
+- **Inside your include set**: it walks each `--include` entry recursively, skipping common build
+  folders (`node_modules`, `dist`, `build`, `.knighted-css`, etc.), and only considers script
+  files (`.ts`, `.tsx`, `.js`, `.jsx`, `.mts`, `.cts`, `.mjs`, `.cjs`). Existing `.d.ts` files
+  are ignored.
+- **Within the project root**: if a candidate file resolves outside `--root`, the CLI skips it
+  and logs a warning.
+- **Imports styles**: the file must import/require a style resource directly (e.g. `.css`,
+  `.scss`, `.sass`, `.less`) or resolve to one via tsconfig paths / resolver hooks.
+- **Produces selectors**: the extracted CSS must be non-empty and yield at least one selector
+  token; otherwise the sidecar is skipped.
+
+In other words, declaration mode is opt-in by usage: only JS/TS/JSX/TSX modules that actually pull in
+styles get a generated `.d.ts` augmentation.
 
 ### Sidecar manifests + strict resolver mode
 
