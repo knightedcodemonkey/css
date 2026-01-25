@@ -410,6 +410,27 @@ test('hasStyleImports treats vanilla extract modules as style imports', async ()
   }
 })
 
+test('hasStyleImports treats vanilla extract extension variants as style imports', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-vanilla-variants-'))
+  try {
+    const srcDir = path.join(root, 'src')
+    await fs.mkdir(srcDir, { recursive: true })
+    const entryPath = path.join(srcDir, 'entry.ts')
+    const variants = ['.css.js', '.css.mjs', '.css.cjs', '.css.mts', '.css.cts']
+
+    for (const ext of variants) {
+      const stylePath = path.join(srcDir, `styles${ext}`)
+      await fs.writeFile(stylePath, '')
+      await fs.writeFile(entryPath, `import './styles${ext}'\n`)
+
+      const hasStyles = await hasStyleImports(entryPath, { rootDir: root })
+      assert.equal(hasStyles, true)
+    }
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
 test('generateTypes hashed emits selector proxies for modules', async () => {
   const project = await setupFixtureProject()
   try {
