@@ -13,6 +13,7 @@
   "engineStrict": true,
   "scripts": {
     "build": "npm run build -w @knighted/css",
+    "prepare": "husky",
     "test": "npm run test -w @knighted/css",
     "pretest": "npm run build",
     "test:e2e": "npm run test -w @knighted/css-playwright-fixture",

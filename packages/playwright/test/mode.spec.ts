@@ -7,6 +7,9 @@ import {
   MODE_DECL_HASHED_SHADOW_TEST_ID,
   MODE_DECL_HASHED_LIGHT_TEST_ID,
   MODE_DECL_LIGHT_TEST_ID,
+  MODE_DECL_VANILLA_HOST_TEST_ID,
+  MODE_DECL_VANILLA_LIGHT_TEST_ID,
+  MODE_DECL_VANILLA_SHADOW_TEST_ID,
   MODE_DECL_STABLE_SELECTOR_TEST_ID,
   MODE_DECL_STABLE_HOST_TEST_ID,
   MODE_DECL_STABLE_SHADOW_TEST_ID,
@@ -107,6 +110,22 @@ test.describe('mode resolver fixture', () => {
       page,
       MODE_DECL_HOST_TEST_ID,
       MODE_DECL_SHADOW_TEST_ID,
+    )
+
+    expect(shadowMetrics.background).toBe(lightMetrics.background)
+    expect(shadowMetrics.color).toBe(lightMetrics.color)
+    expect(shadowMetrics.borderRadius).toBe(lightMetrics.borderRadius)
+  })
+
+  test('declaration vanilla-extract light and shadow styles match', async ({ page }) => {
+    const lightCard = page.getByTestId(MODE_DECL_VANILLA_LIGHT_TEST_ID)
+    await expect(lightCard).toBeVisible()
+    const lightMetrics = await readMetrics(lightCard)
+
+    const shadowMetrics = await readShadowMetrics(
+      page,
+      MODE_DECL_VANILLA_HOST_TEST_ID,
+      MODE_DECL_VANILLA_SHADOW_TEST_ID,
     )
 
     expect(shadowMetrics.background).toBe(lightMetrics.background)
