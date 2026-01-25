@@ -1,6 +1,6 @@
-# Resolver plugin (`knightedCssResolverPlugin`)
+# Resolver plugin (`KnightedCssResolverPlugin`)
 
-`knightedCssResolverPlugin` is the resolver companion for declaration mode. It teaches your
+`KnightedCssResolverPlugin` is the resolver companion for declaration mode. It teaches your
 bundler to rewrite module imports to `?knighted-css` (and `&combined` when applicable) when a
 matching declaration sidecar exists, so runtime exports stay aligned with the generated types.
 
@@ -16,21 +16,38 @@ will be missing at runtime.
 - Optionally enforces strict sidecar matches using a manifest to avoid accidental rewrites.
 - Optionally marks “combined” entries (via `combinedPaths`) so the query includes `&combined`.
 
-## Options
+## API
+
+The idiomatic usage is to instantiate the class:
 
 ```ts
 import { KnightedCssResolverPlugin } from '@knighted/css/plugin'
 
-new KnightedCssResolverPlugin({
-  rootDir: string,
-  tsconfig: string | Record<string, unknown>,
-  conditions: string[],
-  extensions: string[],
-  debug: boolean,
-  combinedPaths: Array<string | RegExp>,
-  strictSidecar: boolean,
-  manifestPath: string,
-})
+new KnightedCssResolverPlugin(options)
+```
+
+If you prefer a factory function, the package also exports `knightedCssResolverPlugin` which
+returns the same plugin instance:
+
+```ts
+import { knightedCssResolverPlugin } from '@knighted/css/plugin'
+
+knightedCssResolverPlugin(options)
+```
+
+### Options
+
+```ts
+type KnightedCssResolverPluginOptions = {
+  rootDir?: string
+  tsconfig?: string | Record<string, unknown>
+  conditions?: string[]
+  extensions?: string[]
+  debug?: boolean
+  combinedPaths?: Array<string | RegExp>
+  strictSidecar?: boolean
+  manifestPath?: string
+}
 ```
 
 - `rootDir` (optional): Base directory used for resolver scoping. Defaults to `process.cwd()`.
@@ -67,7 +84,7 @@ knighted-css-generate-types --root . --include src --mode declaration
 This lets you write clean imports while still receiving `knightedCss` at runtime:
 
 ```ts
-import Button, { knightedCss } from './button.js'
+import { Button, knightedCss } from './button.js'
 ```
 
 ## Strict sidecar + manifest (recommended)
