@@ -34,6 +34,18 @@ export default async () => ({
   module: {
     rules: [
       {
+        test: /\.css\.ts$/,
+        type: 'javascript/auto',
+        use: [
+          {
+            loader: '@knighted/css/loader',
+            options: {
+              vanilla: { transformToEsm: true },
+            },
+          },
+        ],
+      },
+      {
         test: /\.module\.css$/,
         include: declarationHashedDir,
         oneOf: [

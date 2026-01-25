@@ -5,6 +5,10 @@ import type { JSX } from 'react'
 import { ModuleCard } from './module/module-card.js'
 import { DeclarationCard } from './declaration/declaration-card.js'
 import {
+  DeclarationVanillaCard,
+  knightedCss as declarationVanillaCss,
+} from './declaration/vanilla-card.js'
+import {
   DeclarationHashedCard,
   selectors as declarationHashedSelectors,
 } from './declaration-hashed/declaration-hashed-card.js'
@@ -19,7 +23,10 @@ import {
   MODE_DECL_HOST_TEST_ID,
   MODE_DECL_HASHED_HOST_TAG,
   MODE_DECL_HASHED_HOST_TEST_ID,
+  MODE_DECL_VANILLA_HOST_TAG,
+  MODE_DECL_VANILLA_HOST_TEST_ID,
   MODE_DECL_LIGHT_TEST_ID,
+  MODE_DECL_VANILLA_LIGHT_TEST_ID,
   MODE_DECL_STABLE_HOST_TAG,
   MODE_DECL_STABLE_HOST_TEST_ID,
   MODE_MODULE_HOST_TAG,
@@ -36,6 +43,7 @@ import {
 } from './constants.js'
 import { ensureModeModuleHostDefined } from './module/host.js'
 import { ensureModeDeclarationHostDefined } from './declaration/host.js'
+import { ensureModeDeclarationVanillaHostDefined } from './declaration/vanilla-host.js'
 import { ensureModeDeclarationHashedHostDefined } from './declaration-hashed/host.js'
 import { ensureModeDeclarationStableHostDefined } from './declaration-stable/host.js'
 
@@ -59,6 +67,12 @@ export function renderModeDemo(): HTMLElement {
 
   renderSection(root, 'module', ModuleCard, MODE_MODULE_LIGHT_TEST_ID)
   renderSection(root, 'declaration', DeclarationCard, MODE_DECL_LIGHT_TEST_ID)
+  renderSection(
+    root,
+    'declaration-vanilla',
+    DeclarationVanillaCard,
+    MODE_DECL_VANILLA_LIGHT_TEST_ID,
+  )
   renderSection(
     root,
     'declaration-hashed',
@@ -127,6 +141,17 @@ export function renderModeDemo(): HTMLElement {
   const declarationHost = document.createElement(MODE_DECL_HOST_TAG)
   declarationHost.setAttribute('data-testid', MODE_DECL_HOST_TEST_ID)
   root.appendChild(declarationHost)
+
+  const vanillaStyle = document.createElement('style')
+  vanillaStyle.setAttribute('data-mode', 'declaration-vanilla')
+  vanillaStyle.textContent = declarationVanillaCss
+  const headTarget = document.head ?? root
+  headTarget.appendChild(vanillaStyle)
+
+  ensureModeDeclarationVanillaHostDefined()
+  const declarationVanillaHost = document.createElement(MODE_DECL_VANILLA_HOST_TAG)
+  declarationVanillaHost.setAttribute('data-testid', MODE_DECL_VANILLA_HOST_TEST_ID)
+  root.appendChild(declarationVanillaHost)
 
   ensureModeDeclarationHashedHostDefined()
   const declarationHashedHost = document.createElement(MODE_DECL_HASHED_HOST_TAG)
