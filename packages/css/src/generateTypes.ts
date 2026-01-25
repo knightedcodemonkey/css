@@ -1061,6 +1061,18 @@ function isStyleResource(filePath: string): boolean {
   return STYLE_EXTENSIONS.some(ext => normalized.endsWith(ext))
 }
 
+function isVanillaExtractResource(filePath: string): boolean {
+  const normalized = filePath.toLowerCase()
+  return (
+    normalized.endsWith('.css.ts') ||
+    normalized.endsWith('.css.js') ||
+    normalized.endsWith('.css.mts') ||
+    normalized.endsWith('.css.cts') ||
+    normalized.endsWith('.css.mjs') ||
+    normalized.endsWith('.css.cjs')
+  )
+}
+
 function isCssModuleResource(filePath: string): boolean {
   return /\.module\.(css|scss|sass|less)$/i.test(filePath)
 }
@@ -1116,7 +1128,7 @@ async function hasStyleImports(
     if (!resource) {
       continue
     }
-    if (isStyleResource(resource)) {
+    if (isStyleResource(resource) || isVanillaExtractResource(resource)) {
       return true
     }
     const resolved = await resolveImportPath(
@@ -1128,7 +1140,7 @@ async function hasStyleImports(
       options.resolverFactory,
       RESOLUTION_EXTENSIONS,
     )
-    if (resolved && isStyleResource(resolved)) {
+    if (resolved && (isStyleResource(resolved) || isVanillaExtractResource(resolved))) {
       return true
     }
   }

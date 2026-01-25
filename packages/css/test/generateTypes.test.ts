@@ -27,6 +27,7 @@ const {
   resolveIndexFallback,
   readManifest,
   writeSidecarManifest,
+  hasStyleImports,
 } = __generateTypesInternals
 
 let cachedCliSnapshots: Record<string, string> | null = null
@@ -390,6 +391,25 @@ test('generateTypes declaration mode skips files without style imports', async (
   }
 })
 
+test('hasStyleImports treats vanilla extract modules as style imports', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-vanilla-'))
+  try {
+    const srcDir = path.join(root, 'src')
+    await fs.mkdir(srcDir, { recursive: true })
+    await fs.writeFile(
+      path.join(srcDir, 'styles.css.ts'),
+      "export const theme = { color: 'rebeccapurple' }\n",
+    )
+    const entryPath = path.join(srcDir, 'entry.ts')
+    await fs.writeFile(entryPath, "import './styles.css.ts'\n")
+
+    const hasStyles = await hasStyleImports(entryPath, { rootDir: root })
+    assert.equal(hasStyles, true)
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
 test('generateTypes hashed emits selector proxies for modules', async () => {
   const project = await setupFixtureProject()
   try {
@@ -616,7 +636,11 @@ test('generateTypes resolves hash-imports workspace package.json imports', async
     const sassModuleDir = path.join(appRoot, 'node_modules', 'sass')
     await fs.mkdir(path.dirname(sassModuleDir), { recursive: true })
     try {
-      await fs.symlink(sassPackageDir, sassModuleDir)
+      await fs.symlink(
+        sassPackageDir,
+        sassModuleDir,
+        process.platform === 'win32' ? 'junction' : 'dir',
+      )
     } catch {
       await fs.cp(sassPackageDir, sassModuleDir, { recursive: true })
     }

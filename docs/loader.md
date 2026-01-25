@@ -2,6 +2,18 @@
 
 `@knighted/css/loader` lets bundlers attach compiled CSS strings to any module by appending the `?knighted-css` query when importing. The loader mirrors the module graph, compiles every CSS dialect it discovers (CSS, Sass, Less, vanilla-extract, etc.), and exposes the concatenated result as `knightedCss`.
 
+## Loader vs bridge (quick comparison)
+
+Use this table to decide which loader you need before wiring up rules:
+
+| Capability               | @knighted/css/loader                                                           | @knighted/css/loader-bridge                                                                  |
+| ------------------------ | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| Input                    | Original JS/TS module source + its style imports                               | Compiled CSS Modules output (post-hash)                                                      |
+| CSS extraction           | Yes (walks the import graph)                                                   | No (wraps upstream output)                                                                   |
+| Export behavior          | Appends `knightedCss` (and optional selector exports) onto the original module | Exposes `knightedCss`/`knightedCssModules` only; does **not** re-export JS/TS module exports |
+| When to use              | Default choice for `?knighted-css` in JS/TS modules                            | When you need hashed CSS Modules output for runtime `knightedCss`                            |
+| Combined wrapper needed? | Only for explicit `?knighted-css&combined` usage                               | **Yes** if you still need original JS/TS exports (use `&combined` via the resolver plugin)   |
+
 ## Loader example
 
 ```ts

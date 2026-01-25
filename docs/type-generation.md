@@ -94,7 +94,8 @@ The CLI only emits `.d.ts` sidecars for files that pass all of the following che
 - **Within the project root**: if a candidate file resolves outside `--root`, the CLI skips it
   and logs a warning.
 - **Imports styles**: the file must import/require a style resource directly (e.g. `.css`,
-  `.scss`, `.sass`, `.less`) or resolve to one via tsconfig paths / resolver hooks.
+  `.scss`, `.sass`, `.less`, or vanilla-extract `.css.ts` / `.css.js`) or resolve to one via
+  tsconfig paths / resolver hooks.
 - **Produces selectors**: the extracted CSS must be non-empty and yield at least one selector
   token; otherwise the sidecar is skipped.
 
