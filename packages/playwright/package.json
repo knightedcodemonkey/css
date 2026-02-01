@@ -33,11 +33,11 @@
     "clean:knighted": "rm -rf .knighted-*",
     "serve": "http-server dist -p 4174",
     "test": "playwright test",
-    "pretest": "npm run types && npm run build"
+    "pretest": "npm run types && npm run build && node ./scripts/link-css-dist.js"
   },
   "dependencies": {
-    "@knighted/css": "1.2.0-rc.1",
-    "@knighted/jsx": "^1.7.5",
+    "@knighted/css": "1.2.0-rc.2",
+    "@knighted/jsx": "^1.7.6",
     "lit": "^3.2.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
