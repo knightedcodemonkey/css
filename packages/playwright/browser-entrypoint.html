@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Browser entrypoint</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "@knighted/css/browser": "/dist-css/browser.js",
+          "sass": "https://cdn.jsdelivr.net/npm/sass@1.80.0/sass.default.js",
+          "immutable": "https://esm.sh/immutable@4.3.5?bundle",
+          "less": "https://esm.sh/less@4.2.0?bundle",
+          "lightningcss-wasm": "https://esm.sh/lightningcss-wasm@1.30.1?bundle"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <main>
+      <div id="result-css" data-testid="browser-entrypoint-css"></div>
+      <div id="result-sass" data-testid="browser-entrypoint-sass"></div>
+      <div id="result-less" data-testid="browser-entrypoint-less"></div>
+      <div id="result-module" data-testid="browser-entrypoint-module"></div>
+    </main>
+    <script type="module">
+      import { cssFromSource } from '@knighted/css/browser'
+
+      const cssResult = await cssFromSource('.demo { color: rebeccapurple; }', {
+        dialect: 'css',
+      })
+
+      let sassResult = { ok: false, error: { message: 'Sass import failed.' } }
+      try {
+        const sass = await import('sass')
+        sassResult = await cssFromSource(
+          '$color: rebeccapurple; .demo { color: $color; }',
+          {
+            dialect: 'sass',
+            sass,
+          },
+        )
+      } catch (error) {
+        const message =
+          error && typeof error === 'object' && 'message' in error
+            ? String(error.message)
+            : String(error)
+        sassResult = { ok: false, error: { message } }
+      }
+
+      let lessResult = { ok: false, error: { message: 'Less import failed.' } }
+      try {
+        const lessModule = await import('less')
+        const less =
+          typeof lessModule.render === 'function'
+            ? lessModule
+            : typeof lessModule.default === 'object' && lessModule.default
+              ? lessModule.default
+              : lessModule
+        lessResult = await cssFromSource(
+          '@color: rebeccapurple; .demo { color: @color; }',
+          {
+            dialect: 'less',
+            less,
+          },
+        )
+      } catch (error) {
+        const message =
+          error && typeof error === 'object' && 'message' in error
+            ? String(error.message)
+            : String(error)
+        lessResult = { ok: false, error: { message } }
+      }
+
+      let moduleResult = { ok: false, error: { message: 'Lightning CSS import failed.' } }
+      try {
+        const lightningWasm = await import('lightningcss-wasm')
+        const initWasm =
+          typeof lightningWasm.default === 'function'
+            ? lightningWasm.default
+            : lightningWasm.init
+        if (typeof initWasm === 'function') {
+          await initWasm()
+        }
+        const transform =
+          lightningWasm.transform ??
+          (typeof lightningWasm.default === 'object' && lightningWasm.default
+            ? lightningWasm.default.transform
+            : undefined)
+        moduleResult = await cssFromSource('.demo { color: rebeccapurple; }', {
+          dialect: 'module',
+          lightningcss: transform ? { transform } : undefined,
+        })
+      } catch (error) {
+        const message =
+          error && typeof error === 'object' && 'message' in error
+            ? String(error.message)
+            : String(error)
+        moduleResult = { ok: false, error: { message } }
+      }
+
+      const output = [
+        { id: 'result-css', result: cssResult },
+        { id: 'result-sass', result: sassResult },
+        { id: 'result-less', result: lessResult },
+        { id: 'result-module', result: moduleResult },
+      ]
+
+      for (const { id, result } of output) {
+        const node = document.getElementById(id)
+        if (!node) {
+          throw new Error(`Missing output node: ${id}`)
+        }
+        if (result.ok) {
+          node.dataset.ok = 'true'
+          node.textContent = result.css
+          if (result.exports) {
+            node.dataset.exports = JSON.stringify(result.exports)
+          }
+        } else {
+          node.dataset.ok = 'false'
+          node.textContent = result.error.message
+        }
+      }
+    </script>
+  </body>
+</html>
