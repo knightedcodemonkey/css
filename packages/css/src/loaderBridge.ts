@@ -509,13 +509,15 @@ function resolveRemainingRequest(
   const loaders = Array.isArray(ctx.loaders) ? ctx.loaders.slice(ctx.loaderIndex + 1) : []
   if (loaders.length > 0) {
     const loaderRequests = loaders
-      .map(loader => {
-        if (loader && typeof loader.request === 'string' && loader.request) {
-          return loader.request
+      .map(loaderInfo => {
+        if (loaderInfo && typeof loaderInfo.request === 'string' && loaderInfo.request) {
+          return loaderInfo.request
         }
-        const path = loader && typeof loader.path === 'string' ? loader.path : ''
-        const query = loader && typeof loader.query === 'string' ? loader.query : ''
-        return path ? `${path}${query}` : ''
+        const loaderPath =
+          loaderInfo && typeof loaderInfo.path === 'string' ? loaderInfo.path : ''
+        const query =
+          loaderInfo && typeof loaderInfo.query === 'string' ? loaderInfo.query : ''
+        return loaderPath ? `${loaderPath}${query}` : ''
       })
       .filter(Boolean)
     if (loaderRequests.length > 0) {

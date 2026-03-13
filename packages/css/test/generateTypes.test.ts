@@ -1115,12 +1115,12 @@ test('generateTypes internals cover edge cases', async () => {
     resolveImportPath,
     formatSelectorModuleSource,
     removeStaleSelectorModules,
-    resolveIndexFallback,
+    resolveIndexFallback: resolveIndexFallbackInternal,
     loadTsconfigResolutionContext,
     isNonRelativeSpecifier,
     resolveProxyInfo,
-    loadResolverModule,
-    parseCliArgs,
+    loadResolverModule: loadResolverModuleInternal,
+    parseCliArgs: parseCliArgsInternal,
   } = __generateTypesInternals
 
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-internals-'))
@@ -1205,7 +1205,7 @@ test('generateTypes internals cover edge cases', async () => {
 
     const candidate = path.join(tempRoot, 'not-a-dir')
     await fs.writeFile(candidate, 'noop')
-    assert.equal(await resolveIndexFallback(candidate), undefined)
+    assert.equal(await resolveIndexFallbackInternal(candidate), undefined)
 
     const tsconfig = loadTsconfigResolutionContext(tempRoot, () => ({
       path: path.join(tempRoot, 'tsconfig.json'),
@@ -1239,7 +1239,7 @@ test('generateTypes internals cover edge cases', async () => {
 
     const resolverFile = path.join(tempRoot, 'resolver-file.mjs')
     await fs.writeFile(resolverFile, 'export default function resolver() { return null }')
-    const fileResolver = await loadResolverModule(
+    const fileResolver = await loadResolverModuleInternal(
       pathToFileURL(resolverFile).href,
       tempRoot,
     )
@@ -1255,25 +1255,25 @@ test('generateTypes internals cover edge cases', async () => {
       path.join(nodeModulesDir, 'index.js'),
       'export default function resolver() { return null }',
     )
-    const packageResolver = await loadResolverModule('fixture-resolver', tempRoot)
+    const packageResolver = await loadResolverModuleInternal('fixture-resolver', tempRoot)
     assert.equal(typeof packageResolver, 'function')
 
     const badResolver = path.join(tempRoot, 'resolver-bad.mjs')
     await fs.writeFile(badResolver, 'export const resolver = 123')
     await assert.rejects(
-      () => loadResolverModule(pathToFileURL(badResolver).href, tempRoot),
+      () => loadResolverModuleInternal(pathToFileURL(badResolver).href, tempRoot),
       /Resolver module must export a function/,
     )
 
     const namedResolverFile = path.join(tempRoot, 'resolver-named.mjs')
     await fs.writeFile(namedResolverFile, 'export function resolver() { return null }')
-    const namedResolver = await loadResolverModule(
+    const namedResolver = await loadResolverModuleInternal(
       pathToFileURL(namedResolverFile).href,
       tempRoot,
     )
     assert.equal(typeof namedResolver, 'function')
 
-    const parsed = parseCliArgs(['--root', tempRoot, 'src'])
+    const parsed = parseCliArgsInternal(['--root', tempRoot, 'src'])
     assert.deepEqual(parsed.include, ['src'])
     assert.equal(parsed.mode, 'module')
   } finally {
@@ -1332,12 +1332,12 @@ test('generateTypes internals support selector module helpers', async () => {
     relativeToRoot,
     isNonRelativeSpecifier,
     isStyleResource,
-    resolveWithExtensionFallback,
+    resolveWithExtensionFallback: resolveWithExtensionFallbackInternal,
     createProjectPeerResolver,
     getProjectRequire,
     loadTsconfigResolutionContext,
     resolveWithTsconfigPaths,
-    parseCliArgs,
+    parseCliArgs: parseCliArgsInternal,
     printHelp,
     reportCliResult,
     buildSelectorModuleManifestKey,
@@ -1418,10 +1418,12 @@ test('generateTypes internals support selector module helpers', async () => {
   try {
     const filePath = path.join(tempRoot, 'widget.ts')
     await fs.writeFile(filePath, 'export const widget = true')
-    const resolved = await resolveWithExtensionFallback(path.join(tempRoot, 'widget.js'))
+    const resolved = await resolveWithExtensionFallbackInternal(
+      path.join(tempRoot, 'widget.js'),
+    )
     assert.equal(resolved, filePath)
 
-    const missingResolved = await resolveWithExtensionFallback(
+    const missingResolved = await resolveWithExtensionFallbackInternal(
       path.join(tempRoot, 'missing.ts'),
     )
     assert.equal(missingResolved, path.join(tempRoot, 'missing.ts'))
@@ -1430,7 +1432,7 @@ test('generateTypes internals support selector module helpers', async () => {
     await fs.mkdir(indexDir, { recursive: true })
     const indexPath = path.join(indexDir, 'index.ts')
     await fs.writeFile(indexPath, 'export const ok = true')
-    const indexResolved = await resolveWithExtensionFallback(indexDir)
+    const indexResolved = await resolveWithExtensionFallbackInternal(indexDir)
     assert.equal(indexResolved, indexPath)
   } finally {
     await fs.rm(tempRoot, { recursive: true, force: true })
@@ -1478,7 +1480,7 @@ test('generateTypes internals support selector module helpers', async () => {
     await fs.rm(collectRoot, { recursive: true, force: true })
   }
 
-  const parsed = parseCliArgs([
+  const parsed = parseCliArgsInternal([
     '--root',
     '/tmp/project',
     '--include',
@@ -1504,7 +1506,7 @@ test('generateTypes internals support selector module helpers', async () => {
   assert.equal(parsed.mode, 'declaration')
   assert.equal(parsed.manifestPath, '.knighted-css/knighted-manifest.json')
 
-  const hashedParsed = parseCliArgs([
+  const hashedParsed = parseCliArgsInternal([
     '--root',
     '/tmp/project',
     '--hashed',
@@ -1516,17 +1518,20 @@ test('generateTypes internals support selector module helpers', async () => {
   assert.equal(hashedParsed.hashed, true)
   assert.equal(hashedParsed.mode, 'module')
 
-  assert.throws(() => parseCliArgs(['--root']), /Missing value/)
-  assert.throws(() => parseCliArgs(['--include']), /Missing value/)
-  assert.throws(() => parseCliArgs(['--out-dir']), /Missing value/)
-  assert.throws(() => parseCliArgs(['--stable-namespace']), /Missing value/)
-  assert.throws(() => parseCliArgs(['--resolver']), /Missing value/)
-  assert.throws(() => parseCliArgs(['--mode']), /Missing value/)
-  assert.throws(() => parseCliArgs(['--manifest']), /Missing value/)
-  assert.throws(() => parseCliArgs(['--mode', 'wat']), /Unknown mode/)
-  assert.throws(() => parseCliArgs(['--wat']), /Unknown flag/)
-  assert.throws(() => parseCliArgs(['--auto-stable', '--hashed']), /Cannot combine/)
-  const helpParsed = parseCliArgs(['--help'])
+  assert.throws(() => parseCliArgsInternal(['--root']), /Missing value/)
+  assert.throws(() => parseCliArgsInternal(['--include']), /Missing value/)
+  assert.throws(() => parseCliArgsInternal(['--out-dir']), /Missing value/)
+  assert.throws(() => parseCliArgsInternal(['--stable-namespace']), /Missing value/)
+  assert.throws(() => parseCliArgsInternal(['--resolver']), /Missing value/)
+  assert.throws(() => parseCliArgsInternal(['--mode']), /Missing value/)
+  assert.throws(() => parseCliArgsInternal(['--manifest']), /Missing value/)
+  assert.throws(() => parseCliArgsInternal(['--mode', 'wat']), /Unknown mode/)
+  assert.throws(() => parseCliArgsInternal(['--wat']), /Unknown flag/)
+  assert.throws(
+    () => parseCliArgsInternal(['--auto-stable', '--hashed']),
+    /Cannot combine/,
+  )
+  const helpParsed = parseCliArgsInternal(['--help'])
   assert.equal(helpParsed.help, true)
 
   const normalizedPaths = normalizeTsconfigPaths({
@@ -1610,8 +1615,8 @@ test('generateTypes internals support selector module helpers', async () => {
   const peerRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'knighted-peer-resolver-'))
   try {
     await fs.writeFile(path.join(peerRoot, 'package.json'), '{}')
-    const modulePath = path.join(peerRoot, 'demo.mjs')
-    await fs.writeFile(modulePath, 'export const value = 42\n')
+    const peerModulePath = path.join(peerRoot, 'demo.mjs')
+    await fs.writeFile(peerModulePath, 'export const value = 42\n')
     const resolver = createProjectPeerResolver(peerRoot)
     const moduleNs = await resolver('./demo.mjs')
     assert.equal(moduleNs.value, 42)

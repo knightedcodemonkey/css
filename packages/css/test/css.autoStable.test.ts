@@ -91,10 +91,14 @@ test('autoStable captures cssModules exports and selector duplication', async ()
     if (typeof value === 'string') return value
     if (Array.isArray(value)) return value.join(' ')
     if (value && typeof value === 'object' && 'name' in value) {
-      const entry = value as { name?: string; composes?: Array<{ name?: string }> }
-      const names = [entry.name, ...(entry.composes ?? []).map(c => c?.name)].filter(
-        Boolean,
-      )
+      const exportEntry = value as {
+        name?: string
+        composes?: Array<{ name?: string }>
+      }
+      const names = [
+        exportEntry.name,
+        ...(exportEntry.composes ?? []).map(c => c?.name),
+      ].filter(Boolean)
       return names.join(' ')
     }
     return ''
