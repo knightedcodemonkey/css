@@ -48,11 +48,11 @@ const isVisitor = (
 ): value is StrictLightningVisitor => Boolean(value)
 
 function appendStableSelectorsFromExports(
-  css: string,
+  cssText: string,
   exportsMap: Record<string, string | string[] | { name: string }>,
   config: AutoStableOption,
 ): string {
-  let output = css
+  let output = cssText
   for (const [token, value] of Object.entries(exportsMap)) {
     const hashed = Array.isArray(value)
       ? value.join(' ')

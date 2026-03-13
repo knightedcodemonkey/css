@@ -265,10 +265,10 @@ export class KnightedCssResolverPlugin {
     compiler.hooks?.done?.tap('KnightedCssResolverPlugin', () => {
       this.flushDiagnostics()
     })
-    const resolver = compiler.getResolver?.('normal')
-    if (resolver && this.isResolver(resolver as ResolverLike)) {
-      this.compilerResolver = resolver as ResolverLike
-      this.applyToResolver(resolver as ResolverLike)
+    const normalResolver = compiler.getResolver?.('normal')
+    if (normalResolver && this.isResolver(normalResolver as ResolverLike)) {
+      this.compilerResolver = normalResolver as ResolverLike
+      this.applyToResolver(normalResolver as ResolverLike)
       return
     }
 
@@ -296,8 +296,8 @@ export class KnightedCssResolverPlugin {
       return
     }
 
-    resolverHook.tap('KnightedCssResolverPlugin', resolver =>
-      this.applyToResolver(resolver),
+    resolverHook.tap('KnightedCssResolverPlugin', hookedResolver =>
+      this.applyToResolver(hookedResolver),
     )
   }
 

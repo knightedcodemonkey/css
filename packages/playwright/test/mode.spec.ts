@@ -48,18 +48,18 @@ async function readShadowMetrics(
   cardId: string,
 ): Promise<CardMetrics> {
   const handle = await page.waitForFunction(
-    ({ hostId, cardId }) => {
-      const hostEl = document.querySelector(`[data-testid="${hostId}"]`)
-      return hostEl?.shadowRoot?.querySelector(`[data-testid="${cardId}"]`)
+    ({ hostId: targetHostId, cardId: targetCardId }) => {
+      const hostEl = document.querySelector(`[data-testid="${targetHostId}"]`)
+      return hostEl?.shadowRoot?.querySelector(`[data-testid="${targetCardId}"]`)
     },
     { hostId, cardId },
   )
   await handle.dispose()
 
   return page.evaluate(
-    ({ hostId, cardId }) => {
-      const hostEl = document.querySelector(`[data-testid="${hostId}"]`)
-      const card = hostEl?.shadowRoot?.querySelector(`[data-testid="${cardId}"]`)
+    ({ hostId: targetHostId, cardId: targetCardId }) => {
+      const hostEl = document.querySelector(`[data-testid="${targetHostId}"]`)
+      const card = hostEl?.shadowRoot?.querySelector(`[data-testid="${targetCardId}"]`)
       if (!card) {
         throw new Error('Shadow DOM card was not rendered')
       }
