@@ -10,5 +10,6 @@ playwright-report/
 test-results/
 blob-report/
 .knighted-css*/
+packages/playwright/dist-css
 packages/playwright/src/**/*.knighted-css.ts
 packages/playwright/src/mode/**/*.d.ts
