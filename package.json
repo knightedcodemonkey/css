@@ -34,7 +34,7 @@
     "@knighted/duel": "^4.0.2",
     "@napi-rs/wasm-runtime": "^1.0.7",
     "@playwright/test": "^1.48.2",
-    "@rspack/cli": "^1.7.8",
+    "@rspack/cli": "^2.0.4",
     "@rspack/core": "^1.7.8",
     "@types/less": "^3.0.8",
     "@types/webpack": "^5.28.5",
