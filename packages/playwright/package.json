@@ -42,8 +42,8 @@
     "pretest": "npm run types && npm run build && node ./scripts/link-css-dist.js"
   },
   "dependencies": {
-    "@knighted/css": "1.2.0",
-    "@knighted/jsx": "^1.7.9",
+    "@knighted/css": "1.2.1",
+    "@knighted/jsx": "^1.14.0",
     "lit": "^3.2.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

@@ -31,11 +31,11 @@
   "devDependencies": {
     "@emnapi/core": "^1.2.0",
     "@emnapi/runtime": "^1.2.0",
-    "@knighted/duel": "^4.0.2",
-    "@napi-rs/wasm-runtime": "^1.0.7",
-    "@playwright/test": "^1.48.2",
-    "@rspack/cli": "^1.7.8",
-    "@rspack/core": "^1.7.8",
+    "@knighted/duel": "^4.1.0",
+    "@napi-rs/wasm-runtime": "^1.1.4",
+    "@playwright/test": "^1.60.0",
+    "@rspack/cli": "^2.0.4",
+    "@rspack/core": "^2.0.4",
     "@types/less": "^3.0.8",
     "@types/webpack": "^5.28.5",
     "@vanilla-extract/css": "^1.15.2",
@@ -47,15 +47,19 @@
     "husky": "^9.1.7",
     "less": "^4.2.0",
     "lint-staged": "^16.2.7",
-    "oxlint": "^1.55.0",
+    "oxlint": "^1.66.0",
     "prettier": "^3.7.4",
     "sass": "^1.98.0",
-    "tsx": "^4.19.2",
+    "tsx": "^4.22.3",
     "typescript": "^5.9.3"
   },
   "overrides": {
     "module-lookup-amd": {
       "glob": "^9.0.0"
+    },
+    "lightningcss": "1.30.1",
+    "c8": {
+      "yargs": ">17.7.2 <19"
     }
   },
   "prettier": {
@@ -68,8 +72,5 @@
     "{packages/css/src,packages/playwright/src}/**/*.{ts,tsx,js,jsx,mjs,cjs}": "npm run check:cycles",
     "*.{js,jsx,ts,tsx,mjs,cjs,cts,mts}": "oxlint",
     "*.{js,jsx,ts,tsx,mjs,cjs,cts,mts,json,md,css,scss,html}": "prettier --check"
-  },
-  "optionalDependencies": {
-    "@oxc-parser/binding-wasm32-wasi": "^0.105.0"
   }
 }

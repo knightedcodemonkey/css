@@ -18,6 +18,7 @@ const vanillaEntry = path.join(fixturesDir, 'vanilla/styles.css.ts')
 const miscFixturesDir = path.resolve(__dirname, './fixtures/misc')
 const selectorsCss = path.join(miscFixturesDir, 'selectors.css')
 const unsupportedStyle = path.join(miscFixturesDir, 'unsupported.noop')
+const moduleNestingEntry = path.join(miscFixturesDir, 'module-nesting/entry.js')
 const pkgAliasDir = path.resolve(__dirname, './fixtures/pkg-alias')
 const pkgAliasEntry = path.join(pkgAliasDir, 'entry.scss')
 
@@ -88,6 +89,15 @@ test('optionally compiles with lightningcss', async () => {
 test('supports boolean lightningcss option', async () => {
   const result = await css(basicEntry, { lightningcss: true })
   assert.match(result, /\.demo/)
+})
+
+test('supports nested selectors in css modules with lightningcss defaults', async () => {
+  const result = await cssWithMeta(moduleNestingEntry, {
+    lightningcss: { cssModules: true },
+  })
+
+  assert.ok(result.css.length > 0)
+  assert.match(result.css, /:hover/)
 })
 
 test('composes lightningcss visitors with specificity visitor', async () => {
