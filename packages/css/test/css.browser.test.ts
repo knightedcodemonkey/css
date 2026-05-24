@@ -139,9 +139,10 @@ test('cssFromSource uses lightningcss for css modules', async () => {
     dialect: 'module',
     filename: 'custom.css',
     lightningcss: {
-      transform: ({ code, cssModules, filename }) => {
+      transform: ({ code, cssModules, filename, drafts }) => {
         assert.equal(cssModules, true)
         assert.equal(filename, 'custom.css')
+        assert.equal(drafts?.nesting, true)
         const decoded = decoder.decode(code)
         return {
           code: encoder.encode(decoded.replace('green', 'teal')),

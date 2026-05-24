@@ -43,6 +43,17 @@ type StrictLightningVisitor = Exclude<
   undefined
 >
 
+/*
+ * Lightning CSS runtime supports drafts.nesting, but some published d.ts versions
+ * only declare drafts.customMedia. Keep a narrow local widening until upstream
+ * typings include nesting.
+ */
+type LightningDrafts = NonNullable<
+  Partial<Omit<LightningTransformOptions<never>, 'code'>>['drafts']
+> & {
+  nesting?: boolean
+}
+
 const isVisitor = (
   value: LightningTransformOptions<never>['visitor'] | undefined,
 ): value is StrictLightningVisitor => Boolean(value)
@@ -544,8 +555,26 @@ function unwrapModuleNamespace<T>(mod: T): T {
 function normalizeLightningOptions(
   config: LightningCssConfig,
 ): Partial<Omit<LightningTransformOptions<never>, 'code'>> {
-  if (!config || config === true) {
-    return {}
+  const withDefaultDrafts = (
+    options: Partial<Omit<LightningTransformOptions<never>, 'code'>>,
+  ): Partial<Omit<LightningTransformOptions<never>, 'code'>> => {
+    const drafts: LightningDrafts = {
+      ...(typeof options.drafts === 'object' && options.drafts ? options.drafts : {}),
+    }
+
+    if (drafts.nesting === undefined) {
+      drafts.nesting = true
+    }
+
+    return {
+      ...options,
+      drafts,
+    }
   }
-  return config
+
+  if (!config || config === true) {
+    return withDefaultDrafts({})
+  }
+
+  return withDefaultDrafts(config)
 }

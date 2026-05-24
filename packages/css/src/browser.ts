@@ -36,7 +36,14 @@ export type LessLike = {
 }
 
 export type LightningCssWasm = {
-  transform: (options: { filename?: string; code: Uint8Array; cssModules?: boolean }) => {
+  transform: (options: {
+    filename?: string
+    code: Uint8Array
+    cssModules?: boolean
+    drafts?: {
+      nesting?: boolean
+    }
+  }) => {
     code: Uint8Array
     exports?: Record<string, string | string[]>
   }
@@ -129,6 +136,9 @@ async function cssFromSourceInternal(
       filename,
       code: encoder.encode(source),
       cssModules: true,
+      drafts: {
+        nesting: true,
+      },
     })
     return {
       ok: true,
